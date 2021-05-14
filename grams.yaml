@@ -1,0 +1,21 @@
+data_graph:
+  max_n_hop: 1
+  options:
+    - DISABLE_SAME_ENT_SEARCH
+    - PRUNING_REDUNDANT_ENT
+    # - NO_KG_INDEX
+# possible values: psl, oracle, steiner_tree
+st_method: psl
+steiner_tree:
+  # algo: bank or maximum_arborescence
+  algo: semtab2020 # maximum_arborescence
+psl:
+  enable_logging: false
+  threshold: 0.5
+  # select_simplepath, steiner_tree, external:semtab2020
+  postprocessing: steiner_tree
+  disable_rules: # []
+    - HeaderSimimilarity
+    - DataTypeMismatch
+hydra.run.dir: .
+hydra.output_subdir: null

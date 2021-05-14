@@ -1,0 +1,21 @@
+col0,col1,col2,col3,col4
+ABL1 BCR-ABL,imatinib,ABL1,imatinib,human chromosome 22
+ALK EML4-ALK C1156Y–L1198F,crizotinib,ALK,lorlatinib,human chromosome 2
+ALK ALK FUSION G1269A,ceritinib,ALK,alectinib,human chromosome 2
+ALK EML4-ALK C1156Y,lorlatinib,ALK,crizotinib,human chromosome 2
+ALK ALK FUSION F1245C,ceritinib,ALK,crizotinib,human chromosome 2
+ALK EML4-ALK  V1180L,ceritinib,ALK,crizotinib,human chromosome 2
+ALK ALK FUSION I1171,ceritinib,ALK,crizotinib,human chromosome 2
+ALK EML4-ALK G1269A,ceritinib,ALK,crizotinib,human chromosome 2
+ALK EML4-ALK S1206Y,ceritinib,ALK,crizotinib,human chromosome 2
+ALK EML4-ALK L1196M,ceritinib,ALK,crizotinib,human chromosome 2
+ALK EML4-ALK T1151INST,tanespimycin,ALK,crizotinib,human chromosome 2
+ALK ALK FUSION G1202R,tanespimycin,ALK,crizotinib,human chromosome 2
+ROS1 CD74-ROS1 G2101A,foretinib,ROS1,crizotinib,human chromosome 6
+ROS1 CD74-ROS1 L2026M,foretinib,ROS1,crizotinib,human chromosome 6
+ABL1 BCR-ABL T315I,ponatinib,ABL1,imatinib mesylate,human chromosome 9
+ABL1 BCR-ABL E255K,dasatinib,ABL1,axitinib,human chromosome 9
+ABL1 BCR-ABL F486S,nilotinib,ABL1,axitinib,human chromosome 9
+ABL1 BCR-ABL F317L,ponatinib,ABL1,axitinib,human chromosome 9
+BRAF PAPSS1-BRAF,trametinib,BRAF,vemurafenib,human chromosome 7
+BRAF TRIM24-BRAF,trametinib,BRAF,vemurafenib,human chromosome 7

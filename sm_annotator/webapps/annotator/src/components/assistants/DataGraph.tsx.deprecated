@@ -1,0 +1,221 @@
+import G6 from "@antv/g6";
+import React from "react";
+import { THEME } from "../../env";
+import { Table } from "../../models";
+import { wrapTextPreserveWord } from "../sm/Graph";
+
+interface Props {
+  table: Table;
+  rowId: number;
+}
+interface State { }
+
+interface Node {
+  id: string,
+  label: string,
+  type?: string,
+  style?: any;
+  labelCfg?: object,
+  size?: number | number[];
+}
+
+interface Edge {
+  source: string,
+  target: string,
+  label: string
+}
+
+export default class DataGraph extends React.Component<Props, State> {
+  private graphContainer = React.createRef<HTMLDivElement>();
+  private graph: any;
+  private initHeight: number = 500;
+  public state: State = {};
+
+  componentDidMount() {
+    this.renderGraph();
+  }
+
+  componentDidUpdate() {
+    this.renderGraph();
+  }
+
+  dataGraph = () => {
+    let row = this.props.table.rows.filter(row => row.rowId === this.props.rowId)[0];
+    let nodes: Node[] = [];
+    let id2node: { [id: string]: Node } = {};
+    let edges: Edge[] = [];
+
+    // find a list of predicates that we are going to show
+    let predicates = new Set();
+    for (let col of this.props.table.columns) {
+      if (col.metadata === undefined) {
+        continue;
+      }
+      for (let hierarchy of col.metadata.linkHierarchies) {
+        for (let type of hierarchy.hierarchy) {
+          predicates.add(type.id);
+        }
+      }
+    }
+
+    let idcounter = 0;
+    let dnodeProps = {
+      type: "rect",
+      size: [1, 1],
+      labelCfg: {
+        style: {
+          fill: 'black',
+          background: {
+            fill: "#ffd666",
+            stroke: "#874d00",
+            padding: [4, 4, 4, 4],
+            radius: 3,
+          }
+        },
+      }
+    };
+    let cnodeProps = {
+      type: 'rect',
+      size: [1, 1],
+      labelCfg: {
+        style: {
+          fill: 'black',
+          background: {
+            fill: "#9EC9FF",
+            stroke: "#1890ff",
+            padding: [4, 4, 4, 4],
+            radius: 3,
+          }
+        },
+      }
+    }
+    for (let cell of row.data) {
+      let cellId = (++idcounter).toString();
+      nodes.push({
+        id: cellId,
+        label: cell.value,
+        ...dnodeProps
+      });
+      id2node[cellId] = nodes[nodes.length - 1];
+
+      for (let qnode of Object.values(cell.metadata.entities)) {
+        // qnode = toJS(qnode);
+        let node = {
+          id: qnode.id,
+          label: qnode.label,
+          ...cnodeProps
+        };
+        id2node[node.id] = node;
+        nodes.push(node);
+
+        edges.push({
+          source: cellId,
+          target: node.id,
+          label: 'contains'
+        })
+
+        for (let [pid, prop] of Object.entries(qnode.props)) {
+          if (!predicates.has(pid)) {
+            continue;
+          }
+
+          for (let pval of prop.values) {
+            let targetId;
+            if (typeof pval === "object") {
+              if (!(pval.id in id2node)) {
+                targetId = pval.id;
+                nodes.push({
+                  id: targetId,
+                  label: pval.label,
+                  ...cnodeProps
+                });
+                id2node[targetId] = nodes[nodes.length - 1];
+              } else {
+                targetId = pval.id;
+              }
+            } else {
+              targetId = (++idcounter).toString();
+              nodes.push({
+                id: targetId,
+                label: pval,
+                ...cnodeProps
+              });
+              id2node[targetId] = nodes[nodes.length - 1];
+            }
+
+            edges.push({
+              source: node.id,
+              target: targetId,
+              label: wrapTextPreserveWord(`${prop.label} (${prop.id})`, 120, 14)
+            });
+          }
+        }
+      }
+    }
+    return { nodes, edges };
+  }
+
+  renderGraph() {
+    if (this.graphContainer.current === null) {
+      return;
+    }
+
+    if (this.graph === undefined) {
+      this.graph = new G6.Graph({
+        container: this.graphContainer.current,
+        width: this.graphContainer.current.scrollWidth,
+        height: this.initHeight,
+        linkCenter: true,
+        layout: {
+          type: 'force',
+          preventOverlap: true,
+          nodeSize: 10,
+          linkDistance: 200,
+        },
+        defaultEdge: {
+          type: "quadratic",
+          style: {
+            stroke: THEME === "dark" ? "white" : "black",
+            endArrow: {
+              fill: THEME === "dark" ? "white" : "black",
+              path: G6.Arrow.triangle(6, 8, 15),
+              d: 15
+            },
+          },
+          labelCfg: {
+            style: {
+              fill: 'black',
+              background: {
+                fill: "#ffffff",
+                stroke: "#9EC9FF",
+                padding: [2, 2, 2, 2],
+                radius: 2,
+              },
+            },
+          },
+        },
+        defaultNode: {
+        },
+        modes: {
+          default: ["drag-canvas", "drag-node"],
+          edit: ["click-select"],
+        },
+        nodeStateStyles: {
+          hover: {
+            fill: "lightsteelblue",
+          },
+        },
+      });
+    } else {
+      this.graph.clear();
+    }
+    // this.dataGraph();
+    this.graph.data(this.dataGraph());
+    this.graph.render();
+  }
+
+  render() {
+    return <div ref={this.graphContainer}>
+    </div>
+  }
+}

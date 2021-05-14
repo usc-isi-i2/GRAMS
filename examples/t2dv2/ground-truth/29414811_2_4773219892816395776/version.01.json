@@ -1,0 +1,92 @@
+{
+    "version": 2,
+    "table_id": "29414811_2_4773219892816395776",
+    "semantic_models": [
+        {
+            "version": 1,
+            "nodes": [
+                {
+                    "id": "wd:Q7889:0",
+                    "abs_uri": "http://www.wikidata.org/entity/Q7889",
+                    "rel_uri": "wd:Q7889",
+                    "approximation": false,
+                    "readable_label": null
+                },
+                {
+                    "id": "column-2",
+                    "col_index": 2,
+                    "label": "Genre"
+                },
+                {
+                    "id": "column-1",
+                    "col_index": 1,
+                    "label": "Game"
+                },
+                {
+                    "id": "column-4",
+                    "col_index": 4,
+                    "label": "Developer(s)"
+                },
+                {
+                    "id": "column-0",
+                    "col_index": 0,
+                    "label": "Year"
+                },
+                {
+                    "id": "column-3",
+                    "col_index": 3,
+                    "label": "Platform(s)"
+                }
+            ],
+            "edges": [
+                {
+                    "source": "wd:Q7889:0",
+                    "target": "column-2",
+                    "abs_uri": "http://www.wikidata.org/prop/P136",
+                    "rel_uri": "p:P136",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 1
+                },
+                {
+                    "source": "wd:Q7889:0",
+                    "target": "column-1",
+                    "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+                    "rel_uri": "rdfs:label",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 2
+                },
+                {
+                    "source": "wd:Q7889:0",
+                    "target": "column-4",
+                    "abs_uri": "http://www.wikidata.org/prop/P178",
+                    "rel_uri": "p:P178",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 3
+                },
+                {
+                    "source": "wd:Q7889:0",
+                    "target": "column-0",
+                    "abs_uri": "http://www.wikidata.org/prop/P577",
+                    "rel_uri": "p:P577",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 4
+                },
+                {
+                    "source": "wd:Q7889:0",
+                    "target": "column-3",
+                    "abs_uri": "http://www.wikidata.org/prop/P400",
+                    "rel_uri": "p:P400",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 5
+                }
+            ]
+        }
+    ],
+    "is_curated": true,
+    "note": ""
+}

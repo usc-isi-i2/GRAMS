@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "grams"
+version = "0.1.0"
+description = ""
+authors = ["Binh Vu <binh@toan2.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.25.1"
+beautifulsoup4 = "^4.9.3"
+orjson = "^3.5.2"
+python-slugify = "^5.0.2"
+tqdm = "^4.60.0"
+ujson = "^4.0.2"
+"ruamel.yaml" = "^0.17.4"
+loguru = "^0.5.3"
+redis = "^3.5.3"
+networkx = "^2.5.1"
+html5lib = "^1.1"
+omegaconf = "^2.0.6"
+rdflib = "^5.0.0"
+ipython = "^7.22.0"
+matplotlib = "^3.4.1"
+pydot = "^1.4.2"
+rltk = "^2.0.0-alpha.15"
+pslpython = "^2.2.2"
+fastnumbers = "^3.1.0"
+ftfy = "^6.0.1"
+elasticsearch = "^7.12.1"
+fuzzywuzzy = "^0.18.0"
+python-dotenv = "^0.17.0"
+python-Levenshtein = "^0.12.2"
+sm = {git = "ssh://git@github.com/binh-vu/sm.git"}
+
+[tool.poetry.dev-dependencies]
+neptune-client = "^0.9.5"
+ipykernel = "^5.5.4"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

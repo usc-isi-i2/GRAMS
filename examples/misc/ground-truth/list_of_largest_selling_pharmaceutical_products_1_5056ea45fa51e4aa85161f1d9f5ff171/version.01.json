@@ -1,0 +1,13 @@
+{
+  "version":2,
+  "table_id":"https://en.wikipedia.org/wiki/List_of_largest_selling_pharmaceutical_products/1",
+  "semantic_models":[
+    {"version":1,
+      "nodes":[
+        {"id":"col-1","col_index":1,"label":"Drug"},
+        {"id":"http://www.wikidata.org/entity/Q12140:0","abs_uri":"http://www.wikidata.org/entity/Q12140","rel_uri":"wd:Q12140","approximation":false,"readable_label":"medication (Q12140)"},
+        {"id":"col-2","col_index":2,"label":"Main indication"},
+        {"id":"http://www.wikidata.org/entity/Q42303753:0","abs_uri":"http://www.wikidata.org/entity/Q42303753","rel_uri":"wd:Q42303753","approximation":false,"readable_label":"designated intractable/rare diseases (Q42303753)"},{"id":"stmt:column-1-P683-val:72296","abs_uri":"http://wikiba.se/ontology#Statement","rel_uri":"wikibase:Statement","approximation":false,"readable_label":null},{"id":"col-0","col_index":0,"label":"Rank"},{"id":"val:72296","abs_uri":"http://wikiba.se/ontology#Statement","rel_uri":"wikibase:Statement","approximation":false,"readable_label":null},{"id":"col-3","col_index":3,"label":"Trade name"}],
+      "edges":[
+        {"source":"http://www.wikidata.org/entity/Q12140:0","target":"col-1","abs_uri":"http://www.w3.org/2000/01/rdf-schema#label","rel_uri":"rdfs:label","approximation":false,"readable_label":null,"id":1},{"source":"http://www.wikidata.org/entity/Q12140:0","target":"stmt:column-1-P683-val:72296","abs_uri":"http://www.wikidata.org/prop/P683","rel_uri":"p:P683","approximation":false,"readable_label":"ChEBI ID (P683)","id":5},{"source":"http://www.wikidata.org/entity/Q12140:0","target":"col-3","abs_uri":"http://www.wikidata.org/prop/P3780","rel_uri":"p:P3780","approximation":false,"readable_label":"active ingredient in (P3780)","id":11},{"source":"http://www.wikidata.org/entity/Q42303753:0","target":"col-2","abs_uri":"http://www.w3.org/2000/01/rdf-schema#label","rel_uri":"rdfs:label","approximation":false,"readable_label":null,"id":2},{"source":"http://www.wikidata.org/entity/Q42303753:0","target":"http://www.wikidata.org/entity/Q12140:0","abs_uri":"http://www.wikidata.org/prop/P2176","rel_uri":"p:P2176","approximation":false,"readable_label":"drug used for treatment (P2176)","id":10},{"source":"stmt:column-1-P683-val:72296","target":"col-0","abs_uri":"http://www.wikidata.org/prop/P4390","rel_uri":"p:P4390","approximation":false,"readable_label":"mapping relation type (P4390)","id":7},
+        {"source":"stmt:column-1-P683-val:72296","target":"val:72296","abs_uri":"http://www.wikidata.org/prop/P683","rel_uri":"p:P683","approximation":false,"readable_label":"ChEBI ID (P683)","id":8}]}],"is_curated":false,"note":""}

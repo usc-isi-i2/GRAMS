@@ -1,0 +1,21 @@
+col0,col1,col2,col3,col4
+PTEN EXPRESSION,trastuzumab,PTEN,human chromosome 10,Fulvestrant / everolimus combination therapy
+TP53 DELETERIOUS MUTATION,adjuvant therapy,TP53,human chromosome 17,ro-5045337
+DNMT1 EXPRESSION,decitabine,DNMT1,human chromosome 19,cisplatin
+TP53 OVEREXPRESSION,etoposide / mitomycin / cisplatin combination therapy,TP53,human chromosome 17,cisplatin
+CCND1 OVEREXPRESSION,palbociclib,CCND1,human chromosome 11,tamoxifen
+CD274 EXPRESSION,nivolumab,CD274,human chromosome 9,radiation therapy
+chr9:g.133748414T>A (ABL1:p.F359I),dasatinib,ABL1,human chromosome 9,imatinib
+ABL1 Y393C,dasatinib,ABL1,human chromosome 9,imatinib
+ABL1 Y342H,dasatinib,ABL1,human chromosome 9,imatinib
+ABL1 V289I,dasatinib,ABL1,human chromosome 9,imatinib
+KIT W557_K558DELWK,imatinib,KIT,human chromosome 4,imatinib
+ZEB1 EXPRESSION,Salinomycin / doxorubicin combination therapy,ZEB1,human chromosome 10,doxorubicin
+ERBB3 OVEREXPRESSION,afatinib / selumetinib combination therapy,ERBB3,human chromosome 12,cetuximab
+NRG1 EXPRESSION,cisplatin,NRG1,human chromosome 8,cetuximab
+chr9:g.133748289T>G (ABL1:p.F317C),nilotinib,ABL1,human chromosome 9,dasatinib
+chr9:g.133748288T>A (ABL1:p.F317I),nilotinib,ABL1,human chromosome 9,dasatinib
+chr9:g.133748288T>G (ABL1:p.F317V),nilotinib,ABL1,human chromosome 9,dasatinib
+chr9:g.133748282A>G (ABL1:p.T315A),nilotinib,ABL1,human chromosome 9,dasatinib
+CDK6 OVEREXPRESSION,Fulvestrant / palbociclib combination therapy,CDK6,human chromosome 7,Fulvestrant
+AREG EXPRESSION,Panitumumab,AREG,human chromosome 4,crizotinib

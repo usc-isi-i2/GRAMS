@@ -1,0 +1,21 @@
+col0,col1,col2,col3,col4
+mumps,herpangina,23,mumps virus,fever
+scarlet fever,streptococcal infection,5,Streptococcus pyogenes,fever
+brucellosis,zoonosis,5,Brucella,fatigue
+leptospirosis,spirochetal diseases,20,Leptospira interrogans serovar Lai str. 56601,headache
+legionnaires' disease,atypical pneumonia,16,Legionella pneumophila,headache
+Q fever,primary bacterial infectious disease,60,Coxiella burnetii,headache
+cryptosporidiosis,intestinal parasite infection,10,Cryptosporidium parvum,fever
+exanthema subitum,viral infectious disease,12,Human herpesvirus 6,fever
+Japanese encephalitis,brain diseases,15,Japanese encephalitis virus,headache
+ehrlichiosis,tick-borne disease,2,Ehrlichia chaffeensis,headache
+babesiosis,parasitic protozoa infectious disease,4,Babesia,headache
+campylobacteriosis,gastroenteritis,7,Campylobacter jejuni,headache
+Lyme disease,primary bacterial infectious disease,30,Borrelia burgdorferi,myalgia
+chikungunya,neglected tropical disease,12,Chikungunya virus,fever
+shigellosis,bacterial infectious disease,4,Shigella,fever
+poliomyelitis,peripheral neuropathy,35,poliovirus,paralysis
+tuberculosis,mycobacterium infectious disease,8,Mycobacterium tuberculosis,cough
+malaria,parasitic protozoa infectious disease,30,Plasmodium,anemia
+pertussis,commensal bacterial infectious disease,21,Bordetella pertussis,fatigue
+typhoid fever,primary bacterial infectious disease,30,Salmonella enterica,headache
