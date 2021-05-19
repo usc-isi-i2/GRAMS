@@ -104,7 +104,7 @@ class MultiLingualString(str):
         return {"lang2value": self.lang2value, "lang": self.lang}
 
     def __getnewargs__(self) -> Tuple[str]:
-        return (self.lang2value, self.lang)
+        return self.lang2value, self.lang
 
 
 class MultiLingualStringList(List[str]):
