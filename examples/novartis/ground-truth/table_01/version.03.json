@@ -20,14 +20,14 @@
           "abs_uri": "http://www.wikidata.org/entity/Q12136",
           "rel_uri": "wd:Q12136",
           "approximation": false,
-          "readable_label": null
+          "readable_label": "disease (Q12136)"
         },
         {
           "id": "http://www.wikidata.org/entity/Q40397:0",
           "abs_uri": "http://www.wikidata.org/entity/Q40397",
           "rel_uri": "wd:Q40397",
           "approximation": false,
-          "readable_label": null
+          "readable_label": "tissue (Q40397)"
         },
         {
           "id": "col-0",
@@ -39,7 +39,7 @@
           "abs_uri": "http://www.wikidata.org/entity/Q13442814",
           "rel_uri": "wd:Q13442814",
           "approximation": false,
-          "readable_label": null
+          "readable_label": "scholarly article (Q13442814)"
         },
         {
           "id": "col-3",
@@ -51,7 +51,7 @@
           "abs_uri": "http://www.wikidata.org/entity/Q7187",
           "rel_uri": "wd:Q7187",
           "approximation": false,
-          "readable_label": null
+          "readable_label": "gene (Q7187)"
         },
         {
           "id": "col-1",
@@ -75,7 +75,7 @@
           "abs_uri": "http://www.wikidata.org/prop/P279",
           "rel_uri": "p:P279",
           "approximation": false,
-          "readable_label": null,
+          "readable_label": "subclass of (P279)",
           "id": 2
         },
         {
@@ -93,7 +93,7 @@
           "abs_uri": "http://www.wikidata.org/prop/P698",
           "rel_uri": "p:P698",
           "approximation": false,
-          "readable_label": null,
+          "readable_label": "PubMed ID (P698)",
           "id": 5
         },
         {
@@ -102,7 +102,7 @@
           "abs_uri": "http://www.wikidata.org/prop/P921",
           "rel_uri": "p:P921",
           "approximation": false,
-          "readable_label": null,
+          "readable_label": "main subject (P921)",
           "id": 6
         },
         {
@@ -120,7 +120,16 @@
           "abs_uri": "http://www.wikidata.org/prop/P2293",
           "rel_uri": "p:P2293",
           "approximation": false,
-          "readable_label": null,
+          "readable_label": "genetic association (P2293)",
+          "id": 7
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q7187:0",
+          "target": "http://www.wikidata.org/entity/Q40397:0",
+          "abs_uri": "http://www.wikidata.org/prop/P5572",
+          "rel_uri": "p:P5572",
+          "approximation": false,
+          "readable_label": "expressed in (P5572)",
           "id": 7
         }
       ]

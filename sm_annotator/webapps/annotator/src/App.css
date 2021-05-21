@@ -1,0 +1,88 @@
+/* @import-normalize; */
+/* @import "~antd/dist/antd.css"; */
+
+.app-dark {
+  font-family: "SF Pro Text", sans-serif;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  line-height: 1.5715;
+  background-color: #000;
+}
+
+.app-light {
+  font-family: "SF Pro Text", sans-serif;
+}
+
+a {
+  text-decoration: underline;
+}
+
+.mt-2 {
+  margin-top: 8px;
+}
+
+.ml-2 {
+  margin-left: 8px;
+}
+
+.mb-2 {
+  margin-bottom: 8px;
+}
+
+.mr-2 {
+  margin-right: 8px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+table.lightweight-table {
+  text-align: left;
+  border-spacing: 0;
+  border-radius: 2px 2px 0 0;
+}
+
+table.lightweight-table tr {
+  vertical-align: middle;
+}
+
+.app-dark table.lightweight-table tr:hover {
+  background: #262626;
+}
+
+.app-light table.lightweight-table tr:hover {
+  background: #e1f5fe;
+}
+
+table.lightweight-table thead tr {
+  border-bottom: 2px solid #bdbdbd;
+  vertical-align: bottom;
+  font-weight: bold;
+}
+
+table.lightweight-table .row-separator {
+  border-bottom: 0.5px solid #bdbdbd;
+}
+
+table.lightweight-table td,
+table.lightweight-table th {
+  padding: 4px 20px 4px 4px;
+}
+
+.popover-table {
+  margin: -4px;
+}
+
+.popover-table table {
+  text-align: left;
+  border-spacing: 0;
+  border-radius: 2px 2px 0 0;
+}
+
+.popover-table ul {
+  list-style-type: "- ";
+  padding-left: 0;
+  margin-bottom: 0;
+}

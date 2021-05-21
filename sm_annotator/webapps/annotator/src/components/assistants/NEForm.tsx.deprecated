@@ -1,0 +1,330 @@
+import { Button, message, Switch } from "antd";
+import { inject, observer } from "mobx-react";
+import React from "react";
+import { Table, Graph, AppStore } from "../../models";
+import QNodeLink from "../primitives/QNodeLink";
+
+interface Props {
+  table?: Table;
+  graph?: Graph;
+  columnIndex: number;
+  enableAction: boolean;
+}
+
+interface State { }
+
+@inject((provider: { store: AppStore }) => ({
+  table: provider.store.props.table,
+  graph: provider.store.currentGraph,
+}))
+@observer
+export default class NEForm extends React.Component<Props, State> {
+  updateFilter = (
+    columnId: number,
+    qnode: string,
+    op: "include" | "exclude"
+  ) => {
+    return () => {
+      let filters = JSON.parse(
+        JSON.stringify(this.props.table!.filters.columnFilters)
+      );
+      if (filters[columnId] === undefined) {
+        filters[columnId] = {};
+      }
+      if (filters[columnId][qnode] !== op) {
+        filters[columnId][qnode] = op;
+      } else {
+        delete filters[columnId][qnode];
+        if (Object.keys(filters[columnId]).length === 0) {
+          delete filters[columnId];
+        }
+      }
+      this.props.table!.updateFilter({
+        ...this.props.table!.filters,
+        columnFilters: filters,
+      });
+    };
+  };
+
+  updateInterColFilter = (
+    targetId: number,
+    sourceId: number,
+    qnode: string,
+    op: "include" | "exclude"
+  ) => {
+    return () => {
+      let intercolFilter = JSON.parse(
+        JSON.stringify(this.props.table!.filters.interColumnFilters)
+      );
+      if (intercolFilter[targetId] === undefined) {
+        intercolFilter[targetId] = {};
+      }
+      if (intercolFilter[targetId][sourceId] === undefined) {
+        intercolFilter[targetId][sourceId] = {};
+      }
+      if (intercolFilter[targetId][sourceId][qnode] === op) {
+        delete intercolFilter[targetId][sourceId][qnode];
+        if (Object.keys(intercolFilter[targetId][sourceId]).length === 0) {
+          delete intercolFilter[targetId][sourceId];
+        }
+        if (Object.keys(intercolFilter[targetId]).length === 0) {
+          delete intercolFilter[targetId];
+        }
+      } else {
+        intercolFilter[targetId][sourceId][qnode] = op;
+      }
+
+      this.props.table!.updateFilter({
+        ...this.props.table!.filters,
+        interColumnFilters: intercolFilter,
+      });
+    };
+  };
+
+  public static getIndentIndicator = (depth: number) => {
+    let indent = [];
+    for (let i = 0; i < depth; i++) {
+      if (i === 0) {
+        indent.push("\u00B7".repeat(3));
+      } else {
+        indent.push(<span key={i} style={{ display: 'inline-block', transform: 'scale(1, 4)' }}>{"\uff5c"}</span>);
+        indent.push("\u00B7".repeat(3));
+      }
+    }
+    indent.push("↳");
+    return <span style={{ fontFamily: "monospace", fontSize: 10 }}>{indent}</span>
+  }
+
+  selectLinkType = (sourceIndex: number, predicate: { id: string, label: string }) => {
+    return () => {
+      try {
+        this.props.graph!.addColumnRelationship(sourceIndex, this.props.columnIndex, {
+          uri: predicate.id,
+          label: predicate.label,
+          approximation: false
+        });
+      } catch (error) {
+        message.error(error.message);
+        console.error(error);
+      }
+    }
+  }
+
+  selectNEType = (classType: { id: string, uri: string, label: string }) => {
+    return () => {
+      try {
+        this.props.graph!.upsertColumnType(this.props.columnIndex, {
+          uri: classType.uri,
+          label: `${classType.label} (${classType.id})`,
+          approximation: false,
+        });
+      } catch (error) {
+        message.error(error.message);
+        console.error(error);
+      }
+    }
+  }
+
+  render() {
+    let table = this.props.table!;
+    let colindex = this.props.columnIndex;
+    let col = table.getColumnById(colindex);
+
+    if (col.metadata === undefined) {
+      return null;
+    }
+
+    let colFilter = table.filters.columnFilters[col.columnId] || {};
+    let intercolFilter = table.filters.interColumnFilters[col.columnId] || {};
+
+    let linkHierarchyRows = col.metadata.linkHierarchies.flatMap(
+      (linkHierarchy) => {
+        let source = table.getColumnById(linkHierarchy.sourceIndex);
+        let sourceColFilter = intercolFilter[linkHierarchy.sourceIndex] || {};
+
+        return linkHierarchy.hierarchy.map((type, index) => {
+          let prefix =
+            type.depth === 0 ? (
+              ""
+            ) : (
+                NEForm.getIndentIndicator(type.depth)
+              );
+          let includeSwitch = false;
+          let excludeSwitch = false;
+
+          if (sourceColFilter[type.id] !== undefined) {
+            if (sourceColFilter[type.id] === "include") {
+              includeSwitch = true;
+            } else {
+              excludeSwitch = true;
+            }
+          }
+
+          let action = null;
+          if (this.props.enableAction) {
+            action = (
+              <td>
+                <Button onClick={this.selectLinkType(source.columnId, type)}>Select</Button>
+              </td>
+            );
+          }
+
+          return (
+            <tr key={`${source.columnId}:${index}`} className={index === linkHierarchy.hierarchy.length - 1 ? "row-separator" : ""}>
+              {index === 0 ? (
+                <td rowSpan={linkHierarchy.hierarchy.length} className="row-separator">
+                  {source.title} ({source.columnId})
+                </td>
+              ) : null}
+              <td>
+                <QNodeLink qnode={type.id} style={{ textDecoration: "none" }}>
+                  {prefix} {type.label} ({type.id}){" "}
+                  {type.duplicated ? "(duplicated)" : ""}
+                </QNodeLink>
+              </td>
+              <td>{type.freq}</td>
+              <td>
+                <Switch
+                  size="small"
+                  checked={includeSwitch}
+                  onClick={this.updateInterColFilter(
+                    col.columnId,
+                    source.columnId,
+                    type.id,
+                    "include"
+                  )}
+                />
+              </td>
+              <td>
+                <Switch
+                  size="small"
+                  checked={excludeSwitch}
+                  onClick={this.updateInterColFilter(
+                    col.columnId,
+                    source.columnId,
+                    type.id,
+                    "exclude"
+                  )}
+                />
+              </td>
+              {action}
+            </tr>
+          );
+        });
+      }
+    );
+
+    return (
+      <React.Fragment>
+        <table className="lightweight-table">
+          <thead>
+            <tr>
+              <th>entities/row</th>
+              <th>merged entities/row</th>
+              <th>link/text</th>
+              <th>links/row</th>
+              <th># rows</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{col.metadata.averageEntitiesPerRow.toFixed(2)}</td>
+              <td>{col.metadata.averageMergedEntitiesPerRow.toFixed(2)}</td>
+              <td>{col.metadata.averageLinkCoverFractions.toFixed(2)}</td>
+              <td>{col.metadata.averageLinks.toFixed(2)}</td>
+              <td>{this.props.table!.totalRecords}</td>
+            </tr>
+          </tbody>
+        </table>
+        <table className="lightweight-table">
+          <thead>
+            <tr>
+              <th>Merged QNode Class</th>
+              <th>Frequency</th>
+              <th>Include</th>
+              <th>Exclude</th>
+              {this.props.enableAction ? <th>Action</th> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {col.metadata.mergedTypeHierarchy.map((type, index) => {
+              let prefix =
+                type.depth === 0 ? (
+                  ""
+                ) : (
+                    NEForm.getIndentIndicator(type.depth)
+                  );
+              let includeSwitch = false;
+              let excludeSwitch = false;
+
+              if (colFilter[type.id] !== undefined) {
+                if (colFilter[type.id] === "include") {
+                  includeSwitch = true;
+                } else {
+                  excludeSwitch = true;
+                }
+              }
+
+              let action = null;
+              if (this.props.enableAction) {
+                action = (
+                  <td>
+                    <Button onClick={this.selectNEType(type)}>Select</Button>
+                  </td>
+                );
+              }
+
+              return (
+                <tr key={index}>
+                  <td>
+                    <QNodeLink qnode={type.id} style={{ textDecoration: "none" }}>
+                      {prefix} {type.label} ({type.id}){" "}
+                      {type.duplicated ? "(duplicated)" : ""}
+                    </QNodeLink>
+                  </td>
+                  <td>{type.freq}</td>
+                  <td>
+                    <Switch
+                      size="small"
+                      checked={includeSwitch}
+                      onClick={this.updateFilter(
+                        col.columnId,
+                        type.id,
+                        "include"
+                      )}
+                    />
+                  </td>
+                  <td>
+                    <Switch
+                      size="small"
+                      checked={excludeSwitch}
+                      onClick={this.updateFilter(
+                        col.columnId,
+                        type.id,
+                        "exclude"
+                      )}
+                    />
+                  </td>
+                  {action}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <table className="lightweight-table">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Predicate</th>
+              <th>Frequency</th>
+              <th>Include</th>
+              <th>Exclude</th>
+              {this.props.enableAction ? <th>Action</th> : null}
+            </tr>
+          </thead>
+          <tbody>{linkHierarchyRows}</tbody>
+        </table>
+      </React.Fragment>
+    );
+  }
+}

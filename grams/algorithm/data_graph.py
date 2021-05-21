@@ -711,7 +711,7 @@ def kg_path_discovering(options: BuildDGOption, qnodes: Dict[str, QNode], kg_obj
         WikidataValueType.time.value: [LiteralMatcher.time_test],
         WikidataValueType.quantity.value: [LiteralMatcher.quantity_test],
         WikidataValueType.mono_lingual_text.value: [LiteralMatcher.mono_lingual_text_test_exact],
-        WikidataValueType.entity_id.value: [LiteralMatcher.entity_id_test_fuzzy]
+        WikidataValueType.entity_id.value: []#[LiteralMatcher.entity_id_test_fuzzy]
     }
 
     # noinspection PyUnusedLocal,PyShadowingNames
@@ -1462,7 +1462,6 @@ def prune_data_graph_deprecated(dg: nx.MultiDiGraph):
                 # identify if there is other better path is shorter and directly connect the two nodes
                 if (gp.id, gc.id) not in has_direct_kglink_paths:
                     has_better_path = False
-                    has_better_path
                     has_better_path = any((
                         any((
                             provenance.gen_method == LinkGenMethod.FromWikidataLink
@@ -1533,7 +1532,7 @@ def build_data_graph(table: W2WTable,
                 if link.qnode_id is not None:
                     cell_qnodes.add(link.qnode_id)
                     if link.qnode_id not in cell_qnode_spans:
-                        cell_qnode_spans[link.qnode_id] = []
+                            cell_qnode_spans[link.qnode_id] = []
                     cell_qnode_spans[link.qnode_id].append(Span(link.start, link.end))
 
             assert all(len(spans) == len(set(spans)) for spans in cell_qnode_spans.values())

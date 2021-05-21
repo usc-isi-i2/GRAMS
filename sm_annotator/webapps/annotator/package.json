@@ -1,0 +1,57 @@
+{
+  "name": "sm_annotator",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@antv/g6": "^3.7.1",
+    "@antv/hierarchy": "^0.6.6",
+    "@testing-library/jest-dom": "^4.2.4",
+    "@testing-library/react": "^9.5.0",
+    "@testing-library/user-event": "^7.2.1",
+    "@types/jest": "^24.9.1",
+    "@types/node": "^12.12.55",
+    "@types/react": "^16.9.49",
+    "@types/react-dom": "^16.9.8",
+    "antd": "^4.6.2",
+    "axios": "^0.20.0",
+    "fuse.js": "^6.4.1",
+    "memoize-one": "^5.1.1",
+    "mobx": "^5.15.6",
+    "mobx-react": "^6.3.0",
+    "react": "^16.13.1",
+    "react-dom": "^16.13.1",
+    "react-scripts": "3.4.3",
+    "typescript": "^3.7.5"
+  },
+  "scripts": {
+    "start": "REACT_APP_DEV=yes react-app-rewired start",
+    "build": "react-app-rewired build",
+    "build-bundle": "npx ./scripts/bundle.js && gzip build/static/js/main.js && cp build/static/js/main.js.gz ./dist/",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "watch": "npx ./scripts/watch.js --disable-chunks -o static/js/main.js -v"
+  },
+  "eslintConfig": {
+    "extends": "react-app"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "cra-build-watch": "^3.2.0",
+    "css-loader": "3.4.2",
+    "react-app-rewired": "^2.1.6",
+    "rewire": "^5.0.0",
+    "to-string-loader": "^1.1.6",
+    "uglifyjs-webpack-plugin": "^2.2.0"
+  }
+}

@@ -1,3 +1,4 @@
+import copy
 from dataclasses import dataclass
 from operator import itemgetter
 from urllib.parse import urlparse, unquote_plus
@@ -28,6 +29,10 @@ class RemoteExtractedTableCellHTMLElement:
                 yield el
         yield self
 
+    def clone(self):
+        return RemoteExtractedTableCellHTMLElement(self.tag, self.start, self.end,
+                                                   copy.copy(self.attrs), [c.clone() for c in self.children])
+
 
 @dataclass
 class RemoteExtractedTableCell:
@@ -45,13 +50,24 @@ class RemoteExtractedTableCell:
     elements: List[RemoteExtractedTableCellHTMLElement]
 
     # original row & col span
-    # original_rowspan: Optional[int] = None
-    # original_colspan: Optional[int] = None
+    original_rowspan: Optional[int] = None
+    original_colspan: Optional[int] = None
 
     def travel_elements_post_order(self):
         for el in self.elements:
             for pointer in el.post_order():
                 yield pointer
+
+    def clone(self):
+        return RemoteExtractedTableCell(
+            value=self.value,
+            rowspan=self.rowspan,
+            colspan=self.colspan,
+            html=self.html,
+            elements=[el.clone() for el in self.elements],
+            original_rowspan=self.original_rowspan,
+            original_colspan=self.original_colspan
+        )
 
 
 @dataclass
@@ -66,6 +82,9 @@ class ContextLevel:
     level: int
     header: str
     content: str
+
+    def clone(self):
+        return ContextLevel(self.level, self.header, self.content)
 
 
 class OverlapSpanException(Exception):
@@ -91,89 +110,118 @@ class RemoteExtractedTable:
     context: List[ContextLevel]
     # list of rows in the table
     rows: List[RemoteExtractedTableRow]
-    # is_spanned: bool = False
 
-    # def span(self) -> "Table":
-    #     """Span the table by copying values to merged field
-    #     """
-    #     pi = 0
-    #     data = []
-    #     pending_ops = {}
-    #
-    #     # >>> begin find the max #cols
-    #     # calculate the number of columns as some people may actually set unrealistic colspan as they are lazy..
-    #     # I try to make its behaviour as much closer to the browser as possible.
-    #     # one thing I notice that to find the correct value of colspan, they takes into account the #cells of rows below the current row
-    #     # so we may have to iterate several times
-    #     cols = [0 for _ in range(len(self.rows))]
-    #     for i, row in enumerate(self.rows):
-    #         cols[i] += len(row.cells)
-    #         for cell in row.cells:
-    #             if cell.rowspan > 1:
-    #                 for j in range(1, cell.rowspan):
-    #                     if i + j < len(cols):
-    #                         cols[i + j] += 1
-    #
-    #     _row_index, max_ncols = max(enumerate(cols), key=itemgetter(1))
-    #     # sometimes they do show an extra cell for over-colspan row, but it's not consistent or at least not easy for me to find the rule
-    #     # so I decide to not handle that. Hope that we don't have many tables like that.
-    #     # >>> finish find the max #cols
-    #
-    #     for row in self.rows:
-    #         new_row = []
-    #         pj = 0
-    #         for cell_index, cell in enumerate(row.cells):
-    #             cell = cell.clone()
-    #             cell.original_colspan = cell.colspan
-    #             cell.original_rowspan = cell.rowspan
-    #             cell.colspan = 1
-    #             cell.rowspan = 1
-    #
-    #             # adding cell from the top
-    #             while (pi, pj) in pending_ops:
-    #                 new_row.append(pending_ops[pi, pj].clone())
-    #                 pending_ops.pop((pi, pj))
-    #                 pj += 1
-    #
-    #             # now add cell and expand the column
-    #             for _ in range(cell.original_colspan):
-    #                 if (pi, pj) in pending_ops:
-    #                     # exception, overlapping between colspan and rowspan
-    #                     raise OverlapSpanException()
-    #                 new_row.append(cell.clone())
-    #                 for ioffset in range(1, cell.original_rowspan):
-    #                     # no need for this if below
-    #                     # if (pi+ioffset, pj) in pending_ops:
-    #                     #     raise OverlapSpanException()
-    #                     pending_ops[pi + ioffset, pj] = cell
-    #                 pj += 1
-    #
-    #                 if pj >= max_ncols:
-    #                     # our algorithm cannot handle the case where people are bullying the colspan system, and only can handle the case
-    #                     # where the span that goes beyond the maximum number of columns is in the last column.
-    #                     if cell_index != len(row.cells) - 1:
-    #                         raise InvalidColumnSpanException()
-    #                     else:
-    #                         break
-    #
-    #         # add more cells from the top since we reach the end
-    #         while (pi, pj) in pending_ops and pj < max_ncols:
-    #             new_row.append(pending_ops[pi, pj].clone())
-    #             pending_ops.pop((pi, pj))
-    #             pj += 1
-    #
-    #         data.append(Row(cells=new_row, attrs=copy.copy(row.attrs)))
-    #         pi += 1
-    #
-    #     # len(pending_ops) may > 0, but fortunately, it doesn't matter as the browser also does not render that extra empty lines
-    #     return Table(id=self.id,
-    #                  pageURI=self.pageURI,
-    #                  classes=copy.copy(self.classes),
-    #                  rows=data,
-    #                  caption=self.caption,
-    #                  attrs=copy.copy(self.attrs),
-    #                  is_spanned=True,
-    #                  external_links=copy.copy(self.external_links))
+    def span(self) -> "RemoteExtractedTable":
+        """Span the table by copying values to merged field
+        """
+        pi = 0
+        data = []
+        pending_ops = {}
+
+        # >>> begin find the max #cols
+        # calculate the number of columns as some people may actually set unrealistic colspan as they are lazy..
+        # I try to make its behaviour as much closer to the browser as possible.
+        # one thing I notice that to find the correct value of colspan, they takes into account the #cells of rows below the current row
+        # so we may have to iterate several times
+        cols = [0 for _ in range(len(self.rows))]
+        for i, row in enumerate(self.rows):
+            cols[i] += len(row.cells)
+            for cell in row.cells:
+                if cell.rowspan > 1:
+                    for j in range(1, cell.rowspan):
+                        if i + j < len(cols):
+                            cols[i + j] += 1
+
+        _row_index, max_ncols = max(enumerate(cols), key=itemgetter(1))
+        # sometimes they do show an extra cell for over-colspan row, but it's not consistent or at least not easy for me to find the rule
+        # so I decide to not handle that. Hope that we don't have many tables like that.
+        # >>> finish find the max #cols
+
+        for row in self.rows:
+            new_row = []
+            pj = 0
+            for cell_index, cell in enumerate(row.cells):
+                cell = cell.clone()
+                cell.original_colspan = cell.colspan
+                cell.original_rowspan = cell.rowspan
+                cell.colspan = 1
+                cell.rowspan = 1
+
+                # adding cell from the top
+                while (pi, pj) in pending_ops:
+                    new_row.append(pending_ops[pi, pj].clone())
+                    pending_ops.pop((pi, pj))
+                    pj += 1
+
+                # now add cell and expand the column
+                for _ in range(cell.original_colspan):
+                    if (pi, pj) in pending_ops:
+                        # exception, overlapping between colspan and rowspan
+                        raise OverlapSpanException()
+                    new_row.append(cell.clone())
+                    for ioffset in range(1, cell.original_rowspan):
+                        # no need for this if below
+                        # if (pi+ioffset, pj) in pending_ops:
+                        #     raise OverlapSpanException()
+                        pending_ops[pi + ioffset, pj] = cell
+                    pj += 1
+
+                    if pj >= max_ncols:
+                        # our algorithm cannot handle the case where people are bullying the colspan system, and only can handle the case
+                        # where the span that goes beyond the maximum number of columns is in the last column.
+                        if cell_index != len(row.cells) - 1:
+                            raise InvalidColumnSpanException()
+                        else:
+                            break
+
+            # add more cells from the top since we reach the end
+            while (pi, pj) in pending_ops and pj < max_ncols:
+                new_row.append(pending_ops[pi, pj].clone())
+                pending_ops.pop((pi, pj))
+                pj += 1
+
+            data.append(RemoteExtractedTableRow(cells=new_row, attrs=copy.copy(row.attrs)))
+            pi += 1
+
+        # len(pending_ops) may > 0, but fortunately, it doesn't matter as the browser also does not render that extra empty lines
+        return RemoteExtractedTable(
+                     page_url=self.page_url,
+                     caption=self.caption,
+                     attrs=copy.copy(self.attrs),
+                     context=[c.clone() for c in self.context],
+                     rows=data)
+
+    def pad(self) -> "RemoteExtractedTable":
+        """Pad the irregular table (missing cells) to make it become regular table.
+
+        This function only return new table when it's padded
+        """
+        if len(self.rows) == 0:
+            return self
+
+        ncols = len(self.rows[0].cells)
+        is_regular_table = all(len(r.cells) == ncols for r in self.rows)
+        if is_regular_table:
+            return self
+
+        max_ncols = max(len(r.cells) for r in self.rows)
+        default_cell = RemoteExtractedTableCell(
+            value="", rowspan=1, colspan=1, html="", elements=[], original_rowspan=1, original_colspan=1
+        )
+
+        rows = []
+        for r in self.rows:
+            row = RemoteExtractedTableRow(cells=[c.clone() for c in r.cells], attrs=copy.copy(r.attrs))
+            while len(row.cells) < max_ncols:
+                row.cells.append(default_cell.clone())
+            rows.append(row)
+
+        return RemoteExtractedTable(
+            page_url=self.page_url,
+            caption=self.caption,
+            attrs=copy.copy(self.attrs),
+            context=[c.clone() for c in self.context],
+            rows=rows)
 
     def as_df(self):
         return pd.DataFrame([
@@ -548,11 +596,24 @@ def requests_get(url):
     return requests.get(url)
 
 
-def fetch_tables(url: str):
+def fetch_tables(url: str, auto_span: bool=True, auto_pad: bool=True):
     resp = requests_get(url)
     assert resp.status_code == 200
     html = resp.text
     tables = HTMLTableExtractor().extract(url, html)
+    if auto_span:
+        new_tables = []
+        for tbl in tables:
+            try:
+                tbl = tbl.span()
+                new_tables.append(tbl)
+            except OverlapSpanException:
+                pass
+            except InvalidColumnSpanException:
+                pass
+        tables = new_tables
+    if auto_pad:
+        tables = [tbl.pad() for tbl in tables]
     return tables
 
 

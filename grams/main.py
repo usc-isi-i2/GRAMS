@@ -41,9 +41,10 @@ class GRAMS:
             self.qnodes = QNodeDB(os.path.join(data_dir, "qnodes.db"))
             self.wdclasses = WDClassDB(os.path.join(data_dir, "wdclasses.db"))
             self.wdprops = WDProperty.from_file(data_dir, load_parent_closure=True)
-            for item in M.deserialize_lines(os.path.join(data_dir, "new_properties.jl")):
-                item =  WDProperty.deserialize(item)
-                self.wdprops[item.id] = item
+            if Path(os.path.join(data_dir, "new_properties.jl")).exists():
+                for item in M.deserialize_lines(os.path.join(data_dir, "new_properties.jl")):
+                    item =  WDProperty.deserialize(item)
+                    self.wdprops[item.id] = item
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir("/workspace/sm-dev/data/wikidata/step_2/quantity_prop_stats/quantity_stats")
 
         self.build_dg_option = getattr(BuildDGOption, cfg.data_graph.options[0])
@@ -243,75 +244,81 @@ class GRAMS:
 
 if __name__ == '__main__':
     cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
-    # tbl = I.W2WTable.from_csv_file(ROOT_DIR / "examples/medicine/table_01.csv")
+
+    tbl = I.W2WTable.from_csv_file(ROOT_DIR / "examples/novartis/tables/table_03.csv")
+    data = M.deserialize_json(ROOT_DIR / "examples/novartis/ground-truth/table_03/version.01.json")
+    sm = O.SemanticModel.from_json(data['semantic_models'][0])
+    sm.draw()
+    exit(0)
     # tbl = I.W2WTable.from_json(M.deserialize_json(ROOT_DIR / "examples/misc/tables/list_of_largest_selling_pharmaceutical_products_bebff3652629c07e82fa5897b54f612f.json"))
-    tbl = I.W2WTable.from_csv_file(ROOT_DIR / "examples/t2dv2/tables/29414811_2_4773219892816395776.csv")
-    for ri in range(tbl.size()):
-        for ci in range(len(tbl.table.columns)):
-            tbl.links[ri][ci] = []
-    cea = M.deserialize_csv(ROOT_DIR / "examples/t2dv2/tables/29414811_2_4773219892816395776.candidates.tsv", delimiter="\t")
-    gold_cea = {}
-    for r in cea:
-        ri, ci = int(r[0]), int(r[1])
-        gold_cea[ri, ci] = r[2]
-        tbl.links[ri][ci] = [
-            I.Link(0, len(tbl.table.columns[ci].values[ri]), "", x.split(":")[0])
-            for x in r[3:]
-        ]
+    # tbl = I.W2WTable.from_csv_file(ROOT_DIR / "examples/t2dv2/tables/29414811_2_4773219892816395776.csv")
+    # for ri in range(tbl.size()):
+    #     for ci in range(len(tbl.table.columns)):
+    #         tbl.links[ri][ci] = []
+    # cea = M.deserialize_csv(ROOT_DIR / "examples/t2dv2/tables/29414811_2_4773219892816395776.candidates.tsv", delimiter="\t")
+    # gold_cea = {}
+    # for r in cea:
+    #     ri, ci = int(r[0]), int(r[1])
+    #     gold_cea[ri, ci] = r[2]
+    #     tbl.links[ri][ci] = [
+    #         I.Link(0, len(tbl.table.columns[ci].values[ri]), "", x.split(":")[0])
+    #         for x in r[3:]
+    #     ]
     grams = GRAMS(ROOT_DIR / "data", cfg)
     annotation = grams.annotate(tbl)
     annotation.sm.draw()
+    print(annotation.sm.to_json())
     grams.timer.report()
 
-    # %%
-    # ent column
-    from grams.algorithm.sm_wikidata import WDOnt
-    wdont = WDOnt(grams.qnodes, grams.wdclasses, grams.wdprops)
-    from collections import defaultdict
-    from grams.algorithm.data_graph import *
-    # %%
-    ci, classid = list(annotation.pred_cta.items())[0]
-    pred_ents = []
-    props = {'P136', 'P178', 'P400', 'P577'}
-    final_prediction = []
-    original_prediction = []
-    for ri in range(tbl.size()):
-        can_ents = []
-        for link in tbl.links[ri][ci]:
-            if link.qnode_id is not None:
-                qnode = grams.qnodes[link.qnode_id]
-                if any(stmt.value.as_qnode_id() == classid for stmt in qnode.props.get("P31", [])):
-                    can_ents.append(qnode.id)
-
-        qnode2score = defaultdict(set)
-        for stmt, edges in annotation.dg[f"{ri}-{ci}"].items():
-            assert len(edges) == 1
-            edgeid = list(edges.keys())[0]
-            if edgeid not in props:
-                continue
-            stmt = annotation.dg.nodes[stmt]['data']
-            for target_flow in stmt.forward_flow[EdgeFlowSource(source_id=f"{ri}-{ci}", edge_id=edgeid)]:
-                target = annotation.dg.nodes[target_flow.target_id]['data']
-                if target.is_cell and target.column != ci:
-                    qnode2score[stmt.qnode_id].add(target.column)
-
-        best_can, best_can_score = None, -1
-        for can_ent in can_ents:
-            can_ent_score = len(qnode2score.get(can_ent, []))
-            if can_ent_score > best_can_score:
-                best_can = can_ent
-                best_can_score = can_ent_score
-
-        # print(ri, gold_cea[ri, ci], best_can == gold_cea[ri, ci], can_ents[0] == gold_cea[ri, ci], can_ents)
-        print(ri, wdont.get_qnode_label(gold_cea[ri, ci]), best_can == gold_cea[ri, ci], can_ents[0] == gold_cea[ri, ci], [wdont.get_qnode_label(x) for x in can_ents])
-        final_prediction.append((gold_cea[ri, ci], best_can))
-        original_prediction.append((gold_cea[ri, ci], tbl.links[ri][ci][0].qnode_id))
-    #%%
-    print("TOP1", sum(x[0] == x[1] for x in final_prediction) / len(final_prediction))
-    print("TOP1 origin", sum(x[0] == x[1] for x in original_prediction) / len(final_prediction))
-
-    count = 0
-    for ri in range(tbl.size()):
-        if any(link.qnode_id == gold_cea[ri, ci] for link in tbl.links[ri][ci][:5]):
-            count += 1
-    print("TOP5", count / len(final_prediction))
+    # # %%
+    # # ent column
+    # from grams.algorithm.sm_wikidata import WDOnt
+    # wdont = WDOnt(grams.qnodes, grams.wdclasses, grams.wdprops)
+    # from collections import defaultdict
+    # from grams.algorithm.data_graph import *
+    # # %%
+    # ci, classid = list(annotation.pred_cta.items())[0]
+    # pred_ents = []
+    # props = {'P136', 'P178', 'P400', 'P577'}
+    # final_prediction = []
+    # original_prediction = []
+    # for ri in range(tbl.size()):
+    #     can_ents = []
+    #     for link in tbl.links[ri][ci]:
+    #         if link.qnode_id is not None:
+    #             qnode = grams.qnodes[link.qnode_id]
+    #             if any(stmt.value.as_qnode_id() == classid for stmt in qnode.props.get("P31", [])):
+    #                 can_ents.append(qnode.id)
+    #
+    #     qnode2score = defaultdict(set)
+    #     for stmt, edges in annotation.dg[f"{ri}-{ci}"].items():
+    #         assert len(edges) == 1
+    #         edgeid = list(edges.keys())[0]
+    #         if edgeid not in props:
+    #             continue
+    #         stmt = annotation.dg.nodes[stmt]['data']
+    #         for target_flow in stmt.forward_flow[EdgeFlowSource(source_id=f"{ri}-{ci}", edge_id=edgeid)]:
+    #             target = annotation.dg.nodes[target_flow.target_id]['data']
+    #             if target.is_cell and target.column != ci:
+    #                 qnode2score[stmt.qnode_id].add(target.column)
+    #
+    #     best_can, best_can_score = None, -1
+    #     for can_ent in can_ents:
+    #         can_ent_score = len(qnode2score.get(can_ent, []))
+    #         if can_ent_score > best_can_score:
+    #             best_can = can_ent
+    #             best_can_score = can_ent_score
+    #
+    #     # print(ri, gold_cea[ri, ci], best_can == gold_cea[ri, ci], can_ents[0] == gold_cea[ri, ci], can_ents)
+    #     print(ri, wdont.get_qnode_label(gold_cea[ri, ci]), best_can == gold_cea[ri, ci], can_ents[0] == gold_cea[ri, ci], [wdont.get_qnode_label(x) for x in can_ents])
+    #     final_prediction.append((gold_cea[ri, ci], best_can))
+    #     original_prediction.append((gold_cea[ri, ci], tbl.links[ri][ci][0].qnode_id))
+    # #%%
+    # print("TOP1", sum(x[0] == x[1] for x in final_prediction) / len(final_prediction))
+    # print("TOP1 origin", sum(x[0] == x[1] for x in original_prediction) / len(final_prediction))
+    #
+    # count = 0
+    # for ri in range(tbl.size()):
+    #     if any(link.qnode_id == gold_cea[ri, ci] for link in tbl.links[ri][ci][:5]):
+    #         count += 1
+    # print("TOP5", count / len(final_prediction))

@@ -176,16 +176,16 @@ class PSLSteinerTreeSolver:
         # ##################################################################
         # add rules
         feat_weights = {
-            self.LinkNegPrior: 1,
-            self.TypeNegPrior: 1,
+            self.LinkNegPrior: 2,
+            self.TypeNegPrior: 2,
             self.LinkNegParentPropPrior: 0.1,
             self.CascadingError: 2,
             self.TypeMustInPropRange: 2,
-            self.FreqLinkOverRow: 2,
-            self.FreqLinkOverEntRow: 2,
-            self.FreqLinkOverPosLink: 2,
-            self.FreqLinkUnmatchOverEntRow: 2,
-            self.FreqLinkUnmatchOverPossibleLink: 2,
+            self.FreqLinkOverRow: 3,
+            self.FreqLinkOverEntRow: 4,
+            self.FreqLinkOverPosLink: 5,
+            self.FreqLinkUnmatchOverEntRow: 4,
+            self.FreqLinkUnmatchOverPossibleLink: 5,
             self.LinkHeaderSimilarity: 2,
             self.LinkDataTypeMismatch: 100,
             self.FreqTypeOverRow: 2,
@@ -259,9 +259,13 @@ class PSLSteinerTreeSolver:
             preds = {x.upper() for x in data.keys()}
             miss_preds = [p for p in self.model.get_predicates() if p not in preds and p not in {'REL', 'TYPE'}]
             raise Exception(f"Data in all predicates must be set. Missing {','.join(miss_preds)} predicates")
-        can_be_empty_predicates = {"SubProp", f"RelFeature_{self.LinkDataTypeMismatch}", "NotRange"}
+        # TODO: fix me! temporary allow cantype to be empty
+        can_be_empty_predicates = {"SubProp", f"RelFeature_{self.LinkDataTypeMismatch}", "NotRange", "CanType", f"TypeFeature_{self.FreqTypeOverRow}"}
         RelPredicate = self.model.get_predicate("Rel").clear_data().add_data(Partition.TARGETS, data['CanRel'])
-        TypePredicate = self.model.get_predicate("Type").clear_data().add_data(Partition.TARGETS, data['CanType'])
+        if len(data['CanType']) == 0:
+            TypePredicate = self.model.get_predicate("Type").clear_data()
+        else:
+            TypePredicate = self.model.get_predicate("Type").clear_data().add_data(Partition.TARGETS, data['CanType'])
         for pred, pred_data in data.items():
             if pred in can_be_empty_predicates and len(pred_data) == 0:
                 self.model.get_predicate(pred).clear_data()
