@@ -16,7 +16,7 @@ from sm_annotator.base_app import BaseApp
 from sm_annotator.ontology_api import OntologyAPI
 from sm_annotator.slider import SliderApp
 from grams.algorithm.helpers import reorder2tree, IndirectDictAccess
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper, WDOnt, OutOfNamespace
 import grams.outputs as O
 import grams.inputs as I
@@ -25,7 +25,7 @@ import grams.misc as M
 
 class Session:
 
-    def __init__(self, id: str, is_curated: bool, note: str, table: W2WTable, graphs: List[O.SemanticModel]):
+    def __init__(self, id: str, is_curated: bool, note: str, table: LinkedTable, graphs: List[O.SemanticModel]):
         self.id = id
         self.is_curated = is_curated
         self.note = note
@@ -116,7 +116,7 @@ class Annotator(_Annotator):
         self.wdclass_parents: Dict[str, Set[str]] = IndirectDictAccess(self.wdclasses, attrgetter("parents_closure"))
         self.cache_id2label: Dict[str, str] = {}
 
-    def annotate(self, id: str, tbl: W2WTable):
+    def annotate(self, id: str, tbl: LinkedTable):
         self.cache_id2label = {}
         infile = M.get_latest_path(self.savedir / id / "version.json")
         if infile is None:
@@ -675,7 +675,7 @@ class BatchAnnotator(SliderApp):
     def __init__(self, annotator: Annotator, dev: bool = False):
         super().__init__(annotator, annotator.annotate, dev)
 
-    def batch_annotate(self, tables_with_ids: List[Tuple[str, str, W2WTable]], start_index: int=0):
+    def batch_annotate(self, tables_with_ids: List[Tuple[str, str, LinkedTable]], start_index: int=0):
         self.set_data([
             dict(description=description, args=(table_id, table))
             for table_id, description, table in tables_with_ids

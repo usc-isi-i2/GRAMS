@@ -51,7 +51,7 @@ class GRAMS:
         for op in cfg.data_graph.options[1:]:
             self.build_dg_option = self.build_dg_option | getattr(BuildDGOption, op)
 
-    def annotate(self, table: I.W2WTable, cwd: Union[Path, str]=None, use_local_cache: bool=False, verbose: bool=False):
+    def annotate(self, table: I.LinkedTable, cwd: Union[Path, str]=None, use_local_cache: bool=False, verbose: bool=False):
         qnode_ids = {link.qnode_id
                      for rlinks in table.links for links in rlinks
                      for link in links if link.qnode_id is not None}
@@ -91,7 +91,7 @@ class GRAMS:
         sm = self.create_sm_from_cta_cpa(table, pred_sg, cta, qnodes, wdclasses)
         return Annotation(sm=sm, dg=dg, sg=sg, pred_sg=pred_sg, pred_cta=cta)
 
-    def create_sm_from_cta_cpa(self, table: I.W2WTable, sg: nx.MultiDiGraph, cta: Dict[int, str], qnodes: Dict[str, QNode], wdclasses: Dict[str, WDClass]):
+    def create_sm_from_cta_cpa(self, table: I.LinkedTable, sg: nx.MultiDiGraph, cta: Dict[int, str], qnodes: Dict[str, QNode], wdclasses: Dict[str, WDClass]):
         sm = O.SemanticModel()
         sm_helper = WikidataSemanticModelHelper(qnodes, wdclasses, self.wdprops)
         # create class nodes first
@@ -245,7 +245,7 @@ class GRAMS:
 if __name__ == '__main__':
     cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
 
-    tbl = I.W2WTable.from_csv_file(ROOT_DIR / "examples/novartis/tables/table_03.csv")
+    tbl = I.LinkedTable.from_csv_file(ROOT_DIR / "examples/novartis/tables/table_03.csv")
     data = M.deserialize_json(ROOT_DIR / "examples/novartis/ground-truth/table_03/version.01.json")
     sm = O.SemanticModel.from_json(data['semantic_models'][0])
     sm.draw()

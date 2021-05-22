@@ -249,7 +249,7 @@ class RemoteExtractedTable:
             ]
             for ri, row in enumerate(self.rows[1:])
         ]
-        return I.W2WTable(table, I.Context(), links)
+        return I.LinkedTable(table, I.Context(), links)
 
     def get_title_from_url(self, url: str) -> str:
         """This function converts a wikipedia page/article's URL to its title. The function is tested manually in `20200425-wikipedia-links` notebook in section 2.2.

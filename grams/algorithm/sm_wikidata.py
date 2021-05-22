@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from rdflib import RDFS
 
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.evaluation import sm_metrics
 import grams.outputs as O
 from grams.kg_data.wikidatamodels import QNode, WDProperty, WDClass
@@ -376,7 +376,7 @@ class WikidataSemanticModelHelper(WDOnt):
         assert WikidataSemanticModelHelper.is_uri_column(uri)
         return int(uri.replace("http://example.com/table/", ""))
 
-    def extract_claims(self, tbl: W2WTable, sm: O.SemanticModel, allow_multiple_ent: bool = True):
+    def extract_claims(self, tbl: LinkedTable, sm: O.SemanticModel, allow_multiple_ent: bool = True):
         """Extract claims from the table given a semantic model.
 
         If an entity doesn't have link, its id will be null

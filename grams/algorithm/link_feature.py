@@ -7,7 +7,7 @@ import networkx as nx
 from typing import Dict, Iterable, Tuple, Set, List, Optional, Callable
 
 from grams.kg_data.wikidatamodels import QNode, WDProperty, WDQuantityPropertyStats
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.data_graph import DGNode
 from grams.algorithm.semantic_graph import SGNode, SGStatementNode, SGEdge
 from grams.algorithm.literal_match import TextParser
@@ -37,7 +37,7 @@ class LinkFeatureExtraction:
     
 
     def __init__(self,
-                 table: W2WTable, sg: nx.MultiDiGraph, dg: nx.MultiDiGraph,
+                 table: LinkedTable, sg: nx.MultiDiGraph, dg: nx.MultiDiGraph,
                  qnodes: Dict[str, QNode], wdprops: Dict[str, WDProperty],
                  wd_num_prop_stats: Dict[str, WDQuantityPropertyStats],
                  sim_fn: Optional[Callable[[str, str], float]] = None):

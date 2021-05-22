@@ -3,7 +3,7 @@ from typing import Optional
 import orjson
 
 import grams.outputs as O
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from sm_annotator.annotator import Annotator
 from sm_annotator.annotator import Session
 
@@ -14,7 +14,7 @@ class SMVisualizer(Annotator):
         self.app_js_render_fn = "Annotator.renderVizSemModelApp" if self.dev else "Annotator.renderDevVizSemModelApp"
 
     def visualize(self, id: str, note: str, sm1: O.SemanticModel, sm2: O.SemanticModel,
-                  table: Optional[W2WTable] = None, two_column_layout: bool = False):
+                  table: Optional[LinkedTable] = None, two_column_layout: bool = False):
         self.session = Session(id, True, note, table, [sm1, sm2])
 
         cmds = [

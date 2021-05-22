@@ -13,7 +13,7 @@ from typing_extensions import TypedDict
 from grams.algorithm.sm_wikidata import WDOnt
 from grams.kg_data.wikidatamodels import QNode, DataValue, WDProperty, WDClass
 from grams.misc.graph import viz_graph
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.data_graph import build_data_graph, DGNode, StatementNode, CellNode, \
     ContextSpan, EdgeFlowSource, EdgeFlowTarget, \
     FlowProvenance
@@ -340,7 +340,7 @@ def merge_connected_components(graphs: List[nx.MultiDiGraph]):
 
 @dataclass
 class SemanticGraphConstructorArgs:
-    table: W2WTable
+    table: LinkedTable
     dg: nx.MultiDiGraph
     sg: nx.MultiDiGraph
     # column type assignment, from column index (must stored as string) => QNode
@@ -360,7 +360,7 @@ class SemanticGraphConstructor:
         self.wdclasses = wdclasses
         self.wdprops = wdprops
 
-    def run(self, table: W2WTable, dg: nx.MultiDiGraph, debug=False):
+    def run(self, table: LinkedTable, dg: nx.MultiDiGraph, debug=False):
         args = SemanticGraphConstructorArgs(table, dg, None)
         for i, step in enumerate(self.steps):
             step(self, args)

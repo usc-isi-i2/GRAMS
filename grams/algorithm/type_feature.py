@@ -7,7 +7,7 @@ import numpy as np
 from grams.algorithm.data_graph import CellNode
 from grams.algorithm.literal_match import TextParser
 from grams.algorithm.semantic_graph import SGColumnNode
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.kg_data.wikidatamodels import QNode, WDProperty, WDQuantityPropertyStats
 
 
@@ -16,7 +16,7 @@ class TypeFeatureExtraction:
     FreqOverRow = "FreqOfTypeOverRow"
 
     def __init__(self,
-                 table: W2WTable, sg: nx.MultiDiGraph, dg: nx.MultiDiGraph,
+                 table: LinkedTable, sg: nx.MultiDiGraph, dg: nx.MultiDiGraph,
                  qnodes: Dict[str, QNode], wdprops: Dict[str, WDProperty],
                  wd_num_prop_stats: Dict[str, WDQuantityPropertyStats]):
         self.table = table

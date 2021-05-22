@@ -8,11 +8,11 @@ import orjson
 from slugify import slugify
 
 import grams.misc as M
-from grams.inputs.table import ColumnBasedTable, Column, TableMetadata
+from sm.inputs.table import ColumnBasedTable, Column
 
 
 @dataclass
-class W2WTable:
+class LinkedTable:
     # the table that we are working on
     table: ColumnBasedTable
 
@@ -23,7 +23,7 @@ class W2WTable:
 
     @property
     def id(self):
-        return self.table.metadata.table_id
+        return self.table.table_id
 
     def size(self):
         if len(self.table.columns) == 0:
@@ -71,7 +71,7 @@ class W2WTable:
             ]
             for rlinks in odict['links']
         ]
-        return W2WTable(tbl, context, links)
+        return LinkedTable(tbl, context, links)
 
     @staticmethod
     def from_column_based_table(tbl: ColumnBasedTable):
@@ -84,7 +84,7 @@ class W2WTable:
                 ]
                 for ri in range(len(tbl.columns[0].values))
             ]
-        return W2WTable(tbl, Context(None, None, None), links)
+        return LinkedTable(tbl, Context(None, None, None), links)
 
     @staticmethod
     def from_csv_file(infile: Union[Path, str], first_row_header: bool = True, table_id: Optional[str] = None):
@@ -105,8 +105,7 @@ class W2WTable:
 
         for ci, cname in enumerate(headers):
             columns.append(Column(ci, cname, [r[ci] for r in rows]))
-        table = ColumnBasedTable(columns, TableMetadata(table_id=table_id, page_title="",
-                                                        table_name=table_id, text_before="", text_after=""))
+        table = ColumnBasedTable(table_id, columns)
         links = []
         for ri in range(len(rows)):
             links.append([[] for ci in range(len(headers))])
@@ -121,7 +120,7 @@ class W2WTable:
                     else:
                         link = Link(0, len(table.columns[ci][ri]), f"http://www.wikidata.org/entity/{ent}", ent)
                     links[ri][ci].append(link)
-        return W2WTable(table, Context(), links)
+        return LinkedTable(table, Context(), links)
 
 
 @dataclass

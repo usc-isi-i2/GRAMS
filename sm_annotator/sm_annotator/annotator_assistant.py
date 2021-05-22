@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional, TypedDict, Union, List, Tuple, Dict
 
 from grams.kg_data.wikidatamodels import QNode, WDProperty
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.semantic_graph import SGNode, SGStatementNode
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper, WDOnt
 
@@ -26,12 +26,12 @@ ColumnRelationshipResult = TypedDict("ColumnRelationshipResult",
 # noinspection PyMethodMayBeStatic
 class AnnotatorAssistant:
 
-    def get_row_indices(self, table: W2WTable, source_node: Union[int, str], target_node: Union[int, str],
+    def get_row_indices(self, table: LinkedTable, source_node: Union[int, str], target_node: Union[int, str],
                         links: Tuple[str, str]):
         # return the list of indices
         return set()
 
-    def get_column_relationships(self, table: W2WTable, column_index: str) -> Optional[ColumnRelationshipResult]:
+    def get_column_relationships(self, table: LinkedTable, column_index: str) -> Optional[ColumnRelationshipResult]:
         # get relationships of columns, should return {
         # "incoming": {endpoint, endpoint_type, predicates, freq}[]
         # "outgoing": {endpoint, endpoint_type, predicates, freq}[]
@@ -41,7 +41,7 @@ class AnnotatorAssistant:
 
 class DummyAnnotatorAssistant(AnnotatorAssistant):
 
-    def get_column_relationships(self, table: W2WTable, column_index: str) -> Optional[ColumnRelationshipResult]:
+    def get_column_relationships(self, table: LinkedTable, column_index: str) -> Optional[ColumnRelationshipResult]:
         return {
             "incoming": [
                 ColumnRelationship(
@@ -83,7 +83,7 @@ class DummyAnnotatorAssistant(AnnotatorAssistant):
 
 class GRAMSAnnotatorAssistant(AnnotatorAssistant):
 
-    def __init__(self, inputs: List[TypedDict("input", table=W2WTable, dg=nx.MultiDiGraph, sg=nx.MultiDiGraph)], qnodes: Dict[str, QNode],
+    def __init__(self, inputs: List[TypedDict("input", table=LinkedTable, dg=nx.MultiDiGraph, sg=nx.MultiDiGraph)], qnodes: Dict[str, QNode],
                  wdprops: Dict[str, WDProperty]):
         self.qnodes = qnodes
         self.wdprops = wdprops
@@ -94,7 +94,7 @@ class GRAMSAnnotatorAssistant(AnnotatorAssistant):
         for e in inputs:
             self.table2g[e['table'].id] = (e['dg'], e['sg'])
 
-    def get_row_indices(self, table: W2WTable, source_node: Union[int, str], target_node: Union[int, str], links: Tuple[str, str]):
+    def get_row_indices(self, table: LinkedTable, source_node: Union[int, str], target_node: Union[int, str], links: Tuple[str, str]):
         assert isinstance(source_node, int) or isinstance(target_node, int), "Can only get row index for at least one column"
         if isinstance(source_node, str):
             if table.context.page_qnode == source_node:
@@ -137,7 +137,7 @@ class GRAMSAnnotatorAssistant(AnnotatorAssistant):
                         rows.add(du.row)
         return rows
 
-    def get_column_relationships(self, table: W2WTable, column_index: str) -> Optional[ColumnRelationshipResult]:
+    def get_column_relationships(self, table: LinkedTable, column_index: str) -> Optional[ColumnRelationshipResult]:
         dg, sg = self.table2g[table.id]
         node_id = f"column-{column_index}"
 
@@ -214,7 +214,7 @@ if __name__ == '__main__':
 
     dataset_dir = HOME_DIR / "wikitable2wikidata/500tables"
     
-    tables = [W2WTable.from_dbpedia_table(Table.deser_str(r)) for r in M.deserialize_lines(dataset_dir / "tables.jl.gz")]
+    tables = [LinkedTable.from_dbpedia_table(Table.deser_str(r)) for r in M.deserialize_lines(dataset_dir / "tables.jl.gz")]
     tables = {x.table.metadata.table_id: x for x in tables}
     tables = [tables[tbl_id] for tbl_id in M.deserialize_lines(dataset_dir / "predictions_order.txt", trim=True)]
     tbl_context = M.deserialize_json(dataset_dir / "context.json.gz")

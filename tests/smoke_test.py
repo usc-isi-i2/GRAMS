@@ -9,7 +9,7 @@ cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
 grams = GRAMS(DATA_DIR, cfg)
 
 gt = [
-    ([O.SemanticModel.from_json(sm) for sm in r['semantic_models']], I.W2WTable.from_json(r['table']))
+    ([O.SemanticModel.from_json(sm) for sm in r['semantic_models']], I.LinkedTable.from_json(r['table']))
     for r in [M.deserialize_json(infile) for infile in glob.glob(str(cwd / "tables/*.json"))]
 ]
 

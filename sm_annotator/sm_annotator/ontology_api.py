@@ -7,7 +7,7 @@ from fuzzywuzzy import fuzz
 from rdflib import RDFS
 from tqdm.auto import tqdm
 from grams.kg_data.wikidatamodels import WDProperty, WDClass, QNode
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper, WDOnt
 
 

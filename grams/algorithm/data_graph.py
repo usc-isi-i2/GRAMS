@@ -14,7 +14,7 @@ from typing_extensions import TypedDict
 
 from grams.algorithm.kg_index import KGObjectIndex
 from grams.algorithm.literal_match import WikidataValueType, TextParser, LiteralMatcher
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.kg_data.wikidatamodels import QNode, DataValue, WDProperty, WDClass
 import grams.misc as M
 
@@ -1512,7 +1512,7 @@ def prune_data_graph_deprecated(dg: nx.MultiDiGraph):
     remove_nodes(rm_node_ids)
 
 
-def build_data_graph(table: W2WTable,
+def build_data_graph(table: LinkedTable,
                      qnodes: Dict[str, QNode],
                      wdprops: Dict[str, WDProperty],
                      kg_object_index: KGObjectIndex,

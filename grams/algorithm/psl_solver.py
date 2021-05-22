@@ -7,7 +7,7 @@ from grams.algorithm.semtab2020 import SemTab2020PostProcessing
 from typing import Optional, Dict, List, Set, Tuple
 import networkx as nx
 
-from grams.inputs.linked_table import W2WTable
+from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.type_feature import TypeFeatureExtraction
 import time
 from functools import cmp_to_key
@@ -67,7 +67,7 @@ class FakeIDMap(IDMap):
         return new_key
 
 
-PSLRunParallelArgs = TypedDict("PSL.RunParallelArgs", table=W2WTable, datagraph=nx.MultiDiGraph, semanticgraph=nx.MultiDiGraph)
+PSLRunParallelArgs = TypedDict("PSL.RunParallelArgs", table=LinkedTable, datagraph=nx.MultiDiGraph, semanticgraph=nx.MultiDiGraph)
 
 
 class PSLSteinerTreeSolver:
@@ -312,7 +312,7 @@ class PSLSteinerTreeSolver:
         cta = [predwprobs['types'] for r, predwprobs in zip(inputs, predictions)]
         return sgs, cta
 
-    def solve_parallel(self, inputs: List[Tuple[W2WTable, nx.MultiDiGraph, nx.MultiDiGraph]], batch_size: Optional[int]=None, show_progress: bool=False):
+    def solve_parallel(self, inputs: List[Tuple[LinkedTable, nx.MultiDiGraph, nx.MultiDiGraph]], batch_size: Optional[int]=None, show_progress: bool=False):
         global global_objects
         global_objects['cache_dir'] = self.cache_dir
         global_objects['wdprops'] = self.wdprops
@@ -600,7 +600,7 @@ class PSLSteinerTreeSolver:
         # bank_solver._get_graph_weight(candidate_sts[0][0])
         return pred_tree
 
-    def train_setup(self, inputs: List[Tuple[W2WTable, nx.MultiDiGraph, nx.MultiDiGraph, dict]]):
+    def train_setup(self, inputs: List[Tuple[LinkedTable, nx.MultiDiGraph, nx.MultiDiGraph, dict]]):
         features = [x[3] for x in inputs]
         inputs = [(x[0], x[1], x[2]) for x in inputs]
         data, idmap = self.extract_predicate_data(inputs, features=features)
@@ -666,7 +666,7 @@ class PSLSteinerTreeSolver:
         return table_infer_resp
 
     def extract_predicate_data(self,
-                               inputs: List[Tuple[W2WTable, nx.MultiDiGraph, nx.MultiDiGraph]],
+                               inputs: List[Tuple[LinkedTable, nx.MultiDiGraph, nx.MultiDiGraph]],
                                features: Optional[List[dict]]=None,
                                idmap=None,
                                is_parallel: Union[str, bool]='auto',
