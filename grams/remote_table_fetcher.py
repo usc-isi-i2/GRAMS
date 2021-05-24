@@ -7,8 +7,9 @@ import requests, re, pandas as pd
 from bs4 import BeautifulSoup, NavigableString, Tag
 from typing import List, Dict, Optional
 
-import grams.misc as M
+import sm.misc as M
 import grams.inputs as I
+from grams.config import DATA_DIR
 from grams.db import Wikipedia2WikidataDB
 
 
@@ -237,7 +238,7 @@ class RemoteExtractedTable:
             for ci, cname in enumerate(header)
         ], I.TableMetadata(table_id or self.page_url, "", "", "", ""))
 
-        wikidb = Wikipedia2WikidataDB.get_instance()
+        wikidb = Wikipedia2WikidataDB.get_instance(DATA_DIR / "enwiki_links.db", read_only=True)
         links = [
             [
                 [

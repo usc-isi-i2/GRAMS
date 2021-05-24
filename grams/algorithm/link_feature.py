@@ -6,7 +6,7 @@ from operator import xor, attrgetter
 import networkx as nx
 from typing import Dict, Iterable, Tuple, Set, List, Optional, Callable
 
-from grams.kg_data.wikidatamodels import QNode, WDProperty, WDQuantityPropertyStats
+from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
 from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.data_graph import DGNode
 from grams.algorithm.semantic_graph import SGNode, SGStatementNode, SGEdge

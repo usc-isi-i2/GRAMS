@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import orjson
 from slugify import slugify
 
-import grams.misc as M
+import sm.misc as M
 from sm.inputs.table import ColumnBasedTable, Column
 
 

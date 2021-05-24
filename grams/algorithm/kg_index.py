@@ -4,10 +4,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Iterable, Set, Union, List, NamedTuple, Optional
 
-import grams.misc as M
+import sm.misc as M
 from loguru import logger
 from tqdm.auto import tqdm
-from grams.kg_data.wikidatamodels import QNode, WDProperty
+from kgdata.wikidata.models import QNode, WDProperty
 
 Relationship = NamedTuple('Relationship', [('prop', str), ('quals', List[str]), ('both', bool)])
 OneHopIndexPath = NamedTuple('OneHopIndexPath', [('relationship', Relationship), ('statement_index', int)])

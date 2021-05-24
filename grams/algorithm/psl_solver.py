@@ -2,7 +2,7 @@ import copy
 import math
 import os
 from pathlib import Path
-import grams.misc as M
+import sm.misc as M
 from grams.algorithm.semtab2020 import SemTab2020PostProcessing
 from typing import Optional, Dict, List, Set, Tuple
 import networkx as nx
@@ -30,7 +30,7 @@ from typing import Set, Iterable, TypedDict, Union, Any, Callable
 from grams.algorithm.data_graph import DGNode
 from grams.algorithm.semantic_graph import SGNode, SGStatementNode, SGColumnNode, \
     SemanticGraphConstructorArgs, SGEdge, SemanticGraphConstructor
-from grams.kg_data.wikidatamodels import QNode, WDProperty, WDClass, WDQuantityPropertyStats
+from kgdata.wikidata.models import QNode, WDProperty, WDClass, WDQuantityPropertyStats
 from tqdm.auto import tqdm
 
 

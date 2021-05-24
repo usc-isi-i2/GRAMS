@@ -15,8 +15,8 @@ from typing_extensions import TypedDict
 from grams.algorithm.kg_index import KGObjectIndex
 from grams.algorithm.literal_match import WikidataValueType, TextParser, LiteralMatcher
 from grams.inputs.linked_table import LinkedTable
-from grams.kg_data.wikidatamodels import QNode, DataValue, WDProperty, WDClass
-import grams.misc as M
+from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
+import sm.misc as M
 
 
 @dataclass(frozen=True)

@@ -9,8 +9,8 @@ import requests
 from omegaconf import OmegaConf
 from rdflib import RDFS
 
-import grams.misc as M
-import grams.outputs as O
+import sm.misc as M
+import sm.outputs as O
 import grams.inputs as I
 
 from grams.algorithm.data_graph import build_data_graph, BuildDGOption
@@ -18,9 +18,11 @@ from grams.algorithm.kg_index import TraversalOption, KGObjectIndex
 from grams.algorithm.semantic_graph import SemanticGraphConstructor, SemanticGraphConstructorArgs
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 from grams.config import DEFAULT_CONFIG, ROOT_DIR
-from grams.db import QNodeDB, WDClassDB
-from grams.kg_data.wikidatamodels import QNode, WDProperty, WDClass, WDQuantityPropertyStats
+
 from grams.algorithm.psl_solver import PSLSteinerTreeSolver
+
+from kgdata.wikidata.models import QNode, WDProperty, WDClass, WDQuantityPropertyStats
+from kgdata.wikidata.db import get_qnode_db, get_wdprop_db, get_wdclass_db, query_wikidata_entities
 
 
 @dataclass
@@ -33,35 +35,26 @@ class Annotation:
 
 
 class GRAMS:
-    def __init__(self, data_dir: str, cfg=None):
+    def __init__(self, data_dir: str, cfg=None, proxy: bool=True):
         self.timer = M.Timer()
         self.cfg = cfg if cfg is None else DEFAULT_CONFIG
 
         with self.timer.watch('init grams db'):
-            self.qnodes = QNodeDB(os.path.join(data_dir, "qnodes.db"))
-            self.wdclasses = WDClassDB(os.path.join(data_dir, "wdclasses.db"))
-            self.wdprops = WDProperty.from_file(data_dir, load_parent_closure=True)
-            if Path(os.path.join(data_dir, "new_properties.jl")).exists():
-                for item in M.deserialize_lines(os.path.join(data_dir, "new_properties.jl")):
-                    item =  WDProperty.deserialize(item)
-                    self.wdprops[item.id] = item
-            self.wd_numprop_stats = WDQuantityPropertyStats.from_dir("/workspace/sm-dev/data/wikidata/step_2/quantity_prop_stats/quantity_stats")
+            self.qnodes = get_qnode_db(os.path.join(data_dir, "qnodes.db"), proxy=proxy)
+            self.wdclasses = get_wdclass_db(os.path.join(data_dir, "wdclasses.db"), proxy=proxy)
+            self.wdprops = get_wdprop_db(os.path.join(data_dir, "wdprops.db"), proxy=proxy)
+            self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(os.path.join(data_dir, "quantity_prop_stats"))
 
         self.build_dg_option = getattr(BuildDGOption, cfg.data_graph.options[0])
         for op in cfg.data_graph.options[1:]:
             self.build_dg_option = self.build_dg_option | getattr(BuildDGOption, op)
 
-    def annotate(self, table: I.LinkedTable, cwd: Union[Path, str]=None, use_local_cache: bool=False, verbose: bool=False):
+    def annotate(self, table: I.LinkedTable, verbose: bool=False):
         qnode_ids = {link.qnode_id
                      for rlinks in table.links for links in rlinks
                      for link in links if link.qnode_id is not None}
-        if cwd is not None and use_local_cache:
-            ent_cache_file = Path(cwd) / f"{table.id}.entities"
-        else:
-            ent_cache_file = None
-
         with self.timer.watch('retrieving qnodes'):
-            qnodes = self.get_entities(qnode_ids, n_hop=2, cache_file=ent_cache_file, verbose=verbose)
+            qnodes = self.get_entities(qnode_ids, n_hop=2, verbose=verbose)
         wdclasses = self.wdclasses.cache_dict()
 
         with self.timer.watch('build kg object index'):
@@ -162,29 +155,18 @@ class GRAMS:
 
         return sm
 
-    def get_entities(self, qnode_ids: Set[str], n_hop: int=1, cache_file: str=None, verbose: bool=False) -> Dict[str, QNode]:
-        if cache_file is not None:
-            # if os.path.exists(cache_file):
-            #     qnodes = {}
-            #     for line in deserialize_lines(cache_file):
-            #         qnode = QNode.deserialize(line)
-            #         qnodes[qnode.id] = qnode
-            #     return qnodes
-            qnodes_db = QNodeDB(cache_file)
-        else:
-            qnodes_db = self.qnodes
-
+    def get_entities(self, qnode_ids: Set[str], n_hop: int = 1, verbose: bool = False) -> Dict[str, QNode]:
         assert n_hop <= 2
         batch_size = 30
         qnodes: Dict[str, QNode] = {}
         for qnode_id in qnode_ids:
-            qnode = qnodes_db.get(qnode_id, None)
+            qnode = self.qnodes.get(qnode_id, None)
             if qnode is not None:
                 qnodes[qnode_id] = qnode
         qnode_ids = [qnode_id for qnode_id in qnode_ids if qnode_id not in qnodes]
         if len(qnode_ids) > 0:
             resp = M.parallel_map(
-                GRAMS._query_wikidata_entities,
+                query_wikidata_entities,
                 [qnode_ids[i:i+batch_size] for i in range(0, len(qnode_ids), batch_size)],
                 show_progress=verbose,
                 progress_desc=f'query wikidata for get entities in hop: {n_hop}',
@@ -192,7 +174,7 @@ class GRAMS:
             for odict in resp:
                 for k, v in odict.items():
                     qnodes[k] = v
-                    qnodes_db[k] = v
+                    self.qnodes[k] = v
 
         if n_hop > 1:
             next_qnode_ids = set()
@@ -205,40 +187,22 @@ class GRAMS:
                             next_qnode_ids = next_qnode_ids.union(qval.as_qnode_id() for qval in qvals if qval.is_qnode())
             next_qnode_ids = list(next_qnode_ids.difference(qnodes.keys()))
             for qnode_id in next_qnode_ids:
-                qnode = qnodes_db.get(qnode_id, None)
+                qnode = self.qnodes.get(qnode_id, None)
                 if qnode is not None:
                     qnodes[qnode_id] = qnode
             next_qnode_ids = [qnode_id for qnode_id in next_qnode_ids if qnode_id not in qnodes]
 
             if len(next_qnode_ids) > 0:
-                resp = M.parallel_map(GRAMS._query_wikidata_entities,
-                                    [next_qnode_ids[i:i+batch_size] for i in range(0, len(next_qnode_ids), batch_size)],
-                                    show_progress=verbose,
-                                    progress_desc=f'query wikidata for get entities in hop: {n_hop}',
-                                    is_parallel=True)
+                resp = M.parallel_map(
+                    query_wikidata_entities,
+                    [next_qnode_ids[i:i+batch_size] for i in range(0, len(next_qnode_ids), batch_size)],
+                    show_progress=verbose,
+                    progress_desc=f'query wikidata for get entities in hop: {n_hop}',
+                    is_parallel=True)
                 for odict in resp:
                     for k, v in odict.items():
                         qnodes[k] = v
-                        qnodes_db[k] = v
-
-        # if cache_file is not None:
-        #     serialize_byte_lines([v.serialize() for v in qnodes.values()], cache_file)
-        return qnodes
-
-    @staticmethod
-    def _query_wikidata_entities(qnode_ids: Union[Set[str], List[str]]) -> Dict[str, str]:
-        resp = requests.get("https://www.wikidata.org/w/api.php", params={
-            "action": "wbgetentities",
-            "ids": "|".join(qnode_ids),
-            "format": "json"
-        })
-        assert resp.status_code, resp
-        data = resp.json()
-        assert data['success'] == 1
-        qnodes = {
-            qnode_id: QNode.from_wikidump(data['entities'][qnode_id])
-            for qnode_id in qnode_ids
-        }
+                        self.qnodes[k] = v
         return qnodes
 
 

@@ -9,7 +9,7 @@ import fastnumbers
 import ftfy
 from dateutil.parser import parse as dt_parse, ParserError
 
-from grams.kg_data.wikidatamodels import DataValue, QNode
+from kgdata.wikidata.models import DataValue, QNode
 
 
 class WikidataValueType(Enum):

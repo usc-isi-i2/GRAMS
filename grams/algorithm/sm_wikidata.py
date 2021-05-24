@@ -9,10 +9,10 @@ from rdflib import RDFS
 
 from grams.inputs.linked_table import LinkedTable
 from grams.evaluation import sm_metrics
-import grams.outputs as O
-from grams.kg_data.wikidatamodels import QNode, WDProperty, WDClass
-from grams.misc.graph import viz_graph
-from grams.misc import identity_func
+import sm.outputs as O
+from kgdata.wikidata.models import QNode, WDProperty, WDClass
+from sm.misc.graph import viz_graph
+from sm.misc import identity_func
 
 
 class SMNodeType(IntEnum):

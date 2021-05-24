@@ -8,7 +8,7 @@ from grams.algorithm.data_graph import CellNode
 from grams.algorithm.literal_match import TextParser
 from grams.algorithm.semantic_graph import SGColumnNode
 from grams.inputs.linked_table import LinkedTable
-from grams.kg_data.wikidatamodels import QNode, WDProperty, WDQuantityPropertyStats
+from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
 
 
 class TypeFeatureExtraction:

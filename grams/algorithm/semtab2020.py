@@ -2,7 +2,7 @@ from collections import defaultdict
 from operator import itemgetter
 from grams.algorithm.semantic_graph import SGEdge, SemanticGraphConstructor
 from typing import *
-import grams.misc as M
+import sm.misc as M
 import networkx as nx
 
 

@@ -23,7 +23,7 @@ rdflib = "^5.0.0"
 ipython = "^7.22.0"
 matplotlib = "^3.4.1"
 pydot = "^1.4.2"
-rltk = "^2.0.0-alpha.15"
+rltk = "==2.0.0-alpha.15"
 pslpython = "^2.2.2"
 fastnumbers = "^3.1.0"
 ftfy = "^6.0.1"
@@ -31,7 +31,10 @@ elasticsearch = "^7.12.1"
 fuzzywuzzy = "^0.18.0"
 python-dotenv = "^0.17.0"
 python-Levenshtein = "^0.12.2"
-sm = {git = "ssh://git@github.com/binh-vu/sm.git"}
+sem-desc = "^0.1.1"
+kgdata = "^1.1.2"
+sm-widgets = "^0.1.2"
+
 
 [tool.poetry.dev-dependencies]
 neptune-client = "^0.9.5"

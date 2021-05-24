@@ -11,13 +11,13 @@ import networkx as nx
 from rdflib import RDFS
 from typing_extensions import TypedDict
 from grams.algorithm.sm_wikidata import WDOnt
-from grams.kg_data.wikidatamodels import QNode, DataValue, WDProperty, WDClass
-from grams.misc.graph import viz_graph
+from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
+from sm.misc.graph import viz_graph
 from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.data_graph import build_data_graph, DGNode, StatementNode, CellNode, \
     ContextSpan, EdgeFlowSource, EdgeFlowTarget, \
     FlowProvenance
-import grams.outputs as O
+import sm.outputs as O
 
 
 @dataclass
