@@ -899,7 +899,7 @@ def viz_sg(sg, qnodes: Dict[str, QNode], wdclasses: Dict[str, WDClass], wdprops:
             label = u.label
             if u.is_entity_value:
                 qnodeid = u.qnode_id
-                html = f"""<a href="http://wikidata.org/wiki/{qnodeid}" target="_blank">{get_label_fn(qnodeid)}</a>"""
+                html = f"""<a href="http://www.wikidata.org/wiki/{qnodeid}" target="_blank">{get_label_fn(qnodeid)}</a>"""
         elif u.is_statement:
             nodetype = 'statement'
         else:
@@ -929,7 +929,7 @@ def viz_sg(sg, qnodes: Dict[str, QNode], wdclasses: Dict[str, WDClass], wdprops:
         if 'prob' in edge.features:
             label += f" p={edge.features['prob']:.6f}"
 
-        html = f'<a href="http://wikidata.org/wiki/Property:{eid}" target="_blank">{get_label_fn(eid)}</a>'
+        html = f'<a href="http://www.wikidata.org/wiki/Property:{eid}" target="_blank">{get_label_fn(eid)}</a>'
         if len(edge.features) > 0:
             html_feat = []
             for feat, val in edge.features.items():

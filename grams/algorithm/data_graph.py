@@ -1650,7 +1650,7 @@ def viz_dg(dg: nx.MultiDiGraph, qnodes: Dict[str, QNode], wdprops: Dict[str, WDP
             nodetype = 'cell'
             for qnode_id in u.qnode_ids:
                 qnode = qnodes[qnode_id]
-                html += f"""<a href="http://wikidata.org/wiki/{qnode.id}" target="_blank">{qnode.label} ({qnode.id})</a><br/>"""
+                html += f"""<a href="http://www.wikidata.org/wiki/{qnode.id}" target="_blank">{qnode.label} ({qnode.id})</a><br/>"""
 
         elif u.is_literal_value:
             label = u.value.to_string_repr()
@@ -1659,7 +1659,7 @@ def viz_dg(dg: nx.MultiDiGraph, qnodes: Dict[str, QNode], wdprops: Dict[str, WDP
             qnode = qnodes[u.qnode_id]
             label = f"{qnode.label} ({qnode.id})"
             nodetype = 'context' if u.is_context else 'kg'
-            html = f"""<a href="http://wikidata.org/wiki/{qnode.id}" target="_blank">{label}</a>"""
+            html = f"""<a href="http://www.wikidata.org/wiki/{qnode.id}" target="_blank">{label}</a>"""
         else:
             label = ""
             nodetype = 'statement'

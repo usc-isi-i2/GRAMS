@@ -87,9 +87,12 @@ class LinkedTable:
         return LinkedTable(tbl, Context(None, None, None), links)
 
     @staticmethod
-    def from_csv_file(infile: Union[Path, str], first_row_header: bool = True, table_id: Optional[str] = None):
+    def from_csv_file(infile: Union[Path, str], link_file: Optional[str]=None, first_row_header: bool = True, table_id: Optional[str] = None):
         infile = Path(infile)
-        link_file = infile.parent / f"{infile.stem}.links.tsv"
+        if link_file is None:
+            link_file = infile.parent / f"{infile.stem}.links.tsv"
+        else:
+            link_file = Path(link_file)
 
         if table_id is None:
             table_id = infile.stem
@@ -117,6 +120,9 @@ class LinkedTable:
                     if ent.startswith("{"):
                         # it's json, encoding the hyperlinks
                         link = Link(**orjson.loads(ent))
+                    elif ent.startswith("http"):
+                        assert ent.startswith("http://www.wikidata.org/entity/")
+                        link = Link(0, len(table.columns[ci][ri]), ent, ent.replace("http://www.wikidata.org/entity/", ""))
                     else:
                         link = Link(0, len(table.columns[ci][ri]), f"http://www.wikidata.org/entity/{ent}", ent)
                     links[ri][ci].append(link)
