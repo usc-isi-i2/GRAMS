@@ -31,9 +31,9 @@ elasticsearch = "^7.12.1"
 fuzzywuzzy = "^0.18.0"
 python-dotenv = "^0.17.0"
 python-Levenshtein = "^0.12.2"
-sem-desc = "^0.1.1"
-kgdata = "^1.1.2"
-sm-widgets = "^0.1.2"
+sem-desc = "^0.1.3"
+kgdata = "^1.1.7"
+sm-widgets = "^0.1.6"
 
 
 [tool.poetry.dev-dependencies]
