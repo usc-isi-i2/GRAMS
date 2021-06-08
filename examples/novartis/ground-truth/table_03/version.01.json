@@ -1,0 +1,82 @@
+{
+    "version": 2,
+    "table_id": "table_03",
+    "semantic_models": [
+        {
+            "version": 1,
+            "nodes": [
+                {
+                    "id": "col-0",
+                    "col_index": 0,
+                    "label": "Disease"
+                },
+                {
+                    "id": "http://www.wikidata.org/entity/Q12136:0",
+                    "abs_uri": "http://www.wikidata.org/entity/Q12136",
+                    "rel_uri": "wd:Q12136",
+                    "approximation": false,
+                    "readable_label": "disease (Q12136)"
+                },
+                {
+                    "id": "col-1",
+                    "col_index": 1,
+                    "label": "Gene"
+                },
+                {
+                    "id": "http://www.wikidata.org/entity/Q7187:0",
+                    "abs_uri": "http://www.wikidata.org/entity/Q7187",
+                    "rel_uri": "wd:Q7187",
+                    "approximation": false,
+                    "readable_label": "gene (Q7187)"
+                },
+                {
+                    "id": "stmt:column-0-P2293-column-1",
+                    "abs_uri": "http://wikiba.se/ontology#Statement",
+                    "rel_uri": "wikibase:Statement",
+                    "approximation": false,
+                    "readable_label": null
+                }
+            ],
+            "edges": [
+                {
+                    "source": "http://www.wikidata.org/entity/Q12136:0",
+                    "target": "col-0",
+                    "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+                    "rel_uri": "rdfs:label",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 1
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q12136:0",
+                    "target": "stmt:column-0-P2293-column-1",
+                    "abs_uri": "http://www.wikidata.org/prop/P2293",
+                    "rel_uri": "p:P2293",
+                    "approximation": false,
+                    "readable_label": "genetic association (P2293)",
+                    "id": 4
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q7187:0",
+                    "target": "col-1",
+                    "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+                    "rel_uri": "rdfs:label",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 2
+                },
+                {
+                    "source": "stmt:column-0-P2293-column-1",
+                    "target": "http://www.wikidata.org/entity/Q7187:0",
+                    "abs_uri": "http://www.wikidata.org/prop/P2293",
+                    "rel_uri": "p:P2293",
+                    "approximation": false,
+                    "readable_label": "genetic association (P2293)",
+                    "id": 3
+                }
+            ]
+        }
+    ],
+    "is_curated": false,
+    "note": ""
+}

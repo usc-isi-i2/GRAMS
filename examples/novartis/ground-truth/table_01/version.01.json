@@ -1,0 +1,204 @@
+{
+    "version": 2,
+    "table_id": "table_01",
+    "semantic_models": [
+        {
+            "version": 1,
+            "nodes": [
+                {
+                    "id": "col-2",
+                    "col_index": 2,
+                    "label": "Dise"
+                },
+                {
+                    "id": "col-4",
+                    "col_index": 4,
+                    "label": "Tissue"
+                },
+                {
+                    "id": "http://www.wikidata.org/entity/Q12136:0",
+                    "abs_uri": "http://www.wikidata.org/entity/Q12136",
+                    "rel_uri": "wd:Q12136",
+                    "approximation": false,
+                    "readable_label": "disease (Q12136)"
+                },
+                {
+                    "id": "http://www.wikidata.org/entity/Q40397:0",
+                    "abs_uri": "http://www.wikidata.org/entity/Q40397",
+                    "rel_uri": "wd:Q40397",
+                    "approximation": false,
+                    "readable_label": "tissue (Q40397)"
+                },
+                {
+                    "id": "col-0",
+                    "col_index": 0,
+                    "label": "﻿Description"
+                },
+                {
+                    "id": "http://www.wikidata.org/entity/Q13442814:0",
+                    "abs_uri": "http://www.wikidata.org/entity/Q13442814",
+                    "rel_uri": "wd:Q13442814",
+                    "approximation": false,
+                    "readable_label": "scholarly article (Q13442814)"
+                },
+                {
+                    "id": "col-3",
+                    "col_index": 3,
+                    "label": "Gene"
+                },
+                {
+                    "id": "http://www.wikidata.org/entity/Q7187:0",
+                    "abs_uri": "http://www.wikidata.org/entity/Q7187",
+                    "rel_uri": "wd:Q7187",
+                    "approximation": false,
+                    "readable_label": "gene (Q7187)"
+                },
+                {
+                    "id": "stmt:column-0-P698-column-1",
+                    "abs_uri": "http://wikiba.se/ontology#Statement",
+                    "rel_uri": "wikibase:Statement",
+                    "approximation": false,
+                    "readable_label": null
+                },
+                {
+                    "id": "stmt:column-0-P921-column-2",
+                    "abs_uri": "http://wikiba.se/ontology#Statement",
+                    "rel_uri": "wikibase:Statement",
+                    "approximation": false,
+                    "readable_label": null
+                },
+                {
+                    "id": "stmt:column-3-P2293-column-2",
+                    "abs_uri": "http://wikiba.se/ontology#Statement",
+                    "rel_uri": "wikibase:Statement",
+                    "approximation": false,
+                    "readable_label": null
+                },
+                {
+                    "id": "stmt:column-3-PExpressInTissue-column-4",
+                    "abs_uri": "http://wikiba.se/ontology#Statement",
+                    "rel_uri": "wikibase:Statement",
+                    "approximation": false,
+                    "readable_label": null
+                },
+                {
+                    "id": "col-1",
+                    "col_index": 1,
+                    "label": "PUBMEDID"
+                }
+            ],
+            "edges": [
+                {
+                    "source": "http://www.wikidata.org/entity/Q12136:0",
+                    "target": "col-2",
+                    "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+                    "rel_uri": "rdfs:label",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 1
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q13442814:0",
+                    "target": "col-0",
+                    "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+                    "rel_uri": "rdfs:label",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 2
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q13442814:0",
+                    "target": "stmt:column-0-P698-column-1",
+                    "abs_uri": "http://www.wikidata.org/prop/P698",
+                    "rel_uri": "p:P698",
+                    "approximation": false,
+                    "readable_label": "PubMed ID (P698)",
+                    "id": 4
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q13442814:0",
+                    "target": "stmt:column-0-P921-column-2",
+                    "abs_uri": "http://www.wikidata.org/prop/P921",
+                    "rel_uri": "p:P921",
+                    "approximation": false,
+                    "readable_label": "main subject (P921)",
+                    "id": 5
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q7187:0",
+                    "target": "col-3",
+                    "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+                    "rel_uri": "rdfs:label",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 3
+                },
+                {
+                    "source": "stmt:column-0-P698-column-1",
+                    "target": "col-1",
+                    "abs_uri": "http://www.wikidata.org/prop/P698",
+                    "rel_uri": "p:P698",
+                    "approximation": false,
+                    "readable_label": "PubMed ID (P698)",
+                    "id": 6
+                },
+                {
+                    "source": "stmt:column-0-P921-column-2",
+                    "target": "http://www.wikidata.org/entity/Q12136:0",
+                    "abs_uri": "http://www.wikidata.org/prop/P921",
+                    "rel_uri": "p:P921",
+                    "approximation": false,
+                    "readable_label": "main subject (P921)",
+                    "id": 7
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q40397:0",
+                    "target": "col-4",
+                    "abs_uri": "http://www.wikidata.org/prop/P279",
+                    "rel_uri": "p:P279",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 8
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q7187:0",
+                    "target": "stmt:column-3-P2293-column-2",
+                    "abs_uri": "http://www.wikidata.org/prop/P2293",
+                    "rel_uri": "p:P2293",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 9
+                },
+                {
+                    "source": "stmt:column-3-P2293-column-2",
+                    "target": "http://www.wikidata.org/entity/Q12136:0",
+                    "abs_uri": "http://www.wikidata.org/prop/P2293",
+                    "rel_uri": "p:P2293",
+                    "approximation": false,
+                    "readable_label": null,
+                    "id": 10
+                },
+                {
+                    "source": "http://www.wikidata.org/entity/Q7187:0",
+                    "target": "stmt:column-3-PExpressInTissue-column-4",
+                    "abs_uri": "http://www.wikidata.org/prop/P2293",
+                    "rel_uri": "p:P2293",
+                    "approximation": false,
+                    "readable_label": "expressed in tissue",
+                    "id": 9
+                },
+                {
+                    "source": "stmt:column-3-PExpressInTissue-column-4",
+                    "target": "http://www.wikidata.org/entity/Q40397:0",
+                    "abs_uri": "http://www.wikidata.org/prop/P2293",
+                    "rel_uri": "p:P2293",
+                    "approximation": false,
+                    "readable_label": "expressed in tissue",
+                    "id": 10
+                }
+            ]
+        }
+    ],
+    "is_curated": false,
+    "note": ""
+}

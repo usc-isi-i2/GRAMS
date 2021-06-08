@@ -1,0 +1,21 @@
+col0,col1,col2,col3
+retinol,vitamin A,all-trans-retinol binding,US pregnancy category X
+alitretinoin,retinoid,9-cis-retinoic acid biosynthetic process,US pregnancy category D
+neomycin,aminoglycoside,neomycin metabolic process,US pregnancy category D
+carboplatin,platinum-based antineoplastic,response to carboplatin,US pregnancy category D
+cisplatin,platinum-based antineoplastic,cellular response to cisplatin,US pregnancy category D
+streptomycin,aminoglycoside,response to streptomycin,US pregnancy category D
+fenofibrate,Peroxisome proliferator activated receptor alpha,response to fenofibrate,US pregnancy category C
+nalidixic acid,bactericide,nalidixic acid transporter activity,US pregnancy category B
+ergocalciferol,vitamin D,vitamin D2 metabolic process,US pregnancy category A
+cholecalciferol,Secosteroid,vitamin D3 metabolic process,US pregnancy category A
+pyridoxine,vitamin B6,pyridoxine biosynthetic process,US pregnancy category A
+riboflavin,food coloring,riboflavin metabolic process,US pregnancy category A
+(E)-phytonadione,vitamin K,cellular response to phylloquinone,US pregnancy category C
+dactinomycin,actinomycin,response to actinomycin D,Australian pregnancy category D
+tetracycline,tetracycline antibiotic,tetracycline transporter activity,Australian pregnancy category D
+doxorubicin,anthracycline antibiotic,doxorubicin metabolic process,Australian pregnancy category D
+hydroxyurea,urea,cellular response to hydroxyurea,Australian pregnancy category D
+perphenazine,phenothiazine,response to perphenazine,Australian pregnancy category C
+ribavirin,nucleoside analogue,response to ribavirin,Australian pregnancy category X
+fluconazole,azole,fluconazole transport,Australian pregnancy category D

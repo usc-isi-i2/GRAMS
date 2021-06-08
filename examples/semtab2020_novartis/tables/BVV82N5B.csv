@@ -1,0 +1,21 @@
+col0,col1,col2,col3
+ABL1 BCR-ABL Y253H,nilotinib,ABL1,human chromosome 9
+ABL1 BCR-ABL H396R,imatinib,ABL1,human chromosome 9
+ABL1 BCR-ABL D276G,imatinib,ABL1,human chromosome 9
+ABL1 Y253F,imatinib,ABL1,human chromosome 9
+ABL1 BCR-ABL G250E,imatinib,ABL1,human chromosome 9
+ABL1 BCR-ABL L248V,imatinib,ABL1,human chromosome 9
+ABL1 BCR-ABL M244V,imatinib,ABL1,human chromosome 9
+ABL1 BCR-ABL F359V,imatinib,ABL1,human chromosome 9
+KIT V560D,sunitinib,KIT,human chromosome 4
+KIT D820A,imatinib,KIT,human chromosome 4
+KIT C809G,imatinib,KIT,human chromosome 4
+KIT N822K,imatinib,KIT,human chromosome 4
+KIT Y823D,imatinib,KIT,human chromosome 4
+KIT D820Y,imatinib,KIT,human chromosome 4
+KIT D816H,imatinib,KIT,human chromosome 4
+KIT K642E,imatinib,KIT,human chromosome 4
+KIT V560G,imatinib,KIT,human chromosome 4
+PIK3CA E545G,vemurafenib,PIK3CA,human chromosome 3
+GNAS R201C,Irinotecan / Vemurafenib / Cetuximab combination therapy,GNAS,human chromosome 20
+GNAS T393C,gefitinib,GNAS,human chromosome 20

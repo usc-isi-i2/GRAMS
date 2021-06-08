@@ -1,0 +1,126 @@
+{
+  "version": 2,
+  "table_id": "table_02",
+  "semantic_models": [
+    {
+      "version": 1,
+      "nodes": [
+        {
+          "id": "col-1",
+          "col_index": 1,
+          "label": "Drug"
+        },
+        {
+          "id": "col-2",
+          "col_index": 2,
+          "label": "Trade name"
+        },
+        {
+          "id": "col-4",
+          "col_index": 4,
+          "label": "Main indications"
+        },
+        {
+          "id": "col-5",
+          "col_index": 5,
+          "label": "Company"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q891723:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q891723",
+          "rel_uri": "wd:Q891723",
+          "approximation": false,
+          "readable_label": "public company (Q891723)"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q28885102:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q28885102",
+          "rel_uri": "wd:Q28885102",
+          "approximation": false,
+          "readable_label": "pharmaceutical product (Q28885102)"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q12140:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q12140",
+          "rel_uri": "wd:Q12140",
+          "approximation": false,
+          "readable_label": "medication (Q12140)"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q12136:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q12136",
+          "rel_uri": "wd:Q12136",
+          "approximation": false,
+          "readable_label": "disease (Q12136)"
+        }
+      ],
+      "edges": [
+        {
+          "source": "http://www.wikidata.org/entity/Q891723:0",
+          "target": "col-5",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 1
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q28885102:0",
+          "target": "col-2",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 2
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12140:0",
+          "target": "col-1",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 3
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12136:0",
+          "target": "col-4",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 4
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q28885102:0",
+          "target": "http://www.wikidata.org/entity/Q12140:0",
+          "abs_uri": "https://www.wikidata.org/prop/P3781",
+          "rel_uri": "p:P3781",
+          "approximation": false,
+          "readable_label": "has active ingredient (P3781)",
+          "id": 5
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12140:0",
+          "target": "http://www.wikidata.org/entity/Q12136:0",
+          "abs_uri": "https://www.wikidata.org/prop/P2175",
+          "rel_uri": "p:P2175",
+          "approximation": false,
+          "readable_label": "medical condition treated (P2175)",
+          "id": 6
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q891723:0",
+          "target": "http://www.wikidata.org/entity/Q28885102:0",
+          "abs_uri": "https://www.wikidata.org/prop/P1056",
+          "rel_uri": "p:P1056",
+          "approximation": false,
+          "readable_label": "product or material produced (P1056)",
+          "id": 7
+        }
+      ]
+    }
+  ],
+  "is_curated": false,
+  "note": ""
+}

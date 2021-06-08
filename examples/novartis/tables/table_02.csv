@@ -1,0 +1,14 @@
+Rank,Drug,Trade name,Type,Main indications,Company,Sales ( USD millions/year),∆ vs 2014
+1,Adalimumab ,Humira,Biologic,Rheumatoid arthritis ,AbbVie Inc. ,"14,012","1,469"
+2,Ledipasvir/sofosbuvir ,Harvoni,Small molecule,Hepatitis C ,Gilead Sciences ,"13,864","11,737"
+3,Etanercept ,Enbrel,Biologic,Rheumatoid arthritis ,Amgen  Pfizer  ,"8,697","4,009"
+4,Infliximab ,Remicade,Biologic,"Crohn's Disease 
+Rheumatoid Arthritis ",Johnson & Johnson ,"8,355","1,487"
+5,Rituximab ,Mabthera Rituxan ,Biologic,Lymphoma  Leukemia  Autoimmune disorders  ,Roche  Genentech  ,"7,115","1,456"
+6,Insulin glargine ,Lantus,Biologic,Diabetes mellitus ,Sanofi ,"7,029",51
+7,Bevacizumab ,Avastin,Biologic,Metastatic cancers ,Roche  Genentech  ,"6,751",270
+8,Trastuzumab ,Herceptin,Biologic,Breast cancer ,Roche  Genentech  ,"6,603",265
+9,Lenalidomide ,Revlimid,Small molecule,Multiple myeloma  Myelodysplastic syndromes  ,Celgene ,"5,801",821
+10,Sofosbuvir ,Sovaldi,Small molecule,Hepatitis C ,Gilead Sciences ,"5,276","(5,007)"
+11,Fluticasone propionate/salmeterol ,Seretide Advair ,Small molecule,Asthma  Chronic obstructive pulmonary disease  ,GlaxoSmithKline ,"5,227",(778)
+12,Rosuvastatin ,Crestor,Small molecule,Cardiovascular diseases ,AstraZeneca ,"5,017",(495)
