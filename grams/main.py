@@ -40,9 +40,9 @@ class GRAMS:
         self.cfg = cfg if cfg is None else DEFAULT_CONFIG
 
         with self.timer.watch('init grams db'):
-            self.qnodes = get_qnode_db(os.path.join(data_dir, "qnodes.db"), proxy=proxy)
-            self.wdclasses = get_wdclass_db(os.path.join(data_dir, "wdclasses.db"), proxy=proxy)
-            self.wdprops = get_wdprop_db(os.path.join(data_dir, "wdprops.db"), proxy=proxy)
+            self.qnodes = get_qnode_db(os.path.join(data_dir, "qnodes.db"), proxy=proxy, is_singleton=True)
+            self.wdclasses = get_wdclass_db(os.path.join(data_dir, "wdclasses.db"), proxy=proxy, is_singleton=True)
+            self.wdprops = get_wdprop_db(os.path.join(data_dir, "wdprops.db"), proxy=proxy, is_singleton=True)
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(os.path.join(data_dir, "quantity_prop_stats"))
 
         self.build_dg_option = getattr(BuildDGOption, cfg.data_graph.options[0])

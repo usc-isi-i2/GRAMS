@@ -5,6 +5,8 @@ from typing import Optional, Union
 
 
 class Wikipedia2WikidataDB(RocksDBStore[str, str]):
+    instance = None
+
     @staticmethod
     def get_instance(dbfile: Optional[Union[Path, str]] = None, read_only: bool = False):
         if Wikipedia2WikidataDB.instance is None:

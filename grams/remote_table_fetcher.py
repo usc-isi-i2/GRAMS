@@ -7,8 +7,8 @@ import requests, re, pandas as pd
 from bs4 import BeautifulSoup, NavigableString, Tag
 from typing import List, Dict, Optional
 
-import sm.misc as M
-import grams.inputs as I
+from sm.prelude import I, M
+import grams.inputs as GI
 from grams.config import DATA_DIR
 from grams.db import Wikipedia2WikidataDB
 
@@ -186,11 +186,11 @@ class RemoteExtractedTable:
 
         # len(pending_ops) may > 0, but fortunately, it doesn't matter as the browser also does not render that extra empty lines
         return RemoteExtractedTable(
-                     page_url=self.page_url,
-                     caption=self.caption,
-                     attrs=copy.copy(self.attrs),
-                     context=[c.clone() for c in self.context],
-                     rows=data)
+            page_url=self.page_url,
+            caption=self.caption,
+            attrs=copy.copy(self.attrs),
+            context=[c.clone() for c in self.context],
+            rows=data)
 
     def pad(self) -> "RemoteExtractedTable":
         """Pad the irregular table (missing cells) to make it become regular table.
@@ -233,16 +233,17 @@ class RemoteExtractedTable:
     def as_relational_linked_table(self, table_id=None):
         assert len(self.rows) > 0
         header = [c.value for c in self.rows[0].cells]
-        table = I.ColumnBasedTable([
+        table = I.ColumnBasedTable(table_id or self.page_url, [
             I.Column(ci, cname, [self.rows[ri].cells[ci].value for ri in range(1, len(self.rows))])
             for ci, cname in enumerate(header)
-        ], I.TableMetadata(table_id or self.page_url, "", "", "", ""))
+        ])
 
         wikidb = Wikipedia2WikidataDB.get_instance(DATA_DIR / "enwiki_links.db", read_only=True)
         links = [
             [
                 [
-                    I.Link(el.start, el.end, el.attrs['href'], wikidb.get(self.get_title_from_url(el.attrs['href']), None))
+                    GI.Link(el.start, el.end, el.attrs['href'],
+                            wikidb.get(self.get_title_from_url(el.attrs['href']), None))
                     for el in row.cells[ci].travel_elements_post_order()
                     if el.tag == 'a'
                 ]
@@ -250,7 +251,7 @@ class RemoteExtractedTable:
             ]
             for ri, row in enumerate(self.rows[1:])
         ]
-        return I.LinkedTable(table, I.Context(), links)
+        return GI.LinkedTable(table, GI.Context(), links)
 
     def get_title_from_url(self, url: str) -> str:
         """This function converts a wikipedia page/article's URL to its title. The function is tested manually in `20200425-wikipedia-links` notebook in section 2.2.
@@ -300,6 +301,7 @@ class HTMLTableExtractor:
 
     The main function of this extractor are extract
     """
+
     def extract(self, page_url: str, html: str) -> List[RemoteExtractedTable]:
         """Extract just one html table, which may contains multiple nested tables. I assume that the outer tables are used for
         formatting and the inner tables are the interested ones. So this function will discard the outer tables and only keep
@@ -592,13 +594,17 @@ class HTMLTableExtractor:
                                 raise Exception(f"An anchor in a Wikipedia table does not have href: {el}")
 
 
-@M.redis_cache_func()
+@M.cache_func()
 def requests_get(url):
     return requests.get(url)
 
 
-def fetch_tables(url: str, auto_span: bool=True, auto_pad: bool=True):
-    resp = requests_get(url)
+def fetch_tables(url: str, auto_span: bool = True, auto_pad: bool = True, cache: bool = False):
+    if cache:
+        resp = requests_get(url)
+    else:
+        resp = requests.get(url)
+
     assert resp.status_code == 200
     html = resp.text
     tables = HTMLTableExtractor().extract(url, html)
