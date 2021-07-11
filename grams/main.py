@@ -15,7 +15,7 @@ import grams.inputs as I
 
 from grams.algorithm.data_graph import build_data_graph, BuildDGOption
 from grams.algorithm.kg_index import TraversalOption, KGObjectIndex
-from grams.algorithm.semantic_graph import SemanticGraphConstructor, SemanticGraphConstructorArgs
+from grams.algorithm.semantic_graph import SemanticGraphConstructor, SemanticGraphConstructorArgs, viz_sg
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 from grams.config import DEFAULT_CONFIG, ROOT_DIR
 
@@ -70,7 +70,7 @@ class GRAMS:
                 SemanticGraphConstructor.init_sg,
             ], qnodes, wdclasses, self.wdprops)
             sg = constructor.run(table, dg, debug=False).sg
-
+            
         with self.timer.watch('run inference'):
             psl_solver = PSLSteinerTreeSolver(
                 qnodes, wdclasses, self.wdprops, self.wd_numprop_stats,
@@ -209,12 +209,12 @@ class GRAMS:
 if __name__ == '__main__':
     cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
 
-    tbl = I.LinkedTable.from_csv_file(ROOT_DIR / "examples/novartis/tables/table_03.csv")
-    data = M.deserialize_json(ROOT_DIR / "examples/novartis/ground-truth/table_03/version.01.json")
-    sm = O.SemanticModel.from_json(data['semantic_models'][0])
-    sm.draw()
-    exit(0)
-    # tbl = I.W2WTable.from_json(M.deserialize_json(ROOT_DIR / "examples/misc/tables/list_of_largest_selling_pharmaceutical_products_bebff3652629c07e82fa5897b54f612f.json"))
+    # tbl = I.LinkedTable.from_csv_file(ROOT_DIR / "examples/novartis/tables/table_03.csv")
+    # data = M.deserialize_json(ROOT_DIR / "examples/novartis/ground-truth/table_03/version.01.json")
+    # sm = O.SemanticModel.from_json(data['semantic_models'][0])
+    # sm.draw()
+    # exit(0)
+    tbl = I.LinkedTable.from_json(M.deserialize_json(ROOT_DIR / "examples/misc/tables/president_of_the_national_council_austria_10_0f1733248af445ee5a7d360a648bf9b1.json"))
     # tbl = I.W2WTable.from_csv_file(ROOT_DIR / "examples/t2dv2/tables/29414811_2_4773219892816395776.csv")
     # for ri in range(tbl.size()):
     #     for ci in range(len(tbl.table.columns)):

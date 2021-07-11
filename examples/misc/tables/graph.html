@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        html, body {
+            height: 100%;
+        }
+        body {
+            margin: 0;
+        }
+        div#container {
+            height: 100%;
+        }
+        div#container canvas {
+            border: 2px solid #ccc;
+        }
+        div#control {
+            padding: 8px;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css" />
+</head>
+<body>
+    <div id="container">
+        <div id="control">
+            <button id="prev">←</button>
+            <button id="next">→</button>
+            <select id="graph-select">
+            </select>
+            <span id="n-graphs">Total: 0</span>
+            <span id="graph-info"></span>
+        </div>
+        <div id="graph-container">
+        </div>
+    </div>
+    <div id="modal">
+    </div>
+    <script src="https://gw.alipayobjects.com/os/lib/antv/g6/3.8.1/dist/g6.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
+    <script src="./metadata.js"></script>
+    <script>
+        function renderGraph() {
+            const container = document.getElementById("graph-container");
+            container.innerHTML = "";
+            const height = document.getElementById("container").scrollHeight - document.getElementById("control").scrollHeight - 4;
+            const graph = new G6.Graph({
+                container: container, // String | HTMLElement, required, the id of DOM element or an HTML node
+                width: container.scrollWidth - 4, // Number, required, the width of the graph
+                height: height, // Number, required, the height of the graph
+                linkCenter: true,
+                layout: {
+                    type: 'force',
+                    preventOverlap: true,
+                    linkDistance: 50,
+                    nodeSpacing: 70,
+                },
+                defaultEdge: {
+                    type: "quadratic",
+                    style: {
+                        stroke: "#ddd",
+                        endArrow: {
+                            fill: "black",
+                            path: G6.Arrow.triangle(6, 8, 15),
+                            d: 15
+                        },
+                        opacity: 1,
+                    },
+                    labelCfg: {
+                        style: {
+                            fill: 'black',
+                            background: {
+                                fill: "#ffffff",
+                                stroke: "#9EC9FF",
+                                padding: [2, 2, 2, 2],
+                                radius: 2,
+                            },
+                        },
+                    },
+                },
+                defaultNode: {},
+                modes: {
+                    default: [
+                        "drag-canvas", "drag-node",
+                        {
+                            type: 'activate-relations',
+                            resetSelected: true,
+                        }
+                    ],
+                    edit: ["click-select"],
+                },
+                nodeStateStyles: {
+                    hover: {
+                        fill: "lightsteelblue",
+                    },
+                    active: {
+                        opacity: 1,
+                    },
+                    inactive: {
+                        opacity: 0.2,
+                    }
+                },
+                edgeStateStyles: {
+                    active: {
+                        stroke: 'black',
+                        opacity: 1,
+                    },
+                    inactive: {
+                        opacity: 0.2,
+                    }
+                }
+            });
+            graph.data(data);
+            graph.render();
+            graph.on("node:click", function (event) {
+                $("#modal").html(event.item._cfg.model.html);
+                $("#modal").modal();
+            });
+            graph.on("edge:click", function (event) {
+                $("#modal").html(event.item._cfg.model.html);
+                $("#modal").modal();
+            });
+            $("#graph-info").html(`<code><b>Info:</b> #nodes = ${data.nodes.length}, #edges = ${data.edges.length}</code>`);
+        }
+
+        function loadGraph(graphId) {
+            // remove previous graph
+            $("head script").remove();
+
+            var el = document.createElement("script");
+            el.onerror = () => {
+                alert("Error while loading the graph data");
+            };
+            el.onload = () => {
+                console.log("load data success");
+                renderGraph();
+            };
+            document.head.appendChild(el);
+            el.src = `./graph.${graphId}.js`;
+        }
+
+        function updatePagination() {
+            $("#control #n-graphs").html(`(${metadata.currentGraph + 1}/${metadata.graphs.length})`);
+        }
+
+        $(function () {
+            let select = $("#control #graph-select");
+            for (let gname of metadata.graphs) {
+                $(`<option value="${gname}">${gname}</option>`).appendTo(select);
+            }
+            select.val(metadata.graphs[metadata.currentGraph]);
+            select.change((e) => {
+                let graphId = e.target.value;
+                metadata.currentGraph = metadata.graphs.findIndex(gname => gname === graphId);
+                updatePagination();
+                loadGraph(metadata.graphs[metadata.currentGraph]);
+            });
+            updatePagination();
+            $("#control #prev").click(() => {
+                if (metadata.currentGraph > 0) {
+                    metadata.currentGraph -= 1;
+                    updatePagination();
+                    select.val(metadata.graphs[metadata.currentGraph]);
+                    loadGraph(metadata.graphs[metadata.currentGraph]);
+                }
+            });
+            $("#control #next").click(() => {
+                if (metadata.currentGraph < metadata.graphs.length - 1) {
+                    metadata.currentGraph += 1;
+                    updatePagination();
+                    select.val(metadata.graphs[metadata.currentGraph]);
+                    loadGraph(metadata.graphs[metadata.currentGraph]);
+                }
+            });
+            loadGraph(metadata.graphs[metadata.currentGraph]);
+        });
+    </script>
+</body>
+</html>

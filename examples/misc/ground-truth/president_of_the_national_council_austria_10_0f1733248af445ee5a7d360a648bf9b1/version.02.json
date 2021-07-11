@@ -1,0 +1,101 @@
+{
+  "version": 2,
+  "table_id": "https://en.wikipedia.org/wiki/President_of_the_National_Council_(Austria)/10",
+  "semantic_models": [
+    {
+      "version": 1,
+      "nodes": [
+        {
+          "id": "col-0",
+          "col_index": 0,
+          "label": "Name"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q5:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q5",
+          "rel_uri": "wd:Q5",
+          "approximation": false,
+          "readable_label": null
+        },
+        {
+          "id": "d-1",
+          "col_index": 1,
+          "label": "Entered Office"
+        },
+        {
+          "id": "d-2",
+          "col_index": 2,
+          "label": "Left Office"
+        },
+        {
+          "id": "d-3",
+          "col_index": 3,
+          "label": "Party"
+        },
+        {
+          "id": "c-0",
+          "abs_uri": "http://www.wikidata.org/entity/Q7278",
+          "rel_uri": "wd:Q7278",
+          "approximation": false,
+          "readable_label": null
+        },
+        {
+          "id": "c-1",
+          "abs_uri": "http://wikiba.se/ontology#Statement",
+          "rel_uri": "wikibase:Statement",
+          "approximation": false,
+          "readable_label": null
+        }
+      ],
+      "edges": [
+        {
+          "source": "http://www.wikidata.org/entity/Q5:0",
+          "target": "col-0",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 1
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q5:0",
+          "target": "c-1",
+          "abs_uri": "http://www.wikidata.org/prop/P39",
+          "rel_uri": "p:P39",
+          "approximation": false,
+          "readable_label": null,
+          "id": 3
+        },
+        {
+          "source": "c-0",
+          "target": "d-3",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 2
+        },
+        {
+          "source": "c-1",
+          "target": "d-1",
+          "abs_uri": "http://www.wikidata.org/prop/P580",
+          "rel_uri": "p:P580",
+          "approximation": false,
+          "readable_label": null,
+          "id": 4
+        },
+        {
+          "source": "c-1",
+          "target": "d-2",
+          "abs_uri": "http://www.wikidata.org/prop/P582",
+          "rel_uri": "p:P582",
+          "approximation": false,
+          "readable_label": null,
+          "id": 5
+        }
+      ]
+    }
+  ],
+  "is_curated": false,
+  "note": ""
+}
