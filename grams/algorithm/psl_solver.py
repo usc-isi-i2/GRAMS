@@ -176,16 +176,16 @@ class PSLSteinerTreeSolver:
         # ##################################################################
         # add rules
         feat_weights = {
-            self.LinkNegPrior: 2,
-            self.TypeNegPrior: 2,
+            self.LinkNegPrior: 1,
+            self.TypeNegPrior: 1,
             self.LinkNegParentPropPrior: 0.1,
             self.CascadingError: 2,
             self.TypeMustInPropRange: 2,
-            self.FreqLinkOverRow: 3,
-            self.FreqLinkOverEntRow: 4,
-            self.FreqLinkOverPosLink: 5,
-            self.FreqLinkUnmatchOverEntRow: 4,
-            self.FreqLinkUnmatchOverPossibleLink: 5,
+            self.FreqLinkOverRow: 2,
+            self.FreqLinkOverEntRow: 2,
+            self.FreqLinkOverPosLink: 2,
+            self.FreqLinkUnmatchOverEntRow: 2,
+            self.FreqLinkUnmatchOverPossibleLink: 2,
             self.LinkHeaderSimilarity: 2,
             self.LinkDataTypeMismatch: 100,
             self.FreqTypeOverRow: 2,
@@ -577,9 +577,14 @@ class PSLSteinerTreeSolver:
                     v = steiner_tree.nodes[e.target_id]['data']
                     if v.is_value and v.is_in_context:
                         # we should have this as PSL think it's correct
-                        assert not pred_tree.has_node(v.id)
-                        pred_tree.add_node(v.id, data=copy.deepcopy(v))
-                        pred_tree.add_edge(s.id, v.id, key=e.predicate, data=copy.deepcopy(e))
+                        # TODO: the entity can be in the tree before if it's needed to connect
+                        # two nodes, but we need to check it
+                        if pred_tree.has_node(v.id):
+                            assert pred_tree.has_edge(s.id, v.id, key=e.predicate)
+                        else:
+                            # assert not pred_tree.has_node(v.id)
+                            pred_tree.add_node(v.id, data=copy.deepcopy(v))
+                            pred_tree.add_edge(s.id, v.id, key=e.predicate, data=copy.deepcopy(e))
             
         # TODO: uncomment for debugging
         # print(candidate_sts)
