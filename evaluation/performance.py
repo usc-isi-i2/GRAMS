@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-import os
+import os, time
 from operator import itemgetter
 from pathlib import Path
 from typing import List, Dict, Tuple, Callable, Any, Optional, Set, Iterable, Union
@@ -31,15 +31,15 @@ Evaluate performance of GRAMS on datasets
 cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
 HOME_DIR = Path("/data/binhvu/workspace/sm-dev/data/home")
 dataset_dir = HOME_DIR / "wikitable2wikidata/250tables"
-dataset_dir = HOME_DIR / "wikitable2wikidata/semtab2020"
+# dataset_dir = HOME_DIR / "wikitable2wikidata/semtab2020"
 gold_models = get_input_data(dataset_dir, dataset_dir.name, only_curated = True, complete_missing_links = True)
-
 grams = GRAMS(data_dir="/tmp/data", cfg=cfg, proxy=False)
 
 def run_one_table(tbl):
     global grams
+    start = time.time()
     res = grams.annotate(tbl)
-
+    return tbl.id, time.time() - start
 # for i, x in enumerate(gold_models):
 #     if i != 82:
 #         continue
@@ -47,11 +47,13 @@ def run_one_table(tbl):
 
 
 with M.Timer().watch_and_report('execution time'):
-    M.parallel_map(
+    results = M.parallel_map(
         run_one_table,
         [x[1] for x in gold_models],
         show_progress=True,
         progress_desc='annotating tables',
         is_parallel=True,
-        # n_processes=8,
+        n_processes=16,
     )
+
+M.serialize_json(results, "/data/binhvu/workspace/sm-dev/grams/evaluation/data.json", indent=4)
