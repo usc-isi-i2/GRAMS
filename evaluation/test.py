@@ -30,34 +30,38 @@ from memory_profiler import profile
 Evaluate performance of GRAMS on datasets
 """
 
-cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
-HOME_DIR = Path("/workspace/sm-dev/data/home")
-# dataset_dir = HOME_DIR / "wikitable2wikidata/250tables"
-dataset_dir = HOME_DIR / "wikitable2wikidata/semtab2020"
-gold_models = get_input_data(dataset_dir, dataset_dir.name, n_tables=5, only_curated = True, complete_missing_links = True)
-grams = GRAMS(data_dir=HOME_DIR / "databases", cfg=cfg, proxy=False)
-
-
 @profile
-def run_one_table(tbl):
-    global grams
-    start = time.time()
-    res = grams.annotate(tbl)
-    return tbl.id, time.time() - start
+def main():
+    cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
+    HOME_DIR = Path("/workspace/sm-dev/data/home")
+    # dataset_dir = HOME_DIR / "wikitable2wikidata/250tables"
+    dataset_dir = HOME_DIR / "wikitable2wikidata/semtab2020"
+    gold_models = get_input_data(dataset_dir, dataset_dir.name, n_tables=30, only_curated = True, complete_missing_links = True)
+    grams = GRAMS(data_dir=HOME_DIR / "databases", cfg=cfg, proxy=False)
+
+    lst = [x[1] for x in gold_models]
+    grams.annotate(lst[0])
+    grams.annotate(lst[1])
+    grams.annotate(lst[2])
+    grams.annotate(lst[3])
+    grams.annotate(lst[4])
+    grams.annotate(lst[5])
+    grams.annotate(lst[6])
+    grams.annotate(lst[7])
+    grams.annotate(lst[8])
+    grams.annotate(lst[9])
+    grams.annotate(lst[10])
+    grams.annotate(lst[11])
+    grams.annotate(lst[12])
+    grams.annotate(lst[13])
+    grams.annotate(lst[14])
+    grams.annotate(lst[15])
+    grams.annotate(lst[16])
+    grams.annotate(lst[17])
+    grams.annotate(lst[18])
+    grams.annotate(lst[19])
+    grams.annotate(lst[20])
 
 
-for i, x in tqdm(enumerate(gold_models)):
-    grams.annotate(x[1])
-
-
-
-# with M.Timer().watch_and_report('execution time'):
-#     results = M.parallel_map(
-#         run_one_table,
-#         [x[1] for x in gold_models],
-#         show_progress=True,
-#         progress_desc='annotating tables',
-#         is_parallel=True,
-#         n_processes=16,
-#     )
-# M.serialize_json(results, "/data/binhvu/workspace/sm-dev/grams/evaluation/data.json", indent=4)
+if __name__ == '__main__':
+    main()

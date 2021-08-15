@@ -8,6 +8,7 @@ import networkx as nx
 import requests
 from omegaconf import OmegaConf
 from rdflib import RDFS
+from tqdm.auto import tqdm
 
 import sm.misc as M
 import sm.outputs as O
@@ -29,22 +30,22 @@ Evaluate performance of GRAMS on datasets
 """
 
 cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
-HOME_DIR = Path("/data/binhvu/workspace/sm-dev/data/home")
+HOME_DIR = Path("/workspace/sm-dev/data/home")
 dataset_dir = HOME_DIR / "wikitable2wikidata/250tables"
 # dataset_dir = HOME_DIR / "wikitable2wikidata/semtab2020"
 gold_models = get_input_data(dataset_dir, dataset_dir.name, only_curated = True, complete_missing_links = True)
-grams = GRAMS(data_dir="/tmp/data", cfg=cfg, proxy=False)
+grams = GRAMS(data_dir=HOME_DIR / "databases", cfg=cfg, proxy=False)
+
 
 def run_one_table(tbl):
     global grams
     start = time.time()
     res = grams.annotate(tbl)
     return tbl.id, time.time() - start
-# for i, x in enumerate(gold_models):
-#     if i != 82:
-#         continue
-#     grams.annotate(x[1])
 
+
+# for i, x in tqdm(enumerate(gold_models)):
+#     grams.annotate(x[1])
 
 with M.Timer().watch_and_report('execution time'):
     results = M.parallel_map(
@@ -53,7 +54,6 @@ with M.Timer().watch_and_report('execution time'):
         show_progress=True,
         progress_desc='annotating tables',
         is_parallel=True,
-        n_processes=16,
+        # n_processes=16,
     )
-
-M.serialize_json(results, "/data/binhvu/workspace/sm-dev/grams/evaluation/data.json", indent=4)
+# M.serialize_json(results, "/data/binhvu/workspace/sm-dev/grams/evaluation/data.json", indent=4)
