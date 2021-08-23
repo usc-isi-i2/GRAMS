@@ -8,7 +8,7 @@ from uuid import uuid4
 from rdflib import RDFS
 
 from grams.inputs.linked_table import LinkedTable
-from grams.evaluation import sm_metrics
+from sm.evaluation import sm_metrics
 import sm.outputs as O
 from kgdata.wikidata.models import QNode, WDProperty, WDClass
 from sm.misc.graph import viz_graph

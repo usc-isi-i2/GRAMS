@@ -630,5 +630,5 @@ if __name__ == '__main__':
     tables = fetch_tables("https://en.wikipedia.org/wiki/President_of_the_National_Council_(Austria)")
     tables[10].as_relational_linked_table()
     # print(tables[1].as_df())
-    # M.serialize_json(tables[6].as_relational_linked_table().to_json(),
+    # M.serialize_json(tables[6].as_relational_linked_table().to_dict(),
     #                  "/workspace/sm-dev/grams/examples/misc/table_01.json")

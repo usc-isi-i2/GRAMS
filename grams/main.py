@@ -220,10 +220,10 @@ if __name__ == '__main__':
 
     # tbl = I.LinkedTable.from_csv_file(ROOT_DIR / "examples/novartis/tables/table_03.csv")
     # data = M.deserialize_json(ROOT_DIR / "examples/novartis/ground-truth/table_03/version.01.json")
-    # sm = O.SemanticModel.from_json(data['semantic_models'][0])
+    # sm = O.SemanticModel.from_dict(data['semantic_models'][0])
     # sm.draw()
     # exit(0)
-    tbl = I.LinkedTable.from_json(M.deserialize_json(ROOT_DIR / "examples/misc/tables/president_of_the_national_council_austria_10_0f1733248af445ee5a7d360a648bf9b1.json"))
+    tbl = I.LinkedTable.from_dict(M.deserialize_json(ROOT_DIR / "examples/misc/tables/president_of_the_national_council_austria_10_0f1733248af445ee5a7d360a648bf9b1.json"))
     # tbl = I.W2WTable.from_csv_file(ROOT_DIR / "examples/t2dv2/tables/29414811_2_4773219892816395776.csv")
     # for ri in range(tbl.size()):
     #     for ci in range(len(tbl.table.columns)):
@@ -240,7 +240,7 @@ if __name__ == '__main__':
     grams = GRAMS(ROOT_DIR / "data", cfg)
     annotation = grams.annotate(tbl)
     annotation.sm.draw()
-    print(annotation.sm.to_json())
+    print(annotation.sm.to_dict())
     grams.timer.report()
 
     # # %%
