@@ -233,7 +233,7 @@ class WikidataSemanticModelHelper(WDOnt):
 
         n_choices = np.prod([len(c) for c in all_choices]) - 1
         if n_choices > 256:
-            raise sm_metrics.PermutationExploding("Too many possible semantic models")
+            raise sm_metrics.PermutationExplosion("Too many possible semantic models")
 
         all_choices = list(itertools.product(*all_choices))
         assert all(invprop is None for _, invprop, _ in all_choices[0]), "First choice is always the current semantic model"
