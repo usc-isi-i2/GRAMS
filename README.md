@@ -1,9 +1,26 @@
-1. Install package using:
+<h1 align="center">GRAMS</h1>
 
-```python
-poetry install
-```
+<div align="center">
 
-2. For usage, take a look at `demo.ipynb`.
+![PyPI](https://img.shields.io/pypi/v/sm-grams)
+![Python](https://img.shields.io/badge/python-v3.8+-blue.svg)
+[![GitHub Issues](https://img.shields.io/github/issues/usc-isi-i2/GRAMS.svg)](https://github.com/usc-isi-i2/GRAMS/issues)
+![Contributions welcome](https://img.shields.io/badge/contributions-welcome-orange.svg)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-Note: this package has been modified heavily to support plain table (without linked entities). Use this [link](https://drive.google.com/drive/folders/14U6k1OBXL1e356xXYb3dk-j86wnk0EBR) to access to the code used in the paper before the official release is available.
+</div>
+
+## Table of Contents
+- [Introduction](#introduction)
+- [Installation](#installation)
+<!-- - [Example](#example)
+- [Contributing](#contributing)
+<!-- - [Support](#support) -->
+
+## Introduction
+
+GRAMS is a library to build semantic descriptions of tables to map them to Wikidata.
+
+## Installation
+
+Please look in the [wiki](https://github.com/usc-isi-i2/grams/wiki/Installation) for how to install GRAMS
