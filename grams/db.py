@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sm.misc import RocksDBStore
+from sm.misc.big_dict.rocksdb import RocksDBStore
 from typing import Optional, Union
 
 

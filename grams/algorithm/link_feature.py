@@ -35,7 +35,6 @@ class LinkFeatureExtraction:
     DataTypeMismatch = "DataTypeMismatch"
     HeaderSimilarity = "HeaderSimimilarity"
     
-
     def __init__(self,
                  table: LinkedTable, sg: nx.MultiDiGraph, dg: nx.MultiDiGraph,
                  qnodes: Dict[str, QNode], wdprops: Dict[str, WDProperty],
@@ -49,6 +48,8 @@ class LinkFeatureExtraction:
         self.wd_num_prop_stats = wd_num_prop_stats
         self.text_parser = TextParser()
         self.sim_fn = sim_fn
+
+        self.cache_get_value_map = {}
 
     def extract_features(self):
         n_rows = self.table.size()
@@ -473,21 +474,21 @@ class LinkFeatureExtraction:
             return QuantityType.Float
         return None
 
-    @functools.lru_cache(maxsize=None)
     def _get_value_map(self, column_index: int):
         """Get a map of values in a column to its row numbers (possible duplication).
         This function is not perfect now. The value of the column is considered to be list of entities (if exist) or
         just the value of the cell
         """
-        map = defaultdict(list)
-        col = self.table.table.get_column_by_index(column_index)
-        for ri in range(self.table.size()):
-            links = self.table.links[ri][column_index]
-            ents = [link.qnode_id for link in links if link.qnode_id is not None]
-            if len(ents) > 0:
-                key = tuple(ents)
-            else:
-                key = col.values[ri].strip()
-            map[key].append(ri)
-        return dict(map)
-
+        if column_index not in self.cache_get_value_map:
+            map = defaultdict(list)
+            col = self.table.table.get_column_by_index(column_index)
+            for ri in range(self.table.size()):
+                links = self.table.links[ri][column_index]
+                ents = [link.qnode_id for link in links if link.qnode_id is not None]
+                if len(ents) > 0:
+                    key = tuple(ents)
+                else:
+                    key = col.values[ri].strip()
+                map[key].append(ri)
+            self.cache_get_value_map[column_index] = dict(map)
+        return self.cache_get_value_map[column_index]

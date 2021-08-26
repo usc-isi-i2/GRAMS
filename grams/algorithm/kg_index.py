@@ -108,7 +108,7 @@ class KGObjectIndex:
         M.serialize_pkl(self, outfile)
 
     def iter_hop1_props(self, source_qnode_id: str, target_qnode_id: str) -> Iterable[OneHopIndexPath]:
-         return self.one_hop_index[source_qnode_id].get(target_qnode_id, [])
+        return self.one_hop_index[source_qnode_id].get(target_qnode_id, [])
 
     def iter_hop2_props(self, source_qnode_id: str, target_qnode_id: str) -> Iterable[TwoHopIndexPath]:
         return self.two_hop_index[source_qnode_id].get(target_qnode_id, [])

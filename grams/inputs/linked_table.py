@@ -16,10 +16,10 @@ class LinkedTable:
     # the table that we are working on
     table: ColumnBasedTable
 
-    context: 'Context'
+    context: "Context"
 
     # a mapping from (row id, column id) to the list of links attach to that cell
-    links: List[List[List['Link']]]
+    links: List[List[List["Link"]]]
 
     @property
     def id(self):
@@ -30,18 +30,13 @@ class LinkedTable:
             return 0
         return len(self.table.columns[0].values)
 
-    def to_json(self):
-        """This function convert the current table into a dictionary to store in json
-        Note that this function doesn't store the features since it's not all kinds of features are json serializable
-        """
+    def to_dict(self):
         return {
-            "table": self.table.to_json(),
+            "version": 1,
+            "table": self.table.to_dict(),
             "context": asdict(self.context),
             "links": [
-                [
-                    [asdict(link) for link in links]
-                    for links in rlinks
-                ]
+                [[asdict(link) for link in links] for links in rlinks]
                 for rlinks in self.links
             ],
         }
@@ -50,26 +45,26 @@ class LinkedTable:
         id = self.id
         if id.startswith("http://") or id.startswith("https://"):
             if id.find("dbpedia.org") != -1:
-                id = slugify(urlparse(id).path.replace("/resource/", "").replace("/", "_")).replace("-", "_")
+                id = slugify(
+                    urlparse(id).path.replace("/resource/", "").replace("/", "_")
+                ).replace("-", "_")
                 id += "_" + md5(self.id.encode()).hexdigest()
             elif id.find("wikipedia.org") != -1:
-                id = slugify(urlparse(id).path.replace("/wiki/", "").replace("/", "_")).replace("-", "_")
+                id = slugify(
+                    urlparse(id).path.replace("/wiki/", "").replace("/", "_")
+                ).replace("-", "_")
                 id += "_" + md5(self.id.encode()).hexdigest()
             else:
                 raise NotImplementedError()
-
         return id
 
     @staticmethod
-    def from_json(odict: dict):
-        tbl = ColumnBasedTable.from_json(odict['table'])
-        context = Context(**odict['context'])
+    def from_dict(odict: dict):
+        tbl = ColumnBasedTable.from_dict(odict["table"])
+        context = Context(**odict["context"])
         links = [
-            [
-                [Link(**link) for link in links]
-                for links in rlinks
-            ]
-            for rlinks in odict['links']
+            [[Link(**link) for link in links] for links in rlinks]
+            for rlinks in odict["links"]
         ]
         return LinkedTable(tbl, context, links)
 
@@ -78,16 +73,18 @@ class LinkedTable:
         links = []
         if len(tbl.columns) > 0:
             links = [
-                [
-                    []
-                    for ci in range(len(tbl.columns))
-                ]
+                [[] for ci in range(len(tbl.columns))]
                 for ri in range(len(tbl.columns[0].values))
             ]
         return LinkedTable(tbl, Context(None, None, None), links)
 
     @staticmethod
-    def from_csv_file(infile: Union[Path, str], link_file: Optional[str]=None, first_row_header: bool = True, table_id: Optional[str] = None):
+    def from_csv_file(
+        infile: Union[Path, str],
+        link_file: Optional[str] = None,
+        first_row_header: bool = True,
+        table_id: Optional[str] = None,
+    ):
         infile = Path(infile)
         if link_file is None:
             link_file = infile.parent / f"{infile.stem}.links.tsv"
@@ -104,14 +101,14 @@ class LinkedTable:
             headers = rows[0]
             rows = rows[1:]
         else:
-            headers = [f'column-{i:03d}' for i in range(len(rows[0]))]
+            headers = [f"column-{i:03d}" for i in range(len(rows[0]))]
 
         for ci, cname in enumerate(headers):
             columns.append(Column(ci, cname, [r[ci] for r in rows]))
         table = ColumnBasedTable(table_id, columns)
         links = []
         for ri in range(len(rows)):
-            links.append([[] for ci in range(len(headers))])
+            links.append([[] for _ci in range(len(headers))])
 
         if link_file.exists():
             for row in M.deserialize_csv(link_file, delimiter="\t"):
@@ -122,9 +119,19 @@ class LinkedTable:
                         link = Link(**orjson.loads(ent))
                     elif ent.startswith("http"):
                         assert ent.startswith("http://www.wikidata.org/entity/")
-                        link = Link(0, len(table.columns[ci][ri]), ent, ent.replace("http://www.wikidata.org/entity/", ""))
+                        link = Link(
+                            0,
+                            len(table.columns[ci][ri]),
+                            ent,
+                            ent.replace("http://www.wikidata.org/entity/", ""),
+                        )
                     else:
-                        link = Link(0, len(table.columns[ci][ri]), f"http://www.wikidata.org/entity/{ent}", ent)
+                        link = Link(
+                            0,
+                            len(table.columns[ci][ri]),
+                            f"http://www.wikidata.org/entity/{ent}",
+                            ent,
+                        )
                     links[ri][ci].append(link)
         return LinkedTable(table, Context(), links)
 

@@ -38,11 +38,13 @@ class GRAMS:
     def __init__(self, data_dir: str, cfg=None, proxy: bool=True):
         self.timer = M.Timer()
         self.cfg = cfg if cfg is None else DEFAULT_CONFIG
+        self.is_proxy_db = proxy
 
         with self.timer.watch('init grams db'):
-            self.qnodes = get_qnode_db(os.path.join(data_dir, "qnodes.db"), proxy=proxy, is_singleton=True)
-            self.wdclasses = get_wdclass_db(os.path.join(data_dir, "wdclasses.db"), proxy=proxy, is_singleton=True)
-            self.wdprops = get_wdprop_db(os.path.join(data_dir, "wdprops.db"), proxy=proxy, is_singleton=True)
+            read_only = not proxy
+            self.qnodes = get_qnode_db(os.path.join(data_dir, "qnodes.db"), compression=True, read_only=read_only, proxy=proxy, is_singleton=True)
+            self.wdclasses = get_wdclass_db(os.path.join(data_dir, "wdclasses.db"), compression=False, read_only=read_only, proxy=proxy, is_singleton=True)
+            self.wdprops = get_wdprop_db(os.path.join(data_dir, "wdprops.db"), compression=False, read_only=read_only, proxy=proxy, is_singleton=True)
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(os.path.join(data_dir, "quantity_prop_stats"))
 
         self.build_dg_option = getattr(BuildDGOption, cfg.data_graph.options[0])
@@ -53,27 +55,31 @@ class GRAMS:
         qnode_ids = {link.qnode_id
                      for rlinks in table.links for links in rlinks
                      for link in links if link.qnode_id is not None}
+        if table.context.page_qnode is not None:
+            qnode_ids.add(table.context.page_qnode)
+
         with self.timer.watch('retrieving qnodes'):
             qnodes = self.get_entities(qnode_ids, n_hop=2, verbose=verbose)
         wdclasses = self.wdclasses.cache_dict()
+        wdprops = self.wdprops.cache_dict()
 
         with self.timer.watch('build kg object index'):
             kg_object_index = KGObjectIndex.from_qnodes(
-                qnode_ids, qnodes, self.wdprops,
+                qnode_ids, qnodes, wdprops,
                 n_hop=self.cfg.data_graph.max_n_hop, traversal_option=TraversalOption.TransitiveOnly)
 
         with self.timer.watch("build dg & sg"):
-            dg = build_data_graph(table, qnodes, self.wdprops,
+            dg = build_data_graph(table, qnodes, wdprops,
                                   kg_object_index, max_n_hop=self.cfg.data_graph.max_n_hop,
                                   options=self.build_dg_option)
             constructor = SemanticGraphConstructor([
                 SemanticGraphConstructor.init_sg,
-            ], qnodes, wdclasses, self.wdprops)
+            ], qnodes, wdclasses, wdprops)
             sg = constructor.run(table, dg, debug=False).sg
-            
+        
         with self.timer.watch('run inference'):
             psl_solver = PSLSteinerTreeSolver(
-                qnodes, wdclasses, self.wdprops, self.wd_numprop_stats,
+                qnodes, wdclasses, wdprops, self.wd_numprop_stats,
                 disable_rules=set(self.cfg.psl.disable_rules), sim_fn=None,
                 # cache_dir=outdir / f"{override_psl_cachedir}cache/psl",
                 postprocessing_method=self.cfg.psl.postprocessing, enable_logging=self.cfg.psl.enable_logging)
@@ -81,12 +87,12 @@ class GRAMS:
             pred_cta = {int(ci.replace("column-", "")): classes for ci, classes in pred_cta.items()}
             cta = {ci: max(classes.items(), key=itemgetter(1))[0] for ci, classes in pred_cta.items()}
 
-        sm = self.create_sm_from_cta_cpa(table, pred_sg, cta, qnodes, wdclasses)
+        sm = self.create_sm_from_cta_cpa(table, pred_sg, cta, qnodes, wdclasses, wdprops)
         return Annotation(sm=sm, dg=dg, sg=sg, pred_sg=pred_sg, pred_cta=cta)
 
-    def create_sm_from_cta_cpa(self, table: I.LinkedTable, sg: nx.MultiDiGraph, cta: Dict[int, str], qnodes: Dict[str, QNode], wdclasses: Dict[str, WDClass]):
+    def create_sm_from_cta_cpa(self, table: I.LinkedTable, sg: nx.MultiDiGraph, cta: Dict[int, str], qnodes: Dict[str, QNode], wdclasses: Dict[str, WDClass], wdprops: Dict[str, WDProperty]):
         sm = O.SemanticModel()
-        sm_helper = WikidataSemanticModelHelper(qnodes, wdclasses, self.wdprops)
+        sm_helper = WikidataSemanticModelHelper(qnodes, wdclasses, wdprops)
         # create class nodes first
         classcount = {}
         classmap = {}
@@ -163,18 +169,20 @@ class GRAMS:
             qnode = self.qnodes.get(qnode_id, None)
             if qnode is not None:
                 qnodes[qnode_id] = qnode
-        qnode_ids = [qnode_id for qnode_id in qnode_ids if qnode_id not in qnodes]
-        if len(qnode_ids) > 0:
-            resp = M.parallel_map(
-                query_wikidata_entities,
-                [qnode_ids[i:i+batch_size] for i in range(0, len(qnode_ids), batch_size)],
-                show_progress=verbose,
-                progress_desc=f'query wikidata for get entities in hop: {n_hop}',
-                is_parallel=True)
-            for odict in resp:
-                for k, v in odict.items():
-                    qnodes[k] = v
-                    self.qnodes[k] = v
+        
+        if self.is_proxy_db:
+            qnode_ids = [qnode_id for qnode_id in qnode_ids if qnode_id not in qnodes]
+            if len(qnode_ids) > 0:
+                resp = M.parallel_map(
+                    query_wikidata_entities,
+                    [qnode_ids[i:i+batch_size] for i in range(0, len(qnode_ids), batch_size)],
+                    show_progress=verbose,
+                    progress_desc=f'query wikidata for get entities in hop: {n_hop}',
+                    is_parallel=True)
+                for odict in resp:
+                    for k, v in odict.items():
+                        qnodes[k] = v
+                        self.qnodes[k] = v
 
         if n_hop > 1:
             next_qnode_ids = set()
@@ -190,19 +198,20 @@ class GRAMS:
                 qnode = self.qnodes.get(qnode_id, None)
                 if qnode is not None:
                     qnodes[qnode_id] = qnode
-            next_qnode_ids = [qnode_id for qnode_id in next_qnode_ids if qnode_id not in qnodes]
-
-            if len(next_qnode_ids) > 0:
-                resp = M.parallel_map(
-                    query_wikidata_entities,
-                    [next_qnode_ids[i:i+batch_size] for i in range(0, len(next_qnode_ids), batch_size)],
-                    show_progress=verbose,
-                    progress_desc=f'query wikidata for get entities in hop: {n_hop}',
-                    is_parallel=True)
-                for odict in resp:
-                    for k, v in odict.items():
-                        qnodes[k] = v
-                        self.qnodes[k] = v
+            
+            if self.is_proxy_db:
+                next_qnode_ids = [qnode_id for qnode_id in next_qnode_ids if qnode_id not in qnodes]
+                if len(next_qnode_ids) > 0:
+                    resp = M.parallel_map(
+                        query_wikidata_entities,
+                        [next_qnode_ids[i:i+batch_size] for i in range(0, len(next_qnode_ids), batch_size)],
+                        show_progress=verbose,
+                        progress_desc=f'query wikidata for get entities in hop: {n_hop}',
+                        is_parallel=True)
+                    for odict in resp:
+                        for k, v in odict.items():
+                            qnodes[k] = v
+                            self.qnodes[k] = v
         return qnodes
 
 
@@ -211,10 +220,10 @@ if __name__ == '__main__':
 
     # tbl = I.LinkedTable.from_csv_file(ROOT_DIR / "examples/novartis/tables/table_03.csv")
     # data = M.deserialize_json(ROOT_DIR / "examples/novartis/ground-truth/table_03/version.01.json")
-    # sm = O.SemanticModel.from_json(data['semantic_models'][0])
+    # sm = O.SemanticModel.from_dict(data['semantic_models'][0])
     # sm.draw()
     # exit(0)
-    tbl = I.LinkedTable.from_json(M.deserialize_json(ROOT_DIR / "examples/misc/tables/president_of_the_national_council_austria_10_0f1733248af445ee5a7d360a648bf9b1.json"))
+    tbl = I.LinkedTable.from_dict(M.deserialize_json(ROOT_DIR / "examples/misc/tables/president_of_the_national_council_austria_10_0f1733248af445ee5a7d360a648bf9b1.json"))
     # tbl = I.W2WTable.from_csv_file(ROOT_DIR / "examples/t2dv2/tables/29414811_2_4773219892816395776.csv")
     # for ri in range(tbl.size()):
     #     for ci in range(len(tbl.table.columns)):
@@ -231,7 +240,7 @@ if __name__ == '__main__':
     grams = GRAMS(ROOT_DIR / "data", cfg)
     annotation = grams.annotate(tbl)
     annotation.sm.draw()
-    print(annotation.sm.to_json())
+    print(annotation.sm.to_dict())
     grams.timer.report()
 
     # # %%

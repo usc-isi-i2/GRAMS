@@ -8,7 +8,7 @@ from uuid import uuid4
 from rdflib import RDFS
 
 from grams.inputs.linked_table import LinkedTable
-from grams.evaluation import sm_metrics
+from sm.evaluation import sm_metrics
 import sm.outputs as O
 from kgdata.wikidata.models import QNode, WDProperty, WDClass
 from sm.misc.graph import viz_graph
@@ -233,7 +233,7 @@ class WikidataSemanticModelHelper(WDOnt):
 
         n_choices = np.prod([len(c) for c in all_choices]) - 1
         if n_choices > 256:
-            raise sm_metrics.PermutationExploding("Too many possible semantic models")
+            raise sm_metrics.PermutationExplosion("Too many possible semantic models")
 
         all_choices = list(itertools.product(*all_choices))
         assert all(invprop is None for _, invprop, _ in all_choices[0]), "First choice is always the current semantic model"

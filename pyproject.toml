@@ -1,9 +1,12 @@
 [tool.poetry]
-name = "grams"
+name = "sm-grams"
 version = "0.1.0"
 description = ""
 authors = ["Binh Vu <binh@toan2.com>"]
 license = "MIT"
+packages = [
+    { include = "grams" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -31,15 +34,16 @@ elasticsearch = "^7.12.1"
 fuzzywuzzy = "^0.18.0"
 python-dotenv = "^0.17.0"
 python-Levenshtein = "^0.12.2"
-sem-desc = "^0.1.5"
-kgdata = "^1.1.8"
+sem-desc = "^0.1.13"
+kgdata = "^1.2.2"
 sm-widgets = "^0.1.6"
+click = "^8.0.1"
 
 
 [tool.poetry.dev-dependencies]
 neptune-client = "^0.9.5"
 ipykernel = "^5.5.4"
-click = "^8.0.1"
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
