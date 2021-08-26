@@ -13,7 +13,4 @@ class Wikipedia2WikidataDB(RocksDBStore[str, str]):
             Wikipedia2WikidataDB.instance = Wikipedia2WikidataDB(dbfile, read_only=read_only)
         return Wikipedia2WikidataDB.instance
 
-    def deserialize(self, value):
-        return value.decode()
-
 

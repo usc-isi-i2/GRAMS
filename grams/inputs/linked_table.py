@@ -32,7 +32,7 @@ class LinkedTable:
 
     def to_dict(self):
         return {
-            "version": 1,
+            "version": "1",
             "table": self.table.to_dict(),
             "context": asdict(self.context),
             "links": [

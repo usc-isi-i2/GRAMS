@@ -24,10 +24,7 @@ class IOFile:
     "-i",
     "--infiles",
     required=True,
-    help="""path to input tables. You can use a combination of wildcard (`*`) or named wildcard wrapped by curly
-    brackets (e.g., `{name}` or `{group1}`), which behaves as wildcard. The named wildcard can be used in
-    `outfiles` to name the output file. The list of input tables is retrieved by glob.glob (unix style pathname
-    pattern expansion). Examples:
+    help="""path to input tables. You can use a combination of wildcard (`*`) or named wildcard wrapped by curly brackets (e.g., `{name}` or `{group1}`), which behaves as wildcard. The named wildcard can be used in `outfiles` to name the output file. The list of input tables is retrieved by glob.glob (unix style pathname pattern expansion). Examples:
     - `/tables/{filename}.json`
     - `/tables/{filename}.csv`
 """,
@@ -64,11 +61,9 @@ def cli(
 ):
     """Annotate tables using GRAMS
 
+    \b
     Args:
-        infiles: path to input tables. You can use a combination of wildcard (`*`) or named wildcard wrapped by curly
-            brackets (e.g., `{name}` or `{group1}`), which behaves as wildcard. The named wildcard can be used in
-            `outfiles` to name the output file. The list of input tables is retrieved by glob.glob (unix style pathname
-            pattern expansion). Examples:
+        infiles: path to input tables. You can use a combination of wildcard (`*`) or named wildcard wrapped by curly brackets (e.g., `{name}` or `{group1}`), which behaves as wildcard. The named wildcard can be used in `outfiles` to name the output file. The list of input tables is retrieved by glob.glob (unix style pathname pattern expansion). Examples:
             - `/tables/{filename}.json`
             - `/tables/{filename}.csv`
         outfiles: path to the output annotations. You can only use named wildcard defined in `infiles`. Examples:
@@ -92,7 +87,7 @@ def cli(
         tables.append(tbl)
 
     grams = GRAMS(data_dir=data_dir, cfg=cfg, proxy=proxy)
-
+    
     for io_file, tbl in zip(io_files, tables):
         annotation = grams.annotate(tbl)
         M.serialize_json(
