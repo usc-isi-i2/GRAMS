@@ -38,7 +38,7 @@ fuzzywuzzy = "^0.18.0"
 python-dotenv = "^0.17.0"
 python-Levenshtein = "^0.12.2"
 sem-desc = "^0.1.14"
-kgdata = "^1.2.2"
+kgdata = "^1.2.3"
 sm-widgets = "^0.1.6"
 click = "^8.0.1"
 
