@@ -18,7 +18,7 @@ class LinkedTable:
 
     context: "Context"
 
-    # a mapping from (row id, column id) to the list of links attach to that cell
+    # a mapping from (row id, column id) to the list of links attach to that cell (not include header)
     links: List[List[List["Link"]]]
 
     @property
@@ -60,6 +60,7 @@ class LinkedTable:
 
     @staticmethod
     def from_dict(odict: dict):
+        assert odict.get("version", None) == "1"
         tbl = ColumnBasedTable.from_dict(odict["table"])
         context = Context(**odict["context"])
         links = [
