@@ -1,9 +1,11 @@
+import re
 from dataclasses import dataclass, asdict
 from hashlib import md5
 from pathlib import Path
 from typing import List, Optional, Union
 from urllib.parse import urlparse
 
+import fastnumbers
 import orjson
 from slugify import slugify
 
@@ -64,7 +66,7 @@ class LinkedTable:
         tbl = ColumnBasedTable.from_dict(odict["table"])
         context = Context(**odict["context"])
         links = [
-            [[Link(**link) for link in links] for links in rlinks]
+            [[Link.from_dict(link) for link in links] for links in rlinks]
             for rlinks in odict["links"]
         ]
         return LinkedTable(tbl, context, links)
@@ -82,9 +84,11 @@ class LinkedTable:
     @staticmethod
     def from_csv_file(
         infile: Union[Path, str],
-        link_file: Optional[str] = None,
+        link_file: Optional[Union[Path, str]] = None,
         first_row_header: bool = True,
         table_id: Optional[str] = None,
+        top_k: int = 1,
+        skip_gold_entity: bool = False
     ):
         infile = Path(infile)
         if link_file is None:
@@ -112,26 +116,33 @@ class LinkedTable:
             links.append([[] for _ci in range(len(headers))])
 
         if link_file.exists():
+            skip_gold_entity_int = int(skip_gold_entity)
             for row in M.deserialize_csv(link_file, delimiter="\t"):
-                ri, ci, ents = int(row[0]), int(row[1]), row[2:]
-                for ent in ents:
+                ri, ci, ents = int(row[0]), int(row[1]), row[2+skip_gold_entity_int:]
+                for ent in ents[:top_k]:
                     if ent.startswith("{"):
                         # it's json, encoding the hyperlinks
-                        link = Link(**orjson.loads(ent))
-                    elif ent.startswith("http"):
-                        assert ent.startswith("http://www.wikidata.org/entity/")
-                        link = Link(
-                            0,
-                            len(table.columns[ci][ri]),
-                            ent,
-                            ent.replace("http://www.wikidata.org/entity/", ""),
-                        )
+                        link = Link.from_dict(orjson.loads(ent))
                     else:
+                        if ent.startswith("http"):
+                            assert ent.startswith("http://www.wikidata.org/entity/")
+                            qnode_id = ent.replace("http://www.wikidata.org/entity/", "")
+                        else:
+                            qnode_id = ent
+
+                        if ":" in qnode_id:
+                            qnode_id, qnode_prob = qnode_id.split(":", 1)
+                            assert fastnumbers.isfloat(qnode_prob)
+                            qnode_prob = fastnumbers.float(qnode_prob)
+                        else:
+                            qnode_prob = 1.0
+
                         link = Link(
-                            0,
-                            len(table.columns[ci][ri]),
-                            f"http://www.wikidata.org/entity/{ent}",
-                            ent,
+                            start=0,
+                            end=len(table.columns[ci][ri]),
+                            url=f"http://www.wikidata.org/entity/{ent}",
+                            qnode_id=qnode_id,
+                            qnode_prob=qnode_prob,
                         )
                     links[ri][ci].append(link)
         return LinkedTable(table, Context(), links)
@@ -150,3 +161,17 @@ class Link:
     end: int
     url: str
     qnode_id: Optional[str]
+    qnode_prob: Optional[float]
+
+    @staticmethod
+    def from_dict(obj: dict) -> "Link":
+        qnode_prob = obj.get("qnode_prob", None)
+        if qnode_prob is None and obj["qnode_id"] is not None:
+            qnode_prob = 1.0
+        return Link(
+            start=obj["start"],
+            end=obj["end"],
+            url=obj["url"],
+            qnode_id=obj["qnode_id"],
+            qnode_prob=qnode_prob,
+        )
