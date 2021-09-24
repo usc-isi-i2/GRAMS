@@ -55,6 +55,7 @@ class GRAMS:
         qnode_ids = {link.qnode_id
                      for rlinks in table.links for links in rlinks
                      for link in links if link.qnode_id is not None}
+        qnode_ids.update((candidate.entity_id for rlinks in table.links for links in rlinks for link in links for candidate in link.candidates))
         if table.context.page_qnode is not None:
             qnode_ids.add(table.context.page_qnode)
 

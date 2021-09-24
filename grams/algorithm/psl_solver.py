@@ -395,7 +395,7 @@ class PSLSteinerTreeSolver:
 
     def solve(self, table, sg, dg):
         if len(sg.edges) == 0:
-            return {}
+            return { "links": {}, "types": {} }
 
         data, idmap = self.extract_predicate_data([(table, sg, dg)], is_parallel=False, show_progress=False)
 

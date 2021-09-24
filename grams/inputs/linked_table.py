@@ -88,7 +88,6 @@ class LinkedTable:
         first_row_header: bool = True,
         table_id: Optional[str] = None,
         top_k: int = 1,
-        skip_gold_entity: bool = False
     ):
         infile = Path(infile)
         if link_file is None:
@@ -116,17 +115,18 @@ class LinkedTable:
             links.append([[] for _ci in range(len(headers))])
 
         if link_file.exists():
-            skip_gold_entity_int = int(skip_gold_entity)
             for row in M.deserialize_csv(link_file, delimiter="\t"):
-                ri, ci, ents = int(row[0]), int(row[1]), row[2+skip_gold_entity_int:]
-                for ent in ents[:top_k]:
-                    if ent.startswith("{"):
-                        # it's json, encoding the hyperlinks
-                        link = Link.from_dict(orjson.loads(ent))
-                    else:
+                ri, ci, ents = int(row[0]), int(row[1]), row[2:]
+                if len(ents) == 1 and ents[0].startswith("{"):
+                    link = Link.from_dict(orjson.loads(ents[0]))
+                else:
+                    pents = []
+                    for ent in ents[: top_k + 1]:
                         if ent.startswith("http"):
                             assert ent.startswith("http://www.wikidata.org/entity/")
-                            qnode_id = ent.replace("http://www.wikidata.org/entity/", "")
+                            qnode_id = ent.replace(
+                                "http://www.wikidata.org/entity/", ""
+                            )
                         else:
                             qnode_id = ent
 
@@ -136,15 +136,16 @@ class LinkedTable:
                             qnode_prob = fastnumbers.float(qnode_prob)
                         else:
                             qnode_prob = 1.0
+                        pents.append((qnode_id, qnode_prob))
 
-                        link = Link(
-                            start=0,
-                            end=len(table.columns[ci][ri]),
-                            url=f"http://www.wikidata.org/entity/{ent}",
-                            qnode_id=qnode_id,
-                            qnode_prob=qnode_prob,
-                        )
-                    links[ri][ci].append(link)
+                    link = Link(
+                        start=0,
+                        end=len(table.columns[ci][ri]),
+                        url=f"http://www.wikidata.org/entity/{pents[0][0]}",
+                        qnode_id=pents[0][0],
+                        candidates=[CandidateEntity(e[0], e[1]) for e in pents[1:]],
+                    )
+                links[ri][ci].append(link)
         return LinkedTable(table, Context(), links)
 
 
@@ -156,22 +157,25 @@ class Context:
 
 
 @dataclass
+class CandidateEntity:
+    entity_id: str
+    probability: float
+
+
+@dataclass
 class Link:
     start: int
     end: int
     url: str
     qnode_id: Optional[str]
-    qnode_prob: Optional[float]
+    candidates: List[CandidateEntity]
 
     @staticmethod
     def from_dict(obj: dict) -> "Link":
-        qnode_prob = obj.get("qnode_prob", None)
-        if qnode_prob is None and obj["qnode_id"] is not None:
-            qnode_prob = 1.0
         return Link(
             start=obj["start"],
             end=obj["end"],
             url=obj["url"],
             qnode_id=obj["qnode_id"],
-            qnode_prob=qnode_prob,
+            candidates=[CandidateEntity(**c) for c in obj.get("candidates", [])],
         )
