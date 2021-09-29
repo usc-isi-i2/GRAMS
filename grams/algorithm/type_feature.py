@@ -59,12 +59,12 @@ class TypeFeatureExtraction:
 
             type2freq = defaultdict(int)
             for cell in cells:
-                classes = set()
-                for qnode in cell2qnodes[cell.id]:
+                classes = {}
+                for qnode, prob in cell2qnodes[cell.id]:
                     for stmt in qnode.props.get("P31", []):
-                        classes.add(stmt.value.as_qnode_id())
-                for c in classes:
-                    type2freq[c] += 1
+                        classes[stmt.value.as_qnode_id()] = max(prob, classes.get(stmt.value.as_qnode_id(), 0))
+                for c, prob in classes.items():
+                    type2freq[c] += prob
 
             for c, freq in type2freq.items():
                 freq_type[uid, c] = freq
@@ -81,6 +81,8 @@ class TypeFeatureExtraction:
         # merge qnodes that are sub of each other
         # attempt to merge qnodes (spatial) if they are contained in each other
         # we should go even higher order
+        assert cell.id not in cell2qnodes
+
         if len(cell.qnode_ids) > 1:
             # attempt to merge qnodes (spatial) if they are contained in each other
             # we should go even higher order
@@ -98,8 +100,15 @@ class TypeFeatureExtraction:
                     if q1_id in vals:
                         # q0 is inside q1, ignore q1
                         ignore_qnodes.add(q1_id)
-            cell2qnodes[cell.id] = [self.qnodes[q_id] for q_id in cell.qnode_ids if q_id not in ignore_qnodes]
+            qnode_lst = [self.qnodes[q_id] for q_id in cell.qnode_ids if q_id not in ignore_qnodes]
         elif len(cell.qnode_ids) > 0:
-            cell2qnodes[cell.id] = [self.qnodes[cell.qnode_ids[0]]]
+            qnode_lst = [self.qnodes[cell.qnode_ids[0]]]
         else:
-            cell2qnodes[cell.id] = []
+            qnode_lst = []
+
+        qnode2prob = {}
+        for link in self.table.links[cell.row][cell.column]:
+            for c in link.candidates:
+                qnode2prob[c.entity_id] = max(qnode2prob.get(c.entity_id, 0), c.probability)
+
+        cell2qnodes[cell.id] = [(qnode, qnode2prob[qnode.id]) for qnode in qnode_lst]
