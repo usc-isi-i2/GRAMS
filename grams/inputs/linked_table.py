@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass, asdict
 from hashlib import md5
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Set
 from urllib.parse import urlparse
 
 import fastnumbers
@@ -26,6 +26,16 @@ class LinkedTable:
     @property
     def id(self):
         return self.table.table_id
+
+    def shape(self):
+        return self.table.shape()
+
+    def remove_nonexistent_entities(self, nonexisting_entities: Set[str]):
+        nrows, ncols = self.table.shape()
+        for ri in range(nrows):
+            for ci in range(ncols):
+                for link in self.links[ri][ci]:
+                    link.remove_nonexisting_entities(nonexisting_entities)
 
     def size(self):
         if len(self.table.columns) == 0:
@@ -62,7 +72,7 @@ class LinkedTable:
 
     @staticmethod
     def from_dict(odict: dict):
-        assert odict.get("version", None) == "1"
+        assert str(odict.get("version", None)) == "1"
         tbl = ColumnBasedTable.from_dict(odict["table"])
         context = Context(**odict["context"])
         links = [
@@ -142,7 +152,7 @@ class LinkedTable:
                         start=0,
                         end=len(table.columns[ci][ri]),
                         url=f"http://www.wikidata.org/entity/{pents[0][0]}",
-                        qnode_id=pents[0][0],
+                        qnode_id=pents[0][0] if pents[0][0].strip() != '' else None,
                         candidates=[CandidateEntity(e[0], e[1]) for e in pents[1:]],
                     )
                 links[ri][ci].append(link)
@@ -179,3 +189,8 @@ class Link:
             qnode_id=obj["qnode_id"],
             candidates=[CandidateEntity(**c) for c in obj.get("candidates", [])],
         )
+    
+    def remove_nonexisting_entities(self, nonexisting_entities: Set[str]):
+        if self.qnode_id in nonexisting_entities:
+            self.qnode_id = None
+        self.candidates = [c for c in self.candidates if c.entity_id not in nonexisting_entities]

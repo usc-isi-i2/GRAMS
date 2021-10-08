@@ -915,6 +915,9 @@ def kg_path_discovering(
                     stmt_value = stmt.value
                 else:
                     assert stmt.value.type in LiteralMatcher.non_literal_types
+                    if not stmt.value.is_qnode():
+                        # lexical
+                        continue
                     if stmt.value.as_qnode_id() not in qnodes:
                         # this can happen due to some of the qnodes is in the link, but is missing in the KG
                         # this is very rare so we can employ some check to make sure this is not due to

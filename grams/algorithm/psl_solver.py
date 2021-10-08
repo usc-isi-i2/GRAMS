@@ -342,6 +342,7 @@ class PSLSteinerTreeSolver:
             "NotRange",
             "CanType",
             f"TypeFeature_{self.FreqTypeOverRow}",
+            f"RelFeature_{self.LinkNotFuncDep}"
         }
         RelPredicate = (
             self.model.get_predicate("Rel")
