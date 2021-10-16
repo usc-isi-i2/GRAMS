@@ -702,6 +702,11 @@ class PSLSteinerTreeSolver:
             return sol_a.depth - sol_b.depth
 
         terminal_nodes = SemanticGraphConstructor.st_terminal_nodes(steiner_tree)
+        # TODO: this is a temporary fix for case where steiner tree does not contain any column
+        if len(terminal_nodes) == 0:
+            # TODO: fix me
+            return steiner_tree
+
         bank_solver = SteinerTreeBankSolver(
             steiner_tree,
             terminal_nodes,

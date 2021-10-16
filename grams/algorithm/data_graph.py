@@ -2109,6 +2109,7 @@ def build_data_graph(
     if options & BuildDGOption.PRUNING_REDUNDANT_ENT:
         DGPruning(dg).prune_hidden_entities()
 
+    M.log('grams.dg', {"data_graph": dg})
     return dg
 
 
