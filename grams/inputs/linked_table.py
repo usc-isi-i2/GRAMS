@@ -111,7 +111,8 @@ class LinkedTable:
             * `(<link>|(<entity_id>(\t<entity_id>)*))` is either:
                 - `<link>` a json string encoding Link object and can be deserialized using `Link.from_dict` function
                 - or (<entity_id>(\t<entity_id>)*) a list of entity ids joined by `\t` tab character, each entity id can be a wikidata qnode id (e.g., Q414) or a full qnode uri (e.g., "http://www.wikidata.org/entity/Q414")
-
+        Note that a pair `<row_index>`, `<col_index>` don't have to be unique.
+        
         Args:
             infile: csv file
             link_file: if not provided, this function will look for a file of same name of  `infile` in the same folder but ends with `.links.tsv`.
