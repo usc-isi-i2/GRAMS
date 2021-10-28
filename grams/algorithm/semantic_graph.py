@@ -18,6 +18,7 @@ from grams.algorithm.data_graph import build_data_graph, DGNode, StatementNode, 
     ContextSpan, EdgeFlowSource, EdgeFlowTarget, \
     FlowProvenance
 import sm.outputs as O
+import sm.misc as M
 
 
 @dataclass
@@ -556,6 +557,7 @@ class SemanticGraphConstructor:
 
                             sg_stmt.track_provenance(SGEdgeFlowSource(uid, sgi, p), stmt.id, SGEdgeFlowTarget(qv.id, qtgi, qp), stmt.get_provenance(EdgeFlowSource(uid, p), EdgeFlowTarget(qv.id, qp)))
         args.sg = sg
+        M.log('grams.sg', {"semantic_graph": sg})
 
     def cta_majority_vote(self, args: SemanticGraphConstructorArgs):
         # temporary before we should refactor the whole s*

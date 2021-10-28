@@ -1,8 +1,10 @@
 FROM continuumio/anaconda3
 
+RUN apt update && apt install -y build-essential
+
 RUN pip install poetry && poetry config virtualenvs.create false
 
-RUN pip install sm-grams
+RUN pip install -U sm-grams
 
 #RUN conda install gxx_linux-64
 #

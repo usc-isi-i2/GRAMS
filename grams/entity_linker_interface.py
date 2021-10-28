@@ -16,14 +16,14 @@ def clean_table_linker(infile, outfile):
         ri = int(row[cname2idx["row"]])
         gt_ent = row[cname2idx["GT_kg_id"]]
         pred_ent = row[cname2idx["kg_id"]]
-        score = row[cname2idx["siamese_pred"]]
+        score = float(row[cname2idx["siamese_prediction"]])
 
         if (ri, ci) in cells:
             assert cells[ri, ci]["gt"] == gt_ent
         cells[ri, ci]["gt"] = gt_ent
         if "pred_ent" not in cells[ri, ci]:
             cells[ri, ci]["pred_ent"] = []
-        cells[ri, ci]["pred_ent"].append(f"{pred_ent}:{score}")
+        cells[ri, ci]["pred_ent"].append(f"{pred_ent}:{score:.9f}")
 
     links = []
     for (ri, ci), o in cells.items():

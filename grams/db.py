@@ -12,5 +12,3 @@ class Wikipedia2WikidataDB(RocksDBStore[str, str]):
         if Wikipedia2WikidataDB.instance is None:
             Wikipedia2WikidataDB.instance = Wikipedia2WikidataDB(dbfile, read_only=read_only)
         return Wikipedia2WikidataDB.instance
-
-

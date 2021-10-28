@@ -484,7 +484,7 @@ class LinkFeatureExtraction:
             col = self.table.table.get_column_by_index(column_index)
             for ri in range(self.table.size()):
                 links = self.table.links[ri][column_index]
-                ents = [link.qnode_id for link in links if link.qnode_id is not None]
+                ents = [link.entity_id for link in links if link.entity_id is not None]
                 if len(ents) > 0:
                     key = tuple(ents)
                 else:
