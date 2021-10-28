@@ -961,6 +961,9 @@ def kg_path_discovering(
                             qval_value = qval
                         else:
                             assert qval.type in LiteralMatcher.non_literal_types
+                            # TODO: fix me handle L not correct
+                            if qval.value['id'].startswith("L") or qval.value['id'].startswith("P"):
+                                continue
                             if qval.as_qnode_id() not in qnodes:
                                 # this can happen due to some of the qnodes is in the link, but is missing in the KG
                                 # this is very rare so we can employ some check to make sure this is not due to
@@ -1943,6 +1946,7 @@ def build_data_graph(
     | BuildDGOption.PRUNING_REDUNDANT_ENT,
     verbose: bool = False,
 ):
+    """Build data graph from a linked table"""
     dg = nx.MultiDiGraph()
     context_node_id = None
 
@@ -1953,21 +1957,21 @@ def build_data_graph(
             # cell_qnodes = set()
             # cell_qnode_spans = {}
             # for link in table.links[ri][ci]:
-            #     if link.qnode_id is not None:
-            #         cell_qnodes.add(link.qnode_id)
-            #         if link.qnode_id not in cell_qnode_spans:
-            #             cell_qnode_spans[link.qnode_id] = []
-            #         cell_qnode_spans[link.qnode_id].append(Span(link.start, link.end))
+            #     if link.entity_id is not None:
+            #         cell_qnodes.add(link.entity_id)
+            #         if link.entity_id not in cell_qnode_spans:
+            #             cell_qnode_spans[link.entity_id] = []
+            #         cell_qnode_spans[link.entity_id].append(Span(link.start, link.end))
             # assert all(len(spans) == len(set(spans)) for spans in cell_qnode_spans.values())
             # TODO: new code, doesn't handle the qnode_spans correctly
             cell_qnodes = {candidate.entity_id for link in table.links[ri][ci] for candidate in link.candidates}
             cell_qnode_spans = {}
             for link in table.links[ri][ci]:
-                if link.qnode_id is not None or len(link.candidates) > 0:
+                if link.entity_id is not None or len(link.candidates) > 0:
                     if len(link.candidates) > 0:
                         tmpid = link.candidates[0].entity_id
                     else:
-                        tmpid = link.qnode_id
+                        tmpid = link.entity_id
                     if tmpid not in cell_qnode_spans:
                         cell_qnode_spans[tmpid] = []
                     cell_qnode_spans[tmpid].append(Span(link.start, link.end))
@@ -1984,11 +1988,11 @@ def build_data_graph(
             )
             dg.add_node(node.id, data=node)
 
-    if table.context.page_qnode is not None:
-        context_node_id = DGPathNodeQNode(table.context.page_qnode).get_id()
+    if table.context.page_entity is not None:
+        context_node_id = DGPathNodeQNode(table.context.page_entity).get_id()
         node = EntityValueNode(
             id=context_node_id,
-            qnode_id=table.context.page_qnode,
+            qnode_id=table.context.page_entity,
             context_span=ContextSpan(
                 text=table.context.page_title,
                 span=Span(0, len(table.context.page_title)),
@@ -2111,133 +2115,3 @@ def build_data_graph(
 
     M.log('grams.dg', {"data_graph": dg})
     return dg
-
-
-def viz_dg(
-    dg: nx.MultiDiGraph,
-    qnodes: Dict[str, QNode],
-    wdprops: Dict[str, WDProperty],
-    outdir,
-    graph_id,
-):
-    colors = {
-        "context": dict(fill="#C6E5FF", stroke="#5B8FF9"),
-        "statement": dict(fill="#d9d9d9", stroke="#434343"),
-        "kg": dict(fill="#b7eb8f", stroke="#135200"),
-        "cell": dict(fill="#ffd666", stroke="#874d00"),
-    }
-
-    def node_fn(uid, udata):
-        u: DGNode = udata["data"]
-        html = ""
-        if u.is_cell:
-            label = u.value
-            nodetype = "cell"
-            for qnode_id in u.qnode_ids:
-                qnode = qnodes[qnode_id]
-                html += f"""<a href="http://www.wikidata.org/wiki/{qnode.id}" target="_blank">{qnode.label} ({qnode.id})</a><br/>"""
-
-        elif u.is_literal_value:
-            label = u.value.to_string_repr()
-            nodetype = "context" if u.is_context else "kg"
-        elif u.is_entity_value:
-            qnode = qnodes[u.qnode_id]
-            label = f"{qnode.label} ({qnode.id})"
-            nodetype = "context" if u.is_context else "kg"
-            html = f"""<a href="http://www.wikidata.org/wiki/{qnode.id}" target="_blank">{label}</a>"""
-        else:
-            label = ""
-            nodetype = "statement"
-
-        return {"label": label, "style": colors[nodetype], "html": html}
-
-    def edge_fn(eid, edata):
-        e: DGEdge = edata["data"]
-        return {"label": f"{wdprops[e.predicate].label} ({e.predicate})"}
-
-    viz_graph(dg, node_fn, edge_fn, outdir, graph_id)
-
-
-# if __name__ == '__main__':
-#     from sm_unk.dev.wikitable2wikidata.sxx_evaluation import get_input_data
-#
-#     table_index = 34
-#
-#     max_n_hop = 2
-#     dataset_dir = HOME_DIR / "wikitable2wikidata/250tables"
-#     gold_models = get_input_data(dataset_dir, dataset_dir.name, only_curated=True)
-#
-#     REDIS_CACHE_URL = 'redis://localhost:6379/8'
-#     qnodes = get_qnodes(dataset_dir, n_hop=max_n_hop+1, test=True)
-#     wdclasses = WDClass.from_file(dataset_dir / "ontology", load_parent_closure=True)
-#     wdprops = WDProperty.from_file(load_parent_closure=True)
-#
-#     kg_index_file = dataset_dir / "kg_index" / "object_index.2hop_transitive.pkl.gz"
-#     if kg_index_file.exists():
-#         kg_object_index = KGObjectIndex.deserialize(kg_index_file, verbose=True)
-#     else:
-#         index_qnode_ids = list(get_qnodes(dataset_dir, n_hop=1, no_wdclass=True).keys())
-#         kg_object_index = KGObjectIndex.from_qnodes(index_qnode_ids, qnodes, wdprops,
-#                                                     n_hop=2,
-#                                                     verbose=True)
-#         kg_object_index.serialize(kg_index_file)
-#
-#     info = lambda x: f"{qnodes[x].label} ({x}): {qnodes[x].description}" if x[0] == 'Q' else f"{wdprops[x].label} ({x})"
-#
-#     logger.info("Finish setup working environment")
-#
-#     table = gold_models[table_index][1]
-#     cache_fn = lambda fn: M.redis_cache_func(REDIS_CACHE_URL, namespace=f"{dataset_dir.name}.{fn.__name__}")(fn)
-#
-#     # @cache_fn
-#     def wrapper(table_index):
-#         return build_data_graph(table, qnodes, wdprops, kg_object_index, max_n_hop=max_n_hop, verbose=True)
-#
-#     timer = M.Timer()
-#     dg = wrapper(table_index)
-#     timer.report()
-#     exit(0)
-#     logger.info("Pruning graph")
-#
-#     logger.info("dg #nodes: {}", len(dg.nodes))
-#     logger.info("dg #edges: {}", len(dg.edges))
-#     logger.info("dg #cells: {}", sum((int(udata['data'].is_cell) for uid, udata in dg.nodes.items())))
-#     logger.info("dg #entities: {}", sum((int(udata['data'].is_entity_value) for uid, udata in dg.nodes.items())))
-#     logger.info("dg #literals: {}", sum((int(udata['data'].is_literal_value) for uid, udata in dg.nodes.items())))
-#     logger.info("dg #statements: {}", sum((int(udata['data'].is_statement) for uid, udata in dg.nodes.items())))
-#
-#     DGPruning(dg).prune_hidden_entities()
-#
-#     # dg = build_data_graph(table, qnodes, wdprops)
-#
-#     logger.info("dg #nodes: {}", len(dg.nodes))
-#     logger.info("dg #edges: {}", len(dg.edges))
-#     logger.info("dg #cells: {}", sum((int(udata['data'].is_cell) for uid, udata in dg.nodes.items())))
-#     logger.info("dg #entities: {}", sum((int(udata['data'].is_entity_value) for uid, udata in dg.nodes.items())))
-#     logger.info("dg #literals: {}", sum((int(udata['data'].is_literal_value) for uid, udata in dg.nodes.items())))
-#     logger.info("dg #statements: {}", sum((int(udata['data'].is_statement) for uid, udata in dg.nodes.items())))
-#
-#     exit(0)
-#     info('P527')
-#     uid = '0-0'
-#     dict(dg[uid])
-#     dict(dg['stmt:Q12589-P150-241'])
-#     dict(dg['stmt:Q12589-P150-242'])
-#     dict(dg['stmt:Q12589-P527-430'])
-#     dict(dg['stmt:Q1063324-P421-0'])
-#     dict(dg['ent:Q1063324'])
-#
-#     table.table.as_dataframe()
-#
-#     from sm_unk.dev.wikitable2wikidata.s31_graph_v2_semantic_graph import SemanticGraphConstructor
-#     constructor = SemanticGraphConstructor([
-#         SemanticGraphConstructor.init_sg,
-#     ], qnodes, wdclasses, wdprops)
-#     args = constructor.run(table, dg)
-#     len(args.sg)
-#     constructor.calculate_link_frequency(args)
-#     constructor.prune_sg_redundant_entity(args)
-#     len(args.sg)
-#     sg = args.sg
-#     dict(sg['column-0'])
-#     dict(sg['stmt:column-0-P150-ent:Q205584'])

@@ -18,6 +18,7 @@ class LinkedTable:
     # the table that we are working on
     table: ColumnBasedTable
 
+    # context of the table
     context: "Context"
 
     # a mapping from (row id, column id) to the list of links attach to that cell (not include header)
@@ -68,11 +69,14 @@ class LinkedTable:
                 id += "_" + md5(self.id.encode()).hexdigest()
             else:
                 raise NotImplementedError()
+        else:
+            id = slugify(self.id.replace("/", "_")).replace("-", "_")
+
         return id
 
     @staticmethod
     def from_dict(odict: dict):
-        assert str(odict.get("version", None)) == "1"
+        assert str(odict.get("version", None)) == "1.1"
         tbl = ColumnBasedTable.from_dict(odict["table"])
         context = Context(**odict["context"])
         links = [
@@ -97,8 +101,24 @@ class LinkedTable:
         link_file: Optional[Union[Path, str]] = None,
         first_row_header: bool = True,
         table_id: Optional[str] = None,
-        top_k: int = 1,
-    ):
+        top_k: int = 100,
+    ) -> "LinkedTable":
+        """Load table from a csv file, and its links from a tsv file (if exist).
+
+        Each row of a link file has the following format: `<row_index>\t<col_index>\t(<link>|(<entity_id>(\t<entity_id>)*))`, where:
+            * `row_index` and `col_index` start from 0
+            * `row_index` does not count the header of the table (i.e., skip the first row of `infile` if it's the header)
+            * `(<link>|(<entity_id>(\t<entity_id>)*))` is either:
+                - `<link>` a json string encoding Link object and can be deserialized using `Link.from_dict` function
+                - or (<entity_id>(\t<entity_id>)*) a list of entity ids joined by `\t` tab character, each entity id can be a wikidata qnode id (e.g., Q414) or a full qnode uri (e.g., "http://www.wikidata.org/entity/Q414")
+
+        Args:
+            infile: csv file
+            link_file: if not provided, this function will look for a file of same name of  `infile` in the same folder but ends with `.links.tsv`.
+            first_row_header: whether the first row of the `infile` is header of the table
+            table_id: if None, the table id will be file name of `infile`
+            top_k: top k candidate entity to keep.
+        """
         infile = Path(infile)
         if link_file is None:
             link_file = infile.parent / f"{infile.stem}.links.tsv"
@@ -152,7 +172,7 @@ class LinkedTable:
                         start=0,
                         end=len(table.columns[ci][ri]),
                         url=f"http://www.wikidata.org/entity/{pents[0][0]}",
-                        qnode_id=pents[0][0] if pents[0][0].strip() != '' else None,
+                        entity_id=pents[0][0] if pents[0][0].strip() != '' else None,
                         candidates=[CandidateEntity(e[0], e[1]) for e in pents[1:]],
                     )
                 links[ri][ci].append(link)
@@ -161,9 +181,10 @@ class LinkedTable:
 
 @dataclass
 class Context:
+    """Table's context"""
     page_title: Optional[str] = None
     page_url: Optional[str] = None
-    page_qnode: Optional[str] = None
+    page_entity: Optional[str] = None
 
 
 @dataclass
@@ -177,7 +198,7 @@ class Link:
     start: int
     end: int
     url: str
-    qnode_id: Optional[str]
+    entity_id: Optional[str]
     candidates: List[CandidateEntity]
 
     @staticmethod
@@ -186,11 +207,11 @@ class Link:
             start=obj["start"],
             end=obj["end"],
             url=obj["url"],
-            qnode_id=obj["qnode_id"],
+            entity_id=obj["entity_id"],
             candidates=[CandidateEntity(**c) for c in obj.get("candidates", [])],
         )
     
     def remove_nonexisting_entities(self, nonexisting_entities: Set[str]):
-        if self.qnode_id in nonexisting_entities:
-            self.qnode_id = None
+        if self.entity_id in nonexisting_entities:
+            self.entity_id = None
         self.candidates = [c for c in self.candidates if c.entity_id not in nonexisting_entities]

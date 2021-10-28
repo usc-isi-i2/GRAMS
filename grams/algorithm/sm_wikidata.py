@@ -559,9 +559,9 @@ class WikidataSemanticModelHelper(WDOnt):
                 # get entities
                 qnode_ids = sorted(
                     {
-                        e.qnode_id
+                        e.entity_id
                         for e in tbl.links[ri][ci]
-                        if e.qnode_id is not None and e.start < e.end
+                        if e.entity_id is not None and e.start < e.end
                     }
                 )
                 if len(qnode_ids) == 0:
