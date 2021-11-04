@@ -962,7 +962,9 @@ def kg_path_discovering(
                         else:
                             assert qval.type in LiteralMatcher.non_literal_types
                             # TODO: fix me handle L not correct
-                            if qval.value['id'].startswith("L") or qval.value['id'].startswith("P"):
+                            if qval.value["id"].startswith("L") or qval.value[
+                                "id"
+                            ].startswith("P"):
                                 continue
                             if qval.as_qnode_id() not in qnodes:
                                 # this can happen due to some of the qnodes is in the link, but is missing in the KG
@@ -1964,7 +1966,11 @@ def build_data_graph(
             #         cell_qnode_spans[link.entity_id].append(Span(link.start, link.end))
             # assert all(len(spans) == len(set(spans)) for spans in cell_qnode_spans.values())
             # TODO: new code, doesn't handle the qnode_spans correctly
-            cell_qnodes = {candidate.entity_id for link in table.links[ri][ci] for candidate in link.candidates}
+            cell_qnodes = {
+                candidate.entity_id
+                for link in table.links[ri][ci]
+                for candidate in link.candidates
+            }
             cell_qnode_spans = {}
             for link in table.links[ri][ci]:
                 if link.entity_id is not None or len(link.candidates) > 0:
@@ -1975,7 +1981,9 @@ def build_data_graph(
                     if tmpid not in cell_qnode_spans:
                         cell_qnode_spans[tmpid] = []
                     cell_qnode_spans[tmpid].append(Span(link.start, link.end))
-            assert all(len(spans) == len(set(spans)) for spans in cell_qnode_spans.values())
+            assert all(
+                len(spans) == len(set(spans)) for spans in cell_qnode_spans.values()
+            )
             # =====================================================
 
             node = CellNode(
@@ -1984,15 +1992,15 @@ def build_data_graph(
                 column=ci,
                 row=ri,
                 qnode_ids=list(cell_qnodes),
-                qnodes_span=cell_qnode_spans
+                qnodes_span=cell_qnode_spans,
             )
             dg.add_node(node.id, data=node)
 
-    if table.context.page_entity is not None:
-        context_node_id = DGPathNodeQNode(table.context.page_entity).get_id()
+    if table.context.page_entity_id is not None:
+        context_node_id = DGPathNodeQNode(table.context.page_entity_id).get_id()
         node = EntityValueNode(
             id=context_node_id,
-            qnode_id=table.context.page_entity,
+            qnode_id=table.context.page_entity_id,
             context_span=ContextSpan(
                 text=table.context.page_title,
                 span=Span(0, len(table.context.page_title)),
@@ -2113,5 +2121,5 @@ def build_data_graph(
     if options & BuildDGOption.PRUNING_REDUNDANT_ENT:
         DGPruning(dg).prune_hidden_entities()
 
-    M.log('grams.dg', {"data_graph": dg})
+    M.log("grams", data_graph=dg)
     return dg

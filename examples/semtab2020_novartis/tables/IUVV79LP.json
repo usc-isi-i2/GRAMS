@@ -1,1 +1,394 @@
-{"table":{"table":{"columns":[{"index":0,"name":"col0","values":["raloxifene","dapsone","(+-)-flurbiprofen","Lovastatin","hydrochlorothiazide","carbimazole","hydrocodone","dalfampridine","adenosine","ibuprofen","benzydamine","prednisone","methimazole","methoxsalen","warfarin","magnesium sulfate","ephedrine","magnesium oxide","sulfamethazine","salicylamide"]},{"index":1,"name":"col1","values":["60","50","44","45","25","15","15","20","15","30","9","10","10","10","7.5","7","8","7","4","3"]},{"index":2,"name":"col2","values":["145","177","111","175","269","124","198","159","235","77","320","237","145.5","148","322","1137","40","5072","200","140"]}],"table_id":"IUVV79LP","version":"2"},"context":{"page_title":null,"page_url":null,"page_qnode":null},"links":[[[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q425223","qnode_id":"Q425223"}],[],[]],[[{"start":0,"end":7,"url":"http://www.wikidata.org/entity/Q422226","qnode_id":"Q422226"}],[],[]],[[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q419890","qnode_id":"Q419890"}],[],[]],[[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q417740","qnode_id":"Q417740"}],[],[]],[[{"start":0,"end":19,"url":"http://www.wikidata.org/entity/Q423930","qnode_id":"Q423930"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q414013","qnode_id":"Q414013"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q411441","qnode_id":"Q411441"}],[],[]],[[{"start":0,"end":13,"url":"http://www.wikidata.org/entity/Q372539","qnode_id":"Q372539"}],[],[]],[[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q190012","qnode_id":"Q190012"}],[],[]],[[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q186969","qnode_id":"Q186969"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q793143","qnode_id":"Q793143"}],[],[]],[[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q424972","qnode_id":"Q424972"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q419663","qnode_id":"Q419663"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q408570","qnode_id":"Q408570"}],[],[]],[[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q407431","qnode_id":"Q407431"}],[],[]],[[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q288266","qnode_id":"Q288266"}],[],[]],[[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q219626","qnode_id":"Q219626"}],[],[]],[[{"start":0,"end":15,"url":"http://www.wikidata.org/entity/Q214769","qnode_id":"Q214769"}],[],[]],[[{"start":0,"end":14,"url":"http://www.wikidata.org/entity/Q3976823","qnode_id":"Q3976823"}],[],[]],[[{"start":0,"end":12,"url":"http://www.wikidata.org/entity/Q2496906","qnode_id":"Q2496906"}],[],[]]],"version":"1"},"semantic_models":[{"version":1,"nodes":[{"id":"col-0","col_index":0,"label":"col0"},{"id":"http://www.wikidata.org/entity/Q12140:0","abs_uri":"http://www.wikidata.org/entity/Q12140","rel_uri":"wd:Q12140","approximation":false,"readable_label":"medication (Q12140)"},{"id":"col-1","col_index":1,"label":"col1"},{"id":"col-2","col_index":2,"label":"col2"}],"edges":[{"source":"http://www.wikidata.org/entity/Q12140:0","target":"col-0","abs_uri":"http://www.w3.org/2000/01/rdf-schema#label","rel_uri":"rdfs:label","approximation":false,"readable_label":null,"id":1},{"source":"http://www.wikidata.org/entity/Q12140:0","target":"col-1","abs_uri":"http://www.wikidata.org/prop/P4250","rel_uri":"p:P4250","approximation":false,"readable_label":"defined daily dose (P4250)","id":2},{"source":"http://www.wikidata.org/entity/Q12140:0","target":"col-2","abs_uri":"http://www.wikidata.org/prop/P2101","rel_uri":"p:P2101","approximation":false,"readable_label":"melting point (P2101)","id":3}]}]}
+{
+  "table": {
+    "table": {
+      "columns": [
+        {
+          "index": 0,
+          "name": "col0",
+          "values": [
+            "raloxifene",
+            "dapsone",
+            "(+-)-flurbiprofen",
+            "Lovastatin",
+            "hydrochlorothiazide",
+            "carbimazole",
+            "hydrocodone",
+            "dalfampridine",
+            "adenosine",
+            "ibuprofen",
+            "benzydamine",
+            "prednisone",
+            "methimazole",
+            "methoxsalen",
+            "warfarin",
+            "magnesium sulfate",
+            "ephedrine",
+            "magnesium oxide",
+            "sulfamethazine",
+            "salicylamide"
+          ]
+        },
+        {
+          "index": 1,
+          "name": "col1",
+          "values": [
+            "60",
+            "50",
+            "44",
+            "45",
+            "25",
+            "15",
+            "15",
+            "20",
+            "15",
+            "30",
+            "9",
+            "10",
+            "10",
+            "10",
+            "7.5",
+            "7",
+            "8",
+            "7",
+            "4",
+            "3"
+          ]
+        },
+        {
+          "index": 2,
+          "name": "col2",
+          "values": [
+            "145",
+            "177",
+            "111",
+            "175",
+            "269",
+            "124",
+            "198",
+            "159",
+            "235",
+            "77",
+            "320",
+            "237",
+            "145.5",
+            "148",
+            "322",
+            "1137",
+            "40",
+            "5072",
+            "200",
+            "140"
+          ]
+        }
+      ],
+      "table_id": "IUVV79LP",
+      "version": "2"
+    },
+    "context": {
+      "page_title": null,
+      "page_url": null,
+      "page_entity_id": null
+    },
+    "links": [
+      [
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q425223",
+            "entity_id": "Q425223"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 7,
+            "url": "http://www.wikidata.org/entity/Q422226",
+            "entity_id": "Q422226"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q419890",
+            "entity_id": "Q419890"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q417740",
+            "entity_id": "Q417740"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 19,
+            "url": "http://www.wikidata.org/entity/Q423930",
+            "entity_id": "Q423930"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q414013",
+            "entity_id": "Q414013"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q411441",
+            "entity_id": "Q411441"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 13,
+            "url": "http://www.wikidata.org/entity/Q372539",
+            "entity_id": "Q372539"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q190012",
+            "entity_id": "Q190012"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q186969",
+            "entity_id": "Q186969"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q793143",
+            "entity_id": "Q793143"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q424972",
+            "entity_id": "Q424972"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q419663",
+            "entity_id": "Q419663"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q408570",
+            "entity_id": "Q408570"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q407431",
+            "entity_id": "Q407431"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q288266",
+            "entity_id": "Q288266"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q219626",
+            "entity_id": "Q219626"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 15,
+            "url": "http://www.wikidata.org/entity/Q214769",
+            "entity_id": "Q214769"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 14,
+            "url": "http://www.wikidata.org/entity/Q3976823",
+            "entity_id": "Q3976823"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 12,
+            "url": "http://www.wikidata.org/entity/Q2496906",
+            "entity_id": "Q2496906"
+          }
+        ],
+        [],
+        []
+      ]
+    ],
+    "version": "1.1"
+  },
+  "semantic_models": [
+    {
+      "version": 1,
+      "nodes": [
+        {
+          "id": "col-0",
+          "col_index": 0,
+          "label": "col0"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q12140:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q12140",
+          "rel_uri": "wd:Q12140",
+          "approximation": false,
+          "readable_label": "medication (Q12140)"
+        },
+        {
+          "id": "col-1",
+          "col_index": 1,
+          "label": "col1"
+        },
+        {
+          "id": "col-2",
+          "col_index": 2,
+          "label": "col2"
+        }
+      ],
+      "edges": [
+        {
+          "source": "http://www.wikidata.org/entity/Q12140:0",
+          "target": "col-0",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 1
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12140:0",
+          "target": "col-1",
+          "abs_uri": "http://www.wikidata.org/prop/P4250",
+          "rel_uri": "p:P4250",
+          "approximation": false,
+          "readable_label": "defined daily dose (P4250)",
+          "id": 2
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12140:0",
+          "target": "col-2",
+          "abs_uri": "http://www.wikidata.org/prop/P2101",
+          "rel_uri": "p:P2101",
+          "approximation": false,
+          "readable_label": "melting point (P2101)",
+          "id": 3
+        }
+      ]
+    }
+  ]
+}

@@ -1,1 +1,690 @@
-{"table":{"table":{"columns":[{"index":0,"name":"col0","values":["hypothetical protein CPn0012","SIRT5","SIRT3","SIRT2","APOC3","APOC4","ANXA1","GHRL","APOC2","APOC1","APOD","FURIN","LPL","INS","APOH","LCAT","APOB","POMC","GCG","AGT"]},{"index":1,"name":"col1","values":["Hypothetical protein CPn0012","Sirtuin 5","Sirtuin 3","Sirtuin 2","Apolipoprotein C3","Apolipoprotein C4","Annexin A1","obestatin","Apolipoprotein C2","Apolipoprotein C1","Apolipoprotein D","Furin, paired basic amino acid cleaving enzyme","Lipoprotein lipase","proinsulin","Apolipoprotein H","Lecithin-cholesterol acyltransferase","Apolipoprotein B","corticotropin","glucagon","Angiotensinogen"]},{"index":2,"name":"col2","values":["calmodulin dependent kinase signaling pathway","protein deacetylation","protein deacetylation","protein deacetylation","transport","transport","phagocytosis","decidualization","transport","transport","aging","proteolysis","lipid metabolism","positive regulation of cell differentiation","plasminogen activation","lipid metabolism","spermatogenesis","signal transduction","cellular proliferation","vasodilation"]}],"table_id":"3MQ7IT3G","version":"2"},"context":{"page_title":null,"page_url":null,"page_qnode":null},"links":[[[{"start":0,"end":28,"url":"http://www.wikidata.org/entity/Q23328780","qnode_id":"Q23328780"}],[{"start":0,"end":28,"url":"http://www.wikidata.org/entity/Q23601229","qnode_id":"Q23601229"}],[{"start":0,"end":45,"url":"http://www.wikidata.org/entity/Q26249991","qnode_id":"Q26249991"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q18037156","qnode_id":"Q18037156"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q21125222","qnode_id":"Q21125222"}],[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q14914414","qnode_id":"Q14914414"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q18037158","qnode_id":"Q18037158"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q21116855","qnode_id":"Q21116855"}],[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q14914414","qnode_id":"Q14914414"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q18036605","qnode_id":"Q18036605"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q21108304","qnode_id":"Q21108304"}],[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q14914414","qnode_id":"Q14914414"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q14910515","qnode_id":"Q14910515"}],[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q4068038","qnode_id":"Q4068038"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q1435575","qnode_id":"Q1435575"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q14910792","qnode_id":"Q14910792"}],[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q4068037","qnode_id":"Q4068037"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q1435575","qnode_id":"Q1435575"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q14908222","qnode_id":"Q14908222"}],[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q4769148","qnode_id":"Q4769148"}],[{"start":0,"end":12,"url":"http://www.wikidata.org/entity/Q184726","qnode_id":"Q184726"}]],[[{"start":0,"end":4,"url":"http://www.wikidata.org/entity/Q21163357","qnode_id":"Q21163357"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q905680","qnode_id":"Q905680"}],[{"start":0,"end":15,"url":"http://www.wikidata.org/entity/Q1207365","qnode_id":"Q1207365"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q14916272","qnode_id":"Q14916272"}],[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q3445743","qnode_id":"Q3445743"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q1435575","qnode_id":"Q1435575"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q14904550","qnode_id":"Q14904550"}],[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q1977297","qnode_id":"Q1977297"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q1435575","qnode_id":"Q1435575"}]],[[{"start":0,"end":4,"url":"http://www.wikidata.org/entity/Q18247781","qnode_id":"Q18247781"}],[{"start":0,"end":16,"url":"http://www.wikidata.org/entity/Q798252","qnode_id":"Q798252"}],[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q332154","qnode_id":"Q332154"}]],[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q14916427","qnode_id":"Q14916427"}],[{"start":0,"end":46,"url":"http://www.wikidata.org/entity/Q581324","qnode_id":"Q581324"}],[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q33123","qnode_id":"Q33123"}]],[[{"start":0,"end":3,"url":"http://www.wikidata.org/entity/Q14864755","qnode_id":"Q14864755"}],[{"start":0,"end":18,"url":"http://www.wikidata.org/entity/Q420014","qnode_id":"Q420014"}],[{"start":0,"end":16,"url":"http://www.wikidata.org/entity/Q2792936","qnode_id":"Q2792936"}]],[[{"start":0,"end":3,"url":"http://www.wikidata.org/entity/Q21163221","qnode_id":"Q21163221"}],[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q426173","qnode_id":"Q426173"}],[{"start":0,"end":43,"url":"http://www.wikidata.org/entity/Q14758939","qnode_id":"Q14758939"}]],[[{"start":0,"end":4,"url":"http://www.wikidata.org/entity/Q14911006","qnode_id":"Q14911006"}],[{"start":0,"end":16,"url":"http://www.wikidata.org/entity/Q648315","qnode_id":"Q648315"}],[{"start":0,"end":22,"url":"http://www.wikidata.org/entity/Q14599493","qnode_id":"Q14599493"}]],[[{"start":0,"end":4,"url":"http://www.wikidata.org/entity/Q14905444","qnode_id":"Q14905444"}],[{"start":0,"end":36,"url":"http://www.wikidata.org/entity/Q424716","qnode_id":"Q424716"}],[{"start":0,"end":16,"url":"http://www.wikidata.org/entity/Q2792936","qnode_id":"Q2792936"}]],[[{"start":0,"end":4,"url":"http://www.wikidata.org/entity/Q14890615","qnode_id":"Q14890615"}],[{"start":0,"end":16,"url":"http://www.wikidata.org/entity/Q648343","qnode_id":"Q648343"}],[{"start":0,"end":15,"url":"http://www.wikidata.org/entity/Q36961","qnode_id":"Q36961"}]],[[{"start":0,"end":4,"url":"http://www.wikidata.org/entity/Q14819793","qnode_id":"Q14819793"}],[{"start":0,"end":13,"url":"http://www.wikidata.org/entity/Q185690","qnode_id":"Q185690"}],[{"start":0,"end":19,"url":"http://www.wikidata.org/entity/Q828130","qnode_id":"Q828130"}]],[[{"start":0,"end":3,"url":"http://www.wikidata.org/entity/Q14821391","qnode_id":"Q14821391"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q170617","qnode_id":"Q170617"}],[{"start":0,"end":22,"url":"http://www.wikidata.org/entity/Q189101","qnode_id":"Q189101"}]],[[{"start":0,"end":3,"url":"http://www.wikidata.org/entity/Q14859647","qnode_id":"Q14859647"}],[{"start":0,"end":15,"url":"http://www.wikidata.org/entity/Q267200","qnode_id":"Q267200"}],[{"start":0,"end":12,"url":"http://www.wikidata.org/entity/Q14859627","qnode_id":"Q14859627"}]]],"version":"1"},"semantic_models":[{"version":1,"nodes":[{"id":"col-0","col_index":0,"label":"col0"},{"id":"http://www.wikidata.org/entity/Q7187:0","abs_uri":"http://www.wikidata.org/entity/Q7187","rel_uri":"wd:Q7187","approximation":false,"readable_label":"gene (Q7187)"},{"id":"col-2","col_index":2,"label":"col2"},{"id":"http://www.wikidata.org/entity/Q2996394:0","abs_uri":"http://www.wikidata.org/entity/Q2996394","rel_uri":"wd:Q2996394","approximation":false,"readable_label":"biological process (Q2996394)"},{"id":"col-1","col_index":1,"label":"col1"}],"edges":[{"source":"http://www.wikidata.org/entity/Q7187:0","target":"col-0","abs_uri":"http://www.w3.org/2000/01/rdf-schema#label","rel_uri":"rdfs:label","approximation":false,"readable_label":null,"id":1},{"source":"http://www.wikidata.org/entity/Q7187:0","target":"col-1","abs_uri":"http://www.wikidata.org/prop/P688","rel_uri":"p:P688","approximation":false,"readable_label":"encodes (P688)","id":2},{"source":"http://www.wikidata.org/entity/Q7187:0","target":"http://www.wikidata.org/entity/Q2996394:0","abs_uri":"http://www.wikidata.org/prop/P682","rel_uri":"p:P682","approximation":false,"readable_label":"biological process (P682)","id":3},{"source":"http://www.wikidata.org/entity/Q2996394:0","target":"col-2","abs_uri":"http://www.w3.org/2000/01/rdf-schema#label","rel_uri":"rdfs:label","approximation":false,"readable_label":null,"id":4}]}]}
+{
+  "table": {
+    "table": {
+      "columns": [
+        {
+          "index": 0,
+          "name": "col0",
+          "values": [
+            "hypothetical protein CPn0012",
+            "SIRT5",
+            "SIRT3",
+            "SIRT2",
+            "APOC3",
+            "APOC4",
+            "ANXA1",
+            "GHRL",
+            "APOC2",
+            "APOC1",
+            "APOD",
+            "FURIN",
+            "LPL",
+            "INS",
+            "APOH",
+            "LCAT",
+            "APOB",
+            "POMC",
+            "GCG",
+            "AGT"
+          ]
+        },
+        {
+          "index": 1,
+          "name": "col1",
+          "values": [
+            "Hypothetical protein CPn0012",
+            "Sirtuin 5",
+            "Sirtuin 3",
+            "Sirtuin 2",
+            "Apolipoprotein C3",
+            "Apolipoprotein C4",
+            "Annexin A1",
+            "obestatin",
+            "Apolipoprotein C2",
+            "Apolipoprotein C1",
+            "Apolipoprotein D",
+            "Furin, paired basic amino acid cleaving enzyme",
+            "Lipoprotein lipase",
+            "proinsulin",
+            "Apolipoprotein H",
+            "Lecithin-cholesterol acyltransferase",
+            "Apolipoprotein B",
+            "corticotropin",
+            "glucagon",
+            "Angiotensinogen"
+          ]
+        },
+        {
+          "index": 2,
+          "name": "col2",
+          "values": [
+            "calmodulin dependent kinase signaling pathway",
+            "protein deacetylation",
+            "protein deacetylation",
+            "protein deacetylation",
+            "transport",
+            "transport",
+            "phagocytosis",
+            "decidualization",
+            "transport",
+            "transport",
+            "aging",
+            "proteolysis",
+            "lipid metabolism",
+            "positive regulation of cell differentiation",
+            "plasminogen activation",
+            "lipid metabolism",
+            "spermatogenesis",
+            "signal transduction",
+            "cellular proliferation",
+            "vasodilation"
+          ]
+        }
+      ],
+      "table_id": "3MQ7IT3G",
+      "version": "2"
+    },
+    "context": {
+      "page_title": null,
+      "page_url": null,
+      "page_entity_id": null
+    },
+    "links": [
+      [
+        [
+          {
+            "start": 0,
+            "end": 28,
+            "url": "http://www.wikidata.org/entity/Q23328780",
+            "entity_id": "Q23328780"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 28,
+            "url": "http://www.wikidata.org/entity/Q23601229",
+            "entity_id": "Q23601229"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 45,
+            "url": "http://www.wikidata.org/entity/Q26249991",
+            "entity_id": "Q26249991"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q18037156",
+            "entity_id": "Q18037156"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q21125222",
+            "entity_id": "Q21125222"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q14914414",
+            "entity_id": "Q14914414"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q18037158",
+            "entity_id": "Q18037158"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q21116855",
+            "entity_id": "Q21116855"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q14914414",
+            "entity_id": "Q14914414"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q18036605",
+            "entity_id": "Q18036605"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q21108304",
+            "entity_id": "Q21108304"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q14914414",
+            "entity_id": "Q14914414"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q14910515",
+            "entity_id": "Q14910515"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q4068038",
+            "entity_id": "Q4068038"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q1435575",
+            "entity_id": "Q1435575"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q14910792",
+            "entity_id": "Q14910792"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q4068037",
+            "entity_id": "Q4068037"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q1435575",
+            "entity_id": "Q1435575"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q14908222",
+            "entity_id": "Q14908222"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q4769148",
+            "entity_id": "Q4769148"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 12,
+            "url": "http://www.wikidata.org/entity/Q184726",
+            "entity_id": "Q184726"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 4,
+            "url": "http://www.wikidata.org/entity/Q21163357",
+            "entity_id": "Q21163357"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q905680",
+            "entity_id": "Q905680"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 15,
+            "url": "http://www.wikidata.org/entity/Q1207365",
+            "entity_id": "Q1207365"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q14916272",
+            "entity_id": "Q14916272"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q3445743",
+            "entity_id": "Q3445743"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q1435575",
+            "entity_id": "Q1435575"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q14904550",
+            "entity_id": "Q14904550"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q1977297",
+            "entity_id": "Q1977297"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q1435575",
+            "entity_id": "Q1435575"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 4,
+            "url": "http://www.wikidata.org/entity/Q18247781",
+            "entity_id": "Q18247781"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 16,
+            "url": "http://www.wikidata.org/entity/Q798252",
+            "entity_id": "Q798252"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q332154",
+            "entity_id": "Q332154"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q14916427",
+            "entity_id": "Q14916427"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 46,
+            "url": "http://www.wikidata.org/entity/Q581324",
+            "entity_id": "Q581324"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q33123",
+            "entity_id": "Q33123"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 3,
+            "url": "http://www.wikidata.org/entity/Q14864755",
+            "entity_id": "Q14864755"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 18,
+            "url": "http://www.wikidata.org/entity/Q420014",
+            "entity_id": "Q420014"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 16,
+            "url": "http://www.wikidata.org/entity/Q2792936",
+            "entity_id": "Q2792936"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 3,
+            "url": "http://www.wikidata.org/entity/Q21163221",
+            "entity_id": "Q21163221"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q426173",
+            "entity_id": "Q426173"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 43,
+            "url": "http://www.wikidata.org/entity/Q14758939",
+            "entity_id": "Q14758939"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 4,
+            "url": "http://www.wikidata.org/entity/Q14911006",
+            "entity_id": "Q14911006"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 16,
+            "url": "http://www.wikidata.org/entity/Q648315",
+            "entity_id": "Q648315"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 22,
+            "url": "http://www.wikidata.org/entity/Q14599493",
+            "entity_id": "Q14599493"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 4,
+            "url": "http://www.wikidata.org/entity/Q14905444",
+            "entity_id": "Q14905444"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 36,
+            "url": "http://www.wikidata.org/entity/Q424716",
+            "entity_id": "Q424716"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 16,
+            "url": "http://www.wikidata.org/entity/Q2792936",
+            "entity_id": "Q2792936"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 4,
+            "url": "http://www.wikidata.org/entity/Q14890615",
+            "entity_id": "Q14890615"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 16,
+            "url": "http://www.wikidata.org/entity/Q648343",
+            "entity_id": "Q648343"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 15,
+            "url": "http://www.wikidata.org/entity/Q36961",
+            "entity_id": "Q36961"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 4,
+            "url": "http://www.wikidata.org/entity/Q14819793",
+            "entity_id": "Q14819793"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 13,
+            "url": "http://www.wikidata.org/entity/Q185690",
+            "entity_id": "Q185690"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 19,
+            "url": "http://www.wikidata.org/entity/Q828130",
+            "entity_id": "Q828130"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 3,
+            "url": "http://www.wikidata.org/entity/Q14821391",
+            "entity_id": "Q14821391"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q170617",
+            "entity_id": "Q170617"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 22,
+            "url": "http://www.wikidata.org/entity/Q189101",
+            "entity_id": "Q189101"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 3,
+            "url": "http://www.wikidata.org/entity/Q14859647",
+            "entity_id": "Q14859647"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 15,
+            "url": "http://www.wikidata.org/entity/Q267200",
+            "entity_id": "Q267200"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 12,
+            "url": "http://www.wikidata.org/entity/Q14859627",
+            "entity_id": "Q14859627"
+          }
+        ]
+      ]
+    ],
+    "version": "1.1"
+  },
+  "semantic_models": [
+    {
+      "version": 1,
+      "nodes": [
+        {
+          "id": "col-0",
+          "col_index": 0,
+          "label": "col0"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q7187:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q7187",
+          "rel_uri": "wd:Q7187",
+          "approximation": false,
+          "readable_label": "gene (Q7187)"
+        },
+        {
+          "id": "col-2",
+          "col_index": 2,
+          "label": "col2"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q2996394:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q2996394",
+          "rel_uri": "wd:Q2996394",
+          "approximation": false,
+          "readable_label": "biological process (Q2996394)"
+        },
+        {
+          "id": "col-1",
+          "col_index": 1,
+          "label": "col1"
+        }
+      ],
+      "edges": [
+        {
+          "source": "http://www.wikidata.org/entity/Q7187:0",
+          "target": "col-0",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 1
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q7187:0",
+          "target": "col-1",
+          "abs_uri": "http://www.wikidata.org/prop/P688",
+          "rel_uri": "p:P688",
+          "approximation": false,
+          "readable_label": "encodes (P688)",
+          "id": 2
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q7187:0",
+          "target": "http://www.wikidata.org/entity/Q2996394:0",
+          "abs_uri": "http://www.wikidata.org/prop/P682",
+          "rel_uri": "p:P682",
+          "approximation": false,
+          "readable_label": "biological process (P682)",
+          "id": 3
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q2996394:0",
+          "target": "col-2",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 4
+        }
+      ]
+    }
+  ]
+}

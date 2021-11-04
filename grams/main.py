@@ -1,7 +1,8 @@
 import os
 from dataclasses import dataclass
 from operator import itemgetter
-from typing import Dict, Set
+from pathlib import Path
+from typing import Any, Dict, Set, Tuple, Union
 
 import networkx as nx
 from omegaconf import OmegaConf
@@ -41,10 +42,9 @@ class Annotation:
 
 
 class GRAMS:
-    """Implementation of GRAMS. The main method is `annotate`
-    """
+    """Implementation of GRAMS. The main method is `annotate`"""
 
-    def __init__(self, data_dir: str, cfg=None, proxy: bool = True):
+    def __init__(self, data_dir: Union[Path, str], cfg=None, proxy: bool = True):
         self.timer = M.Timer()
         self.cfg = cfg if cfg is None else DEFAULT_CONFIG
         self.is_proxy_db = proxy
@@ -98,8 +98,8 @@ class GRAMS:
                 for candidate in link.candidates
             )
         )
-        if table.context.page_entity is not None:
-            qnode_ids.add(table.context.page_entity)
+        if table.context.page_entity_id is not None:
+            qnode_ids.add(table.context.page_entity_id)
 
         with self.timer.watch("retrieving qnodes"):
             qnodes = self.get_entities(qnode_ids, n_hop=2, verbose=verbose)
@@ -162,124 +162,10 @@ class GRAMS:
                 for ci, classes in pred_cta.items()
             }
 
-        sm = self.create_sm_from_cta_cpa(
-            table, pred_sg, cta, qnodes, wdclasses, wdprops
-        )
-        return Annotation(sm=sm, dg=dg, sg=sg, pred_sg=pred_sg, pred_cta=cta)
-
-    def create_sm_from_cta_cpa(
-        self,
-        table: I.LinkedTable,
-        sg: nx.MultiDiGraph,
-        cta: Dict[int, str],
-        qnodes: Dict[str, QNode],
-        wdclasses: Dict[str, WDClass],
-        wdprops: Dict[str, WDProperty],
-    ):
-        sm = O.SemanticModel()
         sm_helper = WikidataSemanticModelHelper(qnodes, wdclasses, wdprops)
-        # create class nodes first
-        classcount = {}
-        classmap = {}
-        for cid, qnode_id in cta.items():
-            dnode = O.DataNode(
-                id=f"col-{cid}", col_index=cid, label=table.table.columns[cid].name
-            )
-
-            # somehow, they may end-up predict multiple classes, we need to select one
-            if qnode_id.find(" ") != -1:
-                qnode_id = qnode_id.split(" ")[0]
-            curl = sm_helper.get_qnode_uri(qnode_id)
-            cnode_id = f"{curl}:{classcount.get(qnode_id, 0)}"
-            classcount[qnode_id] = classcount.get(qnode_id, 0) + 1
-
-            try:
-                cnode_label = sm_helper.get_qnode_label(curl)
-            except KeyError:
-                cnode_label = f"wd:{qnode_id}"
-            cnode = O.ClassNode(
-                id=cnode_id,
-                abs_uri=curl,
-                rel_uri=f"wd:{qnode_id}",
-                readable_label=cnode_label,
-            )
-            classmap[dnode.id] = cnode.id
-
-            sm.add_node(dnode)
-            sm.add_node(cnode)
-            sm.add_edge(
-                O.Edge(
-                    source=cnode.id,
-                    target=dnode.id,
-                    abs_uri=str(RDFS.label),
-                    rel_uri="rdfs:label",
-                )
-            )
-
-        for uid, vid, edge in sg.edges(data="data"):
-            unode = sg.nodes[uid]["data"]
-            vnode = sg.nodes[vid]["data"]
-
-            if unode.is_column:
-                suid = f"col-{unode.column}"
-            else:
-                suid = unode.id
-            if vnode.is_column:
-                svid = f"col-{vnode.column}"
-            else:
-                svid = vnode.id
-
-            if sm.has_node(suid):
-                if suid in classmap:
-                    suid = classmap[suid]
-                source = sm.get_node(suid)
-            elif unode.is_column:
-                # create a data node
-                source = O.DataNode(
-                    id=suid,
-                    col_index=unode.column,
-                    label=table.table.get_column_by_index(unode.column).name,
-                )
-                sm.add_node(source)
-            else:
-                # create a statement node
-                source = O.ClassNode(
-                    id=suid,
-                    abs_uri="http://wikiba.se/ontology#Statement",
-                    rel_uri="wikibase:Statement",
-                )
-                sm.add_node(source)
-            if sm.has_node(svid):
-                if svid in classmap:
-                    svid = classmap[svid]
-                target = sm.get_node(svid)
-            elif vnode.is_column:
-                target = O.DataNode(
-                    id=svid,
-                    col_index=vnode.column,
-                    label=table.table.get_column_by_index(vnode.column).name,
-                )
-                sm.add_node(target)
-            else:
-                target = O.ClassNode(
-                    id=svid,
-                    abs_uri="http://wikiba.se/ontology#Statement",
-                    rel_uri="wikibase:Statement",
-                )
-                sm.add_node(target)
-
-            prop_uri = sm_helper.get_prop_uri(edge.predicate)
-            sm.add_edge(
-                O.Edge(
-                    source=source.id,
-                    target=target.id,
-                    abs_uri=prop_uri,
-                    rel_uri=f"p:{edge.predicate}",
-                    readable_label=sm_helper.get_pnode_label(prop_uri),
-                )
-            )
-
-        return sm
+        sm = sm_helper.create_sm(table, pred_sg, cta)
+        sm = sm_helper.minify_sm(sm)
+        return Annotation(sm=sm, dg=dg, sg=sg, pred_sg=pred_sg, pred_cta=cta)
 
     def get_entities(
         self, qnode_ids: Set[str], n_hop: int = 1, verbose: bool = False
@@ -293,17 +179,17 @@ class GRAMS:
                 qnodes[qnode_id] = qnode
 
         if self.is_proxy_db:
-            qnode_ids = [
+            missing_qnode_ids = [
                 qnode_id
                 for qnode_id in qnode_ids
                 if qnode_id not in qnodes and not self.qnodes.does_not_exist(qnode_id)
             ]
-            if len(qnode_ids) > 0:
+            if len(missing_qnode_ids) > 0:
                 resp = M.parallel_map(
                     query_wikidata_entities,
                     [
-                        qnode_ids[i : i + batch_size]
-                        for i in range(0, len(qnode_ids), batch_size)
+                        missing_qnode_ids[i : i + batch_size]
+                        for i in range(0, len(missing_qnode_ids), batch_size)
                     ],
                     show_progress=verbose,
                     progress_desc=f"query wikidata for get missing entities in hop 1",

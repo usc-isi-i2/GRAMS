@@ -1,1 +1,927 @@
-{"table":{"table":{"columns":[{"index":0,"name":"col0","values":["mumps","scarlet fever","brucellosis","leptospirosis","legionnaires' disease","Q fever","cryptosporidiosis","exanthema subitum","Japanese encephalitis","ehrlichiosis","babesiosis","campylobacteriosis","Lyme disease","chikungunya","shigellosis","poliomyelitis","tuberculosis","malaria","pertussis","typhoid fever"]},{"index":1,"name":"col1","values":["herpangina","streptococcal infection","zoonosis","spirochetal diseases","atypical pneumonia","primary bacterial infectious disease","intestinal parasite infection","viral infectious disease","brain diseases","tick-borne disease","parasitic protozoa infectious disease","gastroenteritis","primary bacterial infectious disease","neglected tropical disease","bacterial infectious disease","peripheral neuropathy","mycobacterium infectious disease","parasitic protozoa infectious disease","commensal bacterial infectious disease","primary bacterial infectious disease"]},{"index":2,"name":"col2","values":["23","5","5","20","16","60","10","12","15","2","4","7","30","12","4","35","8","30","21","30"]},{"index":3,"name":"col3","values":["mumps virus","Streptococcus pyogenes","Brucella","Leptospira interrogans serovar Lai str. 56601","Legionella pneumophila","Coxiella burnetii","Cryptosporidium parvum","Human herpesvirus 6","Japanese encephalitis virus","Ehrlichia chaffeensis","Babesia","Campylobacter jejuni","Borrelia burgdorferi","Chikungunya virus","Shigella","poliovirus","Mycobacterium tuberculosis","Plasmodium","Bordetella pertussis","Salmonella enterica"]},{"index":4,"name":"col4","values":["fever","fever","fatigue","headache","headache","headache","fever","fever","headache","headache","headache","headache","myalgia","fever","fever","paralysis","cough","anemia","fatigue","headache"]}],"table_id":"MQHMLU2B","version":"2"},"context":{"page_title":null,"page_url":null,"page_qnode":null},"links":[[[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q176741","qnode_id":"Q176741"}],[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q665258","qnode_id":"Q665258"}],[],[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q1952649","qnode_id":"Q1952649"}],[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q38933","qnode_id":"Q38933"}]],[[{"start":0,"end":13,"url":"http://www.wikidata.org/entity/Q180266","qnode_id":"Q180266"}],[],[],[{"start":0,"end":22,"url":"http://www.wikidata.org/entity/Q131271","qnode_id":"Q131271"}],[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q38933","qnode_id":"Q38933"}]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q156050","qnode_id":"Q156050"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q182672","qnode_id":"Q182672"}],[],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q313358","qnode_id":"Q313358"}],[{"start":0,"end":7,"url":"http://www.wikidata.org/entity/Q9690","qnode_id":"Q9690"}]],[[{"start":0,"end":13,"url":"http://www.wikidata.org/entity/Q155098","qnode_id":"Q155098"}],[{"start":0,"end":20,"url":"http://www.wikidata.org/entity/Q3493588","qnode_id":"Q3493588"}],[],[{"start":0,"end":45,"url":"http://www.wikidata.org/entity/Q21065229","qnode_id":"Q21065229"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q86","qnode_id":"Q86"}]],[[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q154882","qnode_id":"Q154882"}],[{"start":0,"end":18,"url":"http://www.wikidata.org/entity/Q2633267","qnode_id":"Q2633267"}],[],[{"start":0,"end":22,"url":"http://www.wikidata.org/entity/Q147885","qnode_id":"Q147885"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q86","qnode_id":"Q86"}]],[[{"start":0,"end":7,"url":"http://www.wikidata.org/entity/Q164818","qnode_id":"Q164818"}],[{"start":0,"end":36,"url":"http://www.wikidata.org/entity/Q18553247","qnode_id":"Q18553247"}],[],[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q133971","qnode_id":"Q133971"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q86","qnode_id":"Q86"}]],[[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q1359898","qnode_id":"Q1359898"}],[{"start":0,"end":29,"url":"http://www.wikidata.org/entity/Q475510","qnode_id":"Q475510"}],[],[{"start":0,"end":22,"url":"http://www.wikidata.org/entity/Q134734","qnode_id":"Q134734"}],[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q38933","qnode_id":"Q38933"}]],[[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q720032","qnode_id":"Q720032"}],[{"start":0,"end":24,"url":"http://www.wikidata.org/entity/Q1928978","qnode_id":"Q1928978"}],[],[{"start":0,"end":19,"url":"http://www.wikidata.org/entity/Q6974","qnode_id":"Q6974"}],[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q38933","qnode_id":"Q38933"}]],[[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q738292","qnode_id":"Q738292"}],[{"start":0,"end":14,"url":"http://www.wikidata.org/entity/Q576349","qnode_id":"Q576349"}],[],[{"start":0,"end":27,"url":"http://www.wikidata.org/entity/Q19838331","qnode_id":"Q19838331"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q86","qnode_id":"Q86"}]],[[{"start":0,"end":12,"url":"http://www.wikidata.org/entity/Q2845432","qnode_id":"Q2845432"}],[{"start":0,"end":18,"url":"http://www.wikidata.org/entity/Q184243","qnode_id":"Q184243"}],[],[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q5348629","qnode_id":"Q5348629"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q86","qnode_id":"Q86"}]],[[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q797668","qnode_id":"Q797668"}],[{"start":0,"end":37,"url":"http://www.wikidata.org/entity/Q353172","qnode_id":"Q353172"}],[],[{"start":0,"end":7,"url":"http://www.wikidata.org/entity/Q797656","qnode_id":"Q797656"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q86","qnode_id":"Q86"}]],[[{"start":0,"end":18,"url":"http://www.wikidata.org/entity/Q683861","qnode_id":"Q683861"}],[{"start":0,"end":15,"url":"http://www.wikidata.org/entity/Q156103","qnode_id":"Q156103"}],[],[{"start":0,"end":20,"url":"http://www.wikidata.org/entity/Q265488","qnode_id":"Q265488"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q86","qnode_id":"Q86"}]],[[{"start":0,"end":12,"url":"http://www.wikidata.org/entity/Q201989","qnode_id":"Q201989"}],[{"start":0,"end":36,"url":"http://www.wikidata.org/entity/Q18553247","qnode_id":"Q18553247"}],[],[{"start":0,"end":20,"url":"http://www.wikidata.org/entity/Q2723634","qnode_id":"Q2723634"}],[{"start":0,"end":7,"url":"http://www.wikidata.org/entity/Q474959","qnode_id":"Q474959"}]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q243257","qnode_id":"Q243257"}],[{"start":0,"end":26,"url":"http://www.wikidata.org/entity/Q929451","qnode_id":"Q929451"}],[],[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q15794049","qnode_id":"Q15794049"}],[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q38933","qnode_id":"Q38933"}]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q327298","qnode_id":"Q327298"}],[{"start":0,"end":28,"url":"http://www.wikidata.org/entity/Q727028","qnode_id":"Q727028"}],[],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q131029","qnode_id":"Q131029"}],[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q38933","qnode_id":"Q38933"}]],[[{"start":0,"end":13,"url":"http://www.wikidata.org/entity/Q12195","qnode_id":"Q12195"}],[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q945238","qnode_id":"Q945238"}],[],[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q12438936","qnode_id":"Q12438936"}],[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q107231","qnode_id":"Q107231"}]],[[{"start":0,"end":12,"url":"http://www.wikidata.org/entity/Q12204","qnode_id":"Q12204"}],[{"start":0,"end":32,"url":"http://www.wikidata.org/entity/Q4293079","qnode_id":"Q4293079"}],[],[{"start":0,"end":26,"url":"http://www.wikidata.org/entity/Q130971","qnode_id":"Q130971"}],[{"start":0,"end":5,"url":"http://www.wikidata.org/entity/Q35805","qnode_id":"Q35805"}]],[[{"start":0,"end":7,"url":"http://www.wikidata.org/entity/Q12156","qnode_id":"Q12156"}],[{"start":0,"end":37,"url":"http://www.wikidata.org/entity/Q353172","qnode_id":"Q353172"}],[],[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q130948","qnode_id":"Q130948"}],[{"start":0,"end":6,"url":"http://www.wikidata.org/entity/Q5445","qnode_id":"Q5445"}]],[[{"start":0,"end":9,"url":"http://www.wikidata.org/entity/Q134859","qnode_id":"Q134859"}],[{"start":0,"end":38,"url":"http://www.wikidata.org/entity/Q18553248","qnode_id":"Q18553248"}],[],[{"start":0,"end":20,"url":"http://www.wikidata.org/entity/Q137103","qnode_id":"Q137103"}],[{"start":0,"end":7,"url":"http://www.wikidata.org/entity/Q9690","qnode_id":"Q9690"}]],[[{"start":0,"end":13,"url":"http://www.wikidata.org/entity/Q83319","qnode_id":"Q83319"}],[{"start":0,"end":36,"url":"http://www.wikidata.org/entity/Q18553247","qnode_id":"Q18553247"}],[],[{"start":0,"end":19,"url":"http://www.wikidata.org/entity/Q2264864","qnode_id":"Q2264864"}],[{"start":0,"end":8,"url":"http://www.wikidata.org/entity/Q86","qnode_id":"Q86"}]]],"version":"1"},"semantic_models":[{"version":1,"nodes":[{"id":"col-0","col_index":0,"label":"col0"},{"id":"http://www.wikidata.org/entity/Q12136:0","abs_uri":"http://www.wikidata.org/entity/Q12136","rel_uri":"wd:Q12136","approximation":false,"readable_label":"disease (Q12136)"},{"id":"col-1","col_index":1,"label":"col1"},{"id":"col-3","col_index":3,"label":"col3"},{"id":"col-4","col_index":4,"label":"col4"},{"id":"col-2","col_index":2,"label":"col2"}],"edges":[{"source":"http://www.wikidata.org/entity/Q12136:0","target":"col-0","abs_uri":"http://www.w3.org/2000/01/rdf-schema#label","rel_uri":"rdfs:label","approximation":false,"readable_label":null,"id":1},{"source":"http://www.wikidata.org/entity/Q12136:0","target":"col-1","abs_uri":"http://www.wikidata.org/prop/P279","rel_uri":"p:P279","approximation":false,"readable_label":"subclass of (P279)","id":2},{"source":"http://www.wikidata.org/entity/Q12136:0","target":"col-3","abs_uri":"http://www.wikidata.org/prop/P828","rel_uri":"p:P828","approximation":false,"readable_label":"has cause (P828)","id":3},{"source":"http://www.wikidata.org/entity/Q12136:0","target":"col-4","abs_uri":"http://www.wikidata.org/prop/P780","rel_uri":"p:P780","approximation":false,"readable_label":"symptoms (P780)","id":4},{"source":"http://www.wikidata.org/entity/Q12136:0","target":"col-2","abs_uri":"http://www.wikidata.org/prop/P3487","rel_uri":"p:P3487","approximation":false,"readable_label":"maximal incubation period in humans (P3487)","id":5}]}]}
+{
+  "table": {
+    "table": {
+      "columns": [
+        {
+          "index": 0,
+          "name": "col0",
+          "values": [
+            "mumps",
+            "scarlet fever",
+            "brucellosis",
+            "leptospirosis",
+            "legionnaires' disease",
+            "Q fever",
+            "cryptosporidiosis",
+            "exanthema subitum",
+            "Japanese encephalitis",
+            "ehrlichiosis",
+            "babesiosis",
+            "campylobacteriosis",
+            "Lyme disease",
+            "chikungunya",
+            "shigellosis",
+            "poliomyelitis",
+            "tuberculosis",
+            "malaria",
+            "pertussis",
+            "typhoid fever"
+          ]
+        },
+        {
+          "index": 1,
+          "name": "col1",
+          "values": [
+            "herpangina",
+            "streptococcal infection",
+            "zoonosis",
+            "spirochetal diseases",
+            "atypical pneumonia",
+            "primary bacterial infectious disease",
+            "intestinal parasite infection",
+            "viral infectious disease",
+            "brain diseases",
+            "tick-borne disease",
+            "parasitic protozoa infectious disease",
+            "gastroenteritis",
+            "primary bacterial infectious disease",
+            "neglected tropical disease",
+            "bacterial infectious disease",
+            "peripheral neuropathy",
+            "mycobacterium infectious disease",
+            "parasitic protozoa infectious disease",
+            "commensal bacterial infectious disease",
+            "primary bacterial infectious disease"
+          ]
+        },
+        {
+          "index": 2,
+          "name": "col2",
+          "values": [
+            "23",
+            "5",
+            "5",
+            "20",
+            "16",
+            "60",
+            "10",
+            "12",
+            "15",
+            "2",
+            "4",
+            "7",
+            "30",
+            "12",
+            "4",
+            "35",
+            "8",
+            "30",
+            "21",
+            "30"
+          ]
+        },
+        {
+          "index": 3,
+          "name": "col3",
+          "values": [
+            "mumps virus",
+            "Streptococcus pyogenes",
+            "Brucella",
+            "Leptospira interrogans serovar Lai str. 56601",
+            "Legionella pneumophila",
+            "Coxiella burnetii",
+            "Cryptosporidium parvum",
+            "Human herpesvirus 6",
+            "Japanese encephalitis virus",
+            "Ehrlichia chaffeensis",
+            "Babesia",
+            "Campylobacter jejuni",
+            "Borrelia burgdorferi",
+            "Chikungunya virus",
+            "Shigella",
+            "poliovirus",
+            "Mycobacterium tuberculosis",
+            "Plasmodium",
+            "Bordetella pertussis",
+            "Salmonella enterica"
+          ]
+        },
+        {
+          "index": 4,
+          "name": "col4",
+          "values": [
+            "fever",
+            "fever",
+            "fatigue",
+            "headache",
+            "headache",
+            "headache",
+            "fever",
+            "fever",
+            "headache",
+            "headache",
+            "headache",
+            "headache",
+            "myalgia",
+            "fever",
+            "fever",
+            "paralysis",
+            "cough",
+            "anemia",
+            "fatigue",
+            "headache"
+          ]
+        }
+      ],
+      "table_id": "MQHMLU2B",
+      "version": "2"
+    },
+    "context": {
+      "page_title": null,
+      "page_url": null,
+      "page_entity_id": null
+    },
+    "links": [
+      [
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q176741",
+            "entity_id": "Q176741"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q665258",
+            "entity_id": "Q665258"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q1952649",
+            "entity_id": "Q1952649"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q38933",
+            "entity_id": "Q38933"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 13,
+            "url": "http://www.wikidata.org/entity/Q180266",
+            "entity_id": "Q180266"
+          }
+        ],
+        [],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 22,
+            "url": "http://www.wikidata.org/entity/Q131271",
+            "entity_id": "Q131271"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q38933",
+            "entity_id": "Q38933"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q156050",
+            "entity_id": "Q156050"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q182672",
+            "entity_id": "Q182672"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q313358",
+            "entity_id": "Q313358"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 7,
+            "url": "http://www.wikidata.org/entity/Q9690",
+            "entity_id": "Q9690"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 13,
+            "url": "http://www.wikidata.org/entity/Q155098",
+            "entity_id": "Q155098"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 20,
+            "url": "http://www.wikidata.org/entity/Q3493588",
+            "entity_id": "Q3493588"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 45,
+            "url": "http://www.wikidata.org/entity/Q21065229",
+            "entity_id": "Q21065229"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q86",
+            "entity_id": "Q86"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q154882",
+            "entity_id": "Q154882"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 18,
+            "url": "http://www.wikidata.org/entity/Q2633267",
+            "entity_id": "Q2633267"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 22,
+            "url": "http://www.wikidata.org/entity/Q147885",
+            "entity_id": "Q147885"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q86",
+            "entity_id": "Q86"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 7,
+            "url": "http://www.wikidata.org/entity/Q164818",
+            "entity_id": "Q164818"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 36,
+            "url": "http://www.wikidata.org/entity/Q18553247",
+            "entity_id": "Q18553247"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q133971",
+            "entity_id": "Q133971"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q86",
+            "entity_id": "Q86"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q1359898",
+            "entity_id": "Q1359898"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 29,
+            "url": "http://www.wikidata.org/entity/Q475510",
+            "entity_id": "Q475510"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 22,
+            "url": "http://www.wikidata.org/entity/Q134734",
+            "entity_id": "Q134734"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q38933",
+            "entity_id": "Q38933"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q720032",
+            "entity_id": "Q720032"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 24,
+            "url": "http://www.wikidata.org/entity/Q1928978",
+            "entity_id": "Q1928978"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 19,
+            "url": "http://www.wikidata.org/entity/Q6974",
+            "entity_id": "Q6974"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q38933",
+            "entity_id": "Q38933"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q738292",
+            "entity_id": "Q738292"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 14,
+            "url": "http://www.wikidata.org/entity/Q576349",
+            "entity_id": "Q576349"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 27,
+            "url": "http://www.wikidata.org/entity/Q19838331",
+            "entity_id": "Q19838331"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q86",
+            "entity_id": "Q86"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 12,
+            "url": "http://www.wikidata.org/entity/Q2845432",
+            "entity_id": "Q2845432"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 18,
+            "url": "http://www.wikidata.org/entity/Q184243",
+            "entity_id": "Q184243"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q5348629",
+            "entity_id": "Q5348629"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q86",
+            "entity_id": "Q86"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q797668",
+            "entity_id": "Q797668"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 37,
+            "url": "http://www.wikidata.org/entity/Q353172",
+            "entity_id": "Q353172"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 7,
+            "url": "http://www.wikidata.org/entity/Q797656",
+            "entity_id": "Q797656"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q86",
+            "entity_id": "Q86"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 18,
+            "url": "http://www.wikidata.org/entity/Q683861",
+            "entity_id": "Q683861"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 15,
+            "url": "http://www.wikidata.org/entity/Q156103",
+            "entity_id": "Q156103"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 20,
+            "url": "http://www.wikidata.org/entity/Q265488",
+            "entity_id": "Q265488"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q86",
+            "entity_id": "Q86"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 12,
+            "url": "http://www.wikidata.org/entity/Q201989",
+            "entity_id": "Q201989"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 36,
+            "url": "http://www.wikidata.org/entity/Q18553247",
+            "entity_id": "Q18553247"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 20,
+            "url": "http://www.wikidata.org/entity/Q2723634",
+            "entity_id": "Q2723634"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 7,
+            "url": "http://www.wikidata.org/entity/Q474959",
+            "entity_id": "Q474959"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q243257",
+            "entity_id": "Q243257"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 26,
+            "url": "http://www.wikidata.org/entity/Q929451",
+            "entity_id": "Q929451"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q15794049",
+            "entity_id": "Q15794049"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q38933",
+            "entity_id": "Q38933"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q327298",
+            "entity_id": "Q327298"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 28,
+            "url": "http://www.wikidata.org/entity/Q727028",
+            "entity_id": "Q727028"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q131029",
+            "entity_id": "Q131029"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q38933",
+            "entity_id": "Q38933"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 13,
+            "url": "http://www.wikidata.org/entity/Q12195",
+            "entity_id": "Q12195"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q945238",
+            "entity_id": "Q945238"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q12438936",
+            "entity_id": "Q12438936"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q107231",
+            "entity_id": "Q107231"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 12,
+            "url": "http://www.wikidata.org/entity/Q12204",
+            "entity_id": "Q12204"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 32,
+            "url": "http://www.wikidata.org/entity/Q4293079",
+            "entity_id": "Q4293079"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 26,
+            "url": "http://www.wikidata.org/entity/Q130971",
+            "entity_id": "Q130971"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 5,
+            "url": "http://www.wikidata.org/entity/Q35805",
+            "entity_id": "Q35805"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 7,
+            "url": "http://www.wikidata.org/entity/Q12156",
+            "entity_id": "Q12156"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 37,
+            "url": "http://www.wikidata.org/entity/Q353172",
+            "entity_id": "Q353172"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q130948",
+            "entity_id": "Q130948"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 6,
+            "url": "http://www.wikidata.org/entity/Q5445",
+            "entity_id": "Q5445"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 9,
+            "url": "http://www.wikidata.org/entity/Q134859",
+            "entity_id": "Q134859"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 38,
+            "url": "http://www.wikidata.org/entity/Q18553248",
+            "entity_id": "Q18553248"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 20,
+            "url": "http://www.wikidata.org/entity/Q137103",
+            "entity_id": "Q137103"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 7,
+            "url": "http://www.wikidata.org/entity/Q9690",
+            "entity_id": "Q9690"
+          }
+        ]
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 13,
+            "url": "http://www.wikidata.org/entity/Q83319",
+            "entity_id": "Q83319"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 36,
+            "url": "http://www.wikidata.org/entity/Q18553247",
+            "entity_id": "Q18553247"
+          }
+        ],
+        [],
+        [
+          {
+            "start": 0,
+            "end": 19,
+            "url": "http://www.wikidata.org/entity/Q2264864",
+            "entity_id": "Q2264864"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "url": "http://www.wikidata.org/entity/Q86",
+            "entity_id": "Q86"
+          }
+        ]
+      ]
+    ],
+    "version": "1.1"
+  },
+  "semantic_models": [
+    {
+      "version": 1,
+      "nodes": [
+        {
+          "id": "col-0",
+          "col_index": 0,
+          "label": "col0"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q12136:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q12136",
+          "rel_uri": "wd:Q12136",
+          "approximation": false,
+          "readable_label": "disease (Q12136)"
+        },
+        {
+          "id": "col-1",
+          "col_index": 1,
+          "label": "col1"
+        },
+        {
+          "id": "col-3",
+          "col_index": 3,
+          "label": "col3"
+        },
+        {
+          "id": "col-4",
+          "col_index": 4,
+          "label": "col4"
+        },
+        {
+          "id": "col-2",
+          "col_index": 2,
+          "label": "col2"
+        }
+      ],
+      "edges": [
+        {
+          "source": "http://www.wikidata.org/entity/Q12136:0",
+          "target": "col-0",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 1
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12136:0",
+          "target": "col-1",
+          "abs_uri": "http://www.wikidata.org/prop/P279",
+          "rel_uri": "p:P279",
+          "approximation": false,
+          "readable_label": "subclass of (P279)",
+          "id": 2
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12136:0",
+          "target": "col-3",
+          "abs_uri": "http://www.wikidata.org/prop/P828",
+          "rel_uri": "p:P828",
+          "approximation": false,
+          "readable_label": "has cause (P828)",
+          "id": 3
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12136:0",
+          "target": "col-4",
+          "abs_uri": "http://www.wikidata.org/prop/P780",
+          "rel_uri": "p:P780",
+          "approximation": false,
+          "readable_label": "symptoms (P780)",
+          "id": 4
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q12136:0",
+          "target": "col-2",
+          "abs_uri": "http://www.wikidata.org/prop/P3487",
+          "rel_uri": "p:P3487",
+          "approximation": false,
+          "readable_label": "maximal incubation period in humans (P3487)",
+          "id": 5
+        }
+      ]
+    }
+  ]
+}

@@ -1,18 +1,27 @@
 import itertools
-
-import numpy as np
 from enum import IntEnum
-from typing import Dict, Set, List
+from typing import Dict, List, Set
 from uuid import uuid4
 
-from rdflib import RDFS
-
-from grams.inputs.linked_table import LinkedTable
-from sm.evaluation import sm_metrics
+import networkx as nx
+import numpy as np
+import sm.misc as M
 import sm.outputs as O
-from kgdata.wikidata.models import QNode, WDProperty, WDClass
-from sm.misc.graph import viz_graph
+from grams.algorithm.semantic_graph import (
+    SGColumnNode,
+    SGEdge,
+    SGEntityValueNode,
+    SGLiteralValueNode,
+    SGNode,
+    SGStatementNode,
+)
+from grams.algorithm.wdont import WDOnt
+from grams.inputs.linked_table import LinkedTable
+from kgdata.wikidata.models import QNode, WDClass, WDProperty
+from rdflib import RDFS
+from sm.evaluation import sm_metrics
 from sm.misc import identity_func
+from sm.misc.graph import viz_graph
 
 
 class SMNodeType(IntEnum):
@@ -23,86 +32,9 @@ class SMNodeType(IntEnum):
     Literal = 4
 
 
-class OutOfNamespace(Exception):
-    pass
-
-
-class WDOnt:
-    STATEMENT_URI = "http://wikiba.se/ontology#Statement"
-    STATEMENT_REL_URI = "wikibase:Statement"
-
-    def __init__(
-        self,
-        qnodes: Dict[str, QNode],
-        wdclasses: Dict[str, WDClass],
-        wdprops: Dict[str, WDProperty],
-    ):
-        self.qnodes = qnodes
-        self.wdclasses = wdclasses
-        self.wdprops = wdprops
-        self.get_qid_fn = {
-            "Q": identity_func,
-            "q": identity_func,
-            # http
-            "h": self.get_qnode_id,
-        }
-        self.get_pid_fn = {
-            "P": identity_func,
-            "p": identity_func,
-            "h": self.get_prop_id,
-        }
-
-    @classmethod
-    def is_uri_statement(cls, uri: str):
-        return uri == "http://wikiba.se/ontology#Statement"
-
-    @classmethod
-    def is_uri_dummy_class(cls, uri: str):
-        return uri == "http://wikiba.se/ontology#DummyClassForInversion"
-
-    @classmethod
-    def is_uri_property(cls, uri: str):
-        return uri.startswith(f"http://www.wikidata.org/prop/")
-
-    @classmethod
-    def is_uri_qnode(cls, uri: str):
-        return uri.startswith("http://www.wikidata.org/entity/")
-
-    @classmethod
-    def get_qnode_id(cls, uri: str):
-        if not cls.is_uri_qnode(uri):
-            raise OutOfNamespace(f"{uri} is not in wikidata qnode namespace")
-        return uri.replace("http://www.wikidata.org/entity/", "")
-
-    @classmethod
-    def get_qnode_uri(cls, qnode_id: str):
-        return f"http://www.wikidata.org/entity/{qnode_id}"
-
-    @classmethod
-    def get_prop_id(cls, uri: str):
-        if not cls.is_uri_property(uri):
-            raise OutOfNamespace(f"{uri} is not in wikidata property namespace")
-        return uri.replace(f"http://www.wikidata.org/prop/", "")
-
-    @classmethod
-    def get_prop_uri(cls, pid: str):
-        return f"http://www.wikidata.org/prop/{pid}"
-
-    def get_qnode_label(self, uri_or_id: str):
-        qid = self.get_qid_fn[uri_or_id[0]](uri_or_id)
-        if qid in self.wdclasses:
-            return f"{self.wdclasses[qid].label} ({qid})"
-        return f"{self.qnodes[qid].label} ({qid})"
-
-    def get_pnode_label(self, uri_or_id: str):
-        pid = self.get_pid_fn[uri_or_id[0]](uri_or_id)
-        # TODO: fix me! should not do this
-        if pid not in self.wdprops:
-            return pid
-        return f"{self.wdprops[pid].label} ({pid})"
-
-
 class WikidataSemanticModelHelper(WDOnt):
+    ENTITY_ID = "Q35120"
+    ENTITY_LABEL = "Entity (Q35120)"
     ID_PROPS = {str(RDFS.label)}
 
     def norm_sm(self, sm: O.SemanticModel):
@@ -114,10 +46,10 @@ class WikidataSemanticModelHelper(WDOnt):
 
         # update readable label
         for n in new_sm.iter_nodes():
-            if n.is_class_node:
+            if isinstance(n, O.ClassNode):
                 if self.is_uri_qnode(n.abs_uri):
                     n.readable_label = self.get_qnode_label(n.abs_uri)
-            elif n.is_literal_node:
+            elif isinstance(n, O.LiteralNode):
                 if self.is_uri_qnode(n.value):
                     n.readable_label = self.get_qnode_label(n.value)
         for e in new_sm.iter_edges():
@@ -132,11 +64,11 @@ class WikidataSemanticModelHelper(WDOnt):
             target = new_sm.get_node(edge.target)
 
             if (
-                not source.is_class_node
-                or (source.is_class_node and source.abs_uri != WDOnt.STATEMENT_URI)
+                not isinstance(source, O.ClassNode)
+                or source.abs_uri != WDOnt.STATEMENT_URI
             ) and (
-                not target.is_class_node
-                or (target.is_class_node and target.abs_uri != WDOnt.STATEMENT_URI)
+                not isinstance(target, O.ClassNode)
+                or target.abs_uri != WDOnt.STATEMENT_URI
             ):
                 # this is direct link, we replace its edge
                 assert len(new_sm.get_edges_between_nodes(source.id, target.id)) == 1
@@ -178,8 +110,9 @@ class WikidataSemanticModelHelper(WDOnt):
         1. Remove an intermediate statement if it doesn't have any qualifiers
         """
         new_sm = sm.clone()
+
         for n in sm.iter_nodes():
-            if n.is_class_node and n.abs_uri == WDOnt.STATEMENT_URI:
+            if isinstance(n, O.ClassNode) and n.abs_uri == WDOnt.STATEMENT_URI:
                 inedges = sm.incoming_edges(n.id)
                 outedges = sm.outgoing_edges(n.id)
                 if len(outedges) == 1 and outedges[0].abs_uri == inedges[0].abs_uri:
@@ -199,6 +132,170 @@ class WikidataSemanticModelHelper(WDOnt):
                             )
                         )
         return new_sm
+
+    def create_sm(self, table: LinkedTable, cpa: nx.MultiDiGraph, cta: Dict[int, str]):
+        """Create a semantic model from outputs of CPA and CTA tasks"""
+        sm = O.SemanticModel()
+        # create class nodes first
+        classcount = {}
+        classmap = {}  # mapping from column to its class node
+        for cid, qnode_id in cta.items():
+            dnode = O.DataNode(
+                id=f"col-{cid}",
+                col_index=cid,
+                label=table.table.columns[cid].name or "",
+            )
+
+            # somehow, they may end-up predict multiple classes, we need to select one
+            if qnode_id.find(" ") != -1:
+                qnode_id = qnode_id.split(" ")[0]
+            curl = self.get_qnode_uri(qnode_id)
+            cnode_id = f"{curl}:{classcount.get(qnode_id, 0)}"
+            classcount[qnode_id] = classcount.get(qnode_id, 0) + 1
+
+            try:
+                cnode_label = self.get_qnode_label(curl)
+            except KeyError:
+                cnode_label = f"wd:{qnode_id}"
+            cnode = O.ClassNode(
+                id=cnode_id,
+                abs_uri=curl,
+                rel_uri=f"wd:{qnode_id}",
+                readable_label=cnode_label,
+            )
+            classmap[dnode.id] = cnode.id
+
+            sm.add_node(dnode)
+            sm.add_node(cnode)
+            sm.add_edge(
+                O.Edge(
+                    source=cnode.id,
+                    target=dnode.id,
+                    abs_uri=str(RDFS.label),
+                    rel_uri="rdfs:label",
+                )
+            )
+
+        # do a final sweep to add subject columns that are not in CTA
+        for uid, unode in cpa.nodes(data="data"):  # type: ignore
+            unode: SGNode
+            if not isinstance(unode, SGColumnNode):
+                continue
+            outdegree: int = cpa.out_degree(uid)  # type: ignore
+            if outdegree > 0 and not sm.has_node(f"col-{unode.column}"):
+                # add data node to the graph and use the entity class (all instances belong to this class) to describe this data node
+                dnode = O.DataNode(
+                    id=f"col-{unode.column}",
+                    col_index=unode.column,
+                    label=table.table.columns[unode.column].name or "",
+                )
+                sm.add_node(dnode)
+
+                curl = self.get_qnode_uri(self.ENTITY_ID)
+                cnode_id = f"{curl}:{classcount.get(self.ENTITY_ID, 0)}"
+                classcount[self.ENTITY_ID] = classcount.get(self.ENTITY_ID, 0) + 1
+                sm.add_node(
+                    O.ClassNode(
+                        id=cnode_id,
+                        abs_uri=curl,
+                        rel_uri=f"wd:{self.ENTITY_ID}",
+                        readable_label=self.ENTITY_LABEL,
+                    )
+                )
+                classmap[dnode.id] = cnode_id
+
+                sm.add_edge(
+                    O.Edge(
+                        source=cnode_id,
+                        target=dnode.id,
+                        abs_uri=str(RDFS.label),
+                        rel_uri="rdfs:label",
+                    )
+                )
+
+        # now add remaining edges and remember to use class node instead of data node
+        for uid, vid, edge in cpa.edges(data="data"):  # type: ignore
+            edge: SGEdge
+            unode: SGNode = cpa.nodes[uid]["data"]
+            vnode: SGNode = cpa.nodes[vid]["data"]
+
+            if isinstance(unode, SGColumnNode):
+                # outgoing edge is from a class node instead of a data node
+                suid = classmap[f"col-{unode.column}"]
+                source = sm.get_node(suid)
+            elif isinstance(unode, SGEntityValueNode):
+                source = O.LiteralNode(
+                    id=unode.id,
+                    value=self.get_qnode_uri(unode.qnode_id),
+                    readable_label=self.get_qnode_label(unode.qnode_id),
+                    datatype=O.LiteralNodeDataType.Entity,
+                    is_in_context=unode.qnode_id == table.context.page_entity_id,
+                )
+                sm.add_node(source)
+            else:
+                assert isinstance(
+                    unode, SGStatementNode
+                ), "Outgoing edge can't not be from literal"
+                # create a statement node
+                source = O.ClassNode(
+                    id=unode.id,
+                    abs_uri=WDOnt.STATEMENT_URI,
+                    rel_uri=WDOnt.STATEMENT_REL_URI,
+                )
+                sm.add_node(source)
+
+            if isinstance(vnode, SGColumnNode):
+                svid = f"col-{vnode.column}"
+                if svid in classmap:
+                    target = sm.get_node(classmap[svid])
+                elif sm.has_node(svid):
+                    target = sm.get_node(svid)
+                else:
+                    target = O.DataNode(
+                        id=f"col-{vnode.column}",
+                        col_index=vnode.column,
+                        label=table.table.columns[vnode.column].name or "",
+                    )
+                    sm.add_node(target)
+            elif isinstance(vnode, SGEntityValueNode):
+                target = O.LiteralNode(
+                    id=vnode.id,
+                    value=self.get_qnode_uri(vnode.qnode_id),
+                    readable_label=self.get_qnode_label(vnode.qnode_id),
+                    datatype=O.LiteralNodeDataType.Entity,
+                    is_in_context=vnode.qnode_id == table.context.page_entity_id,
+                )
+                sm.add_node(target)
+            elif isinstance(vnode, SGLiteralValueNode):
+                target = O.LiteralNode(
+                    id=vnode.id,
+                    value=vnode.value.to_string_repr(),
+                    readable_label=vnode.label,
+                    datatype=O.LiteralNodeDataType.String,
+                )
+                sm.add_node(target)
+            else:
+                # create a statement node
+                target = O.ClassNode(
+                    id=vnode.id,
+                    abs_uri=WDOnt.STATEMENT_URI,
+                    rel_uri=WDOnt.STATEMENT_REL_URI,
+                )
+                sm.add_node(target)
+
+            prop_uri = self.get_prop_uri(edge.predicate)
+            sm.add_edge(
+                O.Edge(
+                    source=source.id,
+                    target=target.id,
+                    abs_uri=self.get_prop_uri(edge.predicate),
+                    rel_uri=f"p:{edge.predicate}",
+                    readable_label=self.get_pnode_label(prop_uri),
+                )
+            )
+
+        M.log("grams", semantic_model=sm, cpa=cpa, cta=cta)
+        return sm
 
     def gen_equivalent_sm(
         self,

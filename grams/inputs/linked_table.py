@@ -110,9 +110,9 @@ class LinkedTable:
             * `row_index` does not count the header of the table (i.e., skip the first row of `infile` if it's the header)
             * `(<link>|(<entity_id>(\t<entity_id>)*))` is either:
                 - `<link>` a json string encoding Link object and can be deserialized using `Link.from_dict` function
-                - or (<entity_id>(\t<entity_id>)*) a list of entity ids joined by `\t` tab character, each entity id can be a wikidata qnode id (e.g., Q414) or a full qnode uri (e.g., "http://www.wikidata.org/entity/Q414")
+                - or (<entity_id>(\t<entity_id>)*) a list of entity ids joined by `\t` tab character, each entity id can be a wikidata qnode id (e.g., Q414) or a full qnode uri (e.g., "http://www.wikidata.org/entity/Q414"). The first entity is considered as the correct entity of the cell, and the rest are considered as the candidate entities of the cell
         Note that a pair `<row_index>`, `<col_index>` don't have to be unique.
-        
+
         Args:
             infile: csv file
             link_file: if not provided, this function will look for a file of same name of  `infile` in the same folder but ends with `.links.tsv`.
@@ -146,8 +146,14 @@ class LinkedTable:
             links.append([[] for _ci in range(len(headers))])
 
         if link_file.exists():
+            rows = []
             for row in M.deserialize_csv(link_file, delimiter="\t"):
                 ri, ci, ents = int(row[0]), int(row[1]), row[2:]
+                rows.append((ri, ci, ents))
+
+            has_only_correct_entity = all(len(ents) == 1 for _, _, ents in rows)
+
+            for ri, ci, ents in rows:
                 if len(ents) == 1 and ents[0].startswith("{"):
                     link = Link.from_dict(orjson.loads(ents[0]))
                 else:
@@ -169,12 +175,17 @@ class LinkedTable:
                             qnode_prob = 1.0
                         pents.append((qnode_id, qnode_prob))
 
+                    if has_only_correct_entity:
+                        candidates = [CandidateEntity(pents[0][0], pents[0][1])]
+                    else:
+                        candidates = [CandidateEntity(e[0], e[1]) for e in pents[1:]]
+
                     link = Link(
                         start=0,
                         end=len(table.columns[ci][ri]),
                         url=f"http://www.wikidata.org/entity/{pents[0][0]}",
-                        entity_id=pents[0][0] if pents[0][0].strip() != '' else None,
-                        candidates=[CandidateEntity(e[0], e[1]) for e in pents[1:]],
+                        entity_id=pents[0][0] if pents[0][0].strip() != "" else None,
+                        candidates=candidates,
                     )
                 links[ri][ci].append(link)
         return LinkedTable(table, Context(), links)
@@ -183,9 +194,10 @@ class LinkedTable:
 @dataclass
 class Context:
     """Table's context"""
+
     page_title: Optional[str] = None
     page_url: Optional[str] = None
-    page_entity: Optional[str] = None
+    page_entity_id: Optional[str] = None
 
 
 @dataclass
@@ -211,8 +223,10 @@ class Link:
             entity_id=obj["entity_id"],
             candidates=[CandidateEntity(**c) for c in obj.get("candidates", [])],
         )
-    
+
     def remove_nonexisting_entities(self, nonexisting_entities: Set[str]):
         if self.entity_id in nonexisting_entities:
             self.entity_id = None
-        self.candidates = [c for c in self.candidates if c.entity_id not in nonexisting_entities]
+        self.candidates = [
+            c for c in self.candidates if c.entity_id not in nonexisting_entities
+        ]

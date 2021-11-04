@@ -22,7 +22,7 @@ class RemoteExtractedTableCellHTMLElement:
     end: int
     # html attributes
     attrs: Dict[str, str]
-    children: List['RemoteExtractedTableCellHTMLElement']
+    children: List["RemoteExtractedTableCellHTMLElement"]
 
     def post_order(self):
         for c in self.children:
@@ -31,8 +31,13 @@ class RemoteExtractedTableCellHTMLElement:
         yield self
 
     def clone(self):
-        return RemoteExtractedTableCellHTMLElement(self.tag, self.start, self.end,
-                                                   copy.copy(self.attrs), [c.clone() for c in self.children])
+        return RemoteExtractedTableCellHTMLElement(
+            self.tag,
+            self.start,
+            self.end,
+            copy.copy(self.attrs),
+            [c.clone() for c in self.children],
+        )
 
 
 @dataclass
@@ -67,7 +72,7 @@ class RemoteExtractedTableCell:
             html=self.html,
             elements=[el.clone() for el in self.elements],
             original_rowspan=self.original_rowspan,
-            original_colspan=self.original_colspan
+            original_colspan=self.original_colspan,
         )
 
 
@@ -90,6 +95,7 @@ class ContextLevel:
 
 class OverlapSpanException(Exception):
     """Indicating the table has cell rowspan and cell colspan overlaps"""
+
     pass
 
 
@@ -97,6 +103,7 @@ class InvalidColumnSpanException(Exception):
     """Indicating that the column span is not used in a standard way. In particular, the total of columns' span is beyond the maximum number of columns is considered
     to be non standard with one exception that only the last column spans more than the maximum number of columns
     """
+
     pass
 
 
@@ -113,8 +120,7 @@ class RemoteExtractedTable:
     rows: List[RemoteExtractedTableRow]
 
     def span(self) -> "RemoteExtractedTable":
-        """Span the table by copying values to merged field
-        """
+        """Span the table by copying values to merged field"""
         pi = 0
         data = []
         pending_ops = {}
@@ -181,7 +187,9 @@ class RemoteExtractedTable:
                 pending_ops.pop((pi, pj))
                 pj += 1
 
-            data.append(RemoteExtractedTableRow(cells=new_row, attrs=copy.copy(row.attrs)))
+            data.append(
+                RemoteExtractedTableRow(cells=new_row, attrs=copy.copy(row.attrs))
+            )
             pi += 1
 
         # len(pending_ops) may > 0, but fortunately, it doesn't matter as the browser also does not render that extra empty lines
@@ -190,7 +198,8 @@ class RemoteExtractedTable:
             caption=self.caption,
             attrs=copy.copy(self.attrs),
             context=[c.clone() for c in self.context],
-            rows=data)
+            rows=data,
+        )
 
     def pad(self) -> "RemoteExtractedTable":
         """Pad the irregular table (missing cells) to make it become regular table.
@@ -207,12 +216,20 @@ class RemoteExtractedTable:
 
         max_ncols = max(len(r.cells) for r in self.rows)
         default_cell = RemoteExtractedTableCell(
-            value="", rowspan=1, colspan=1, html="", elements=[], original_rowspan=1, original_colspan=1
+            value="",
+            rowspan=1,
+            colspan=1,
+            html="",
+            elements=[],
+            original_rowspan=1,
+            original_colspan=1,
         )
 
         rows = []
         for r in self.rows:
-            row = RemoteExtractedTableRow(cells=[c.clone() for c in r.cells], attrs=copy.copy(r.attrs))
+            row = RemoteExtractedTableRow(
+                cells=[c.clone() for c in r.cells], attrs=copy.copy(r.attrs)
+            )
             while len(row.cells) < max_ncols:
                 row.cells.append(default_cell.clone())
             rows.append(row)
@@ -222,35 +239,55 @@ class RemoteExtractedTable:
             caption=self.caption,
             attrs=copy.copy(self.attrs),
             context=[c.clone() for c in self.context],
-            rows=rows)
+            rows=rows,
+        )
 
     def as_df(self):
-        return pd.DataFrame([
-            [c.value for c in r.cells]
-            for r in self.rows
-        ])
+        return pd.DataFrame([[c.value for c in r.cells] for r in self.rows])
 
     def as_relational_linked_table(self, table_id=None):
         assert len(self.rows) > 0
         header = [c.value for c in self.rows[0].cells]
-        table = I.ColumnBasedTable(table_id or self.page_url, [
-            I.Column(ci, cname, [self.rows[ri].cells[ci].value for ri in range(1, len(self.rows))])
-            for ci, cname in enumerate(header)
-        ])
-
-        wikidb = Wikipedia2WikidataDB.get_instance(DATA_DIR / "enwiki_links.db", read_only=True)
-        links = [
+        table = I.ColumnBasedTable(
+            table_id or self.page_url,
             [
-                [
-                    GI.Link(el.start, el.end, el.attrs['href'],
-                            wikidb.get(self.get_title_from_url(el.attrs['href']), None))
-                    for el in row.cells[ci].travel_elements_post_order()
-                    if el.tag == 'a'
-                ]
-                for ci in range(len(header))
-            ]
-            for ri, row in enumerate(self.rows[1:])
-        ]
+                I.Column(
+                    ci,
+                    cname,
+                    [self.rows[ri].cells[ci].value for ri in range(1, len(self.rows))],
+                )
+                for ci, cname in enumerate(header)
+            ],
+        )
+
+        wikidb = Wikipedia2WikidataDB.get_instance(
+            DATA_DIR / "enwiki_links.db", read_only=True
+        )
+        links = []
+        for ri, row in enumerate(self.rows[1:]):
+            rlinks = []
+            for ci in range(len(header)):
+                clinks = []
+                for el in row.cells[ci].travel_elements_post_order():
+                    if el.tag == "a":
+                        entity_id = wikidb.get(
+                            self.get_title_from_url(el.attrs["href"]), None
+                        )
+                        if entity_id is not None:
+                            candidates = [GI.CandidateEntity(entity_id, 1.0)]
+                        else:
+                            candidates = []
+                        clinks.append(
+                            GI.Link(
+                                el.start,
+                                el.end,
+                                el.attrs["href"],
+                                entity_id,
+                                candidates,
+                            )
+                        )
+                rlinks.append(clinks)
+            links.append(rlinks)
         return GI.LinkedTable(table, GI.Context(), links)
 
     def get_title_from_url(self, url: str) -> str:
@@ -277,8 +314,8 @@ class RemoteExtractedTable:
 
 
 class InvalidCellSpanException(Exception):
-    """Indicating that the html colspan or rowspan is wrong
-    """
+    """Indicating that the html colspan or rowspan is wrong"""
+
     pass
 
 
@@ -318,13 +355,10 @@ class HTMLTableExtractor:
             if len(temp_results) > 0:
                 context = self._locate_context(table_el)
                 for r in temp_results:
-                    r['context'] = context
+                    r["context"] = context
                 results += temp_results
 
-        tables = [
-            RemoteExtractedTable(page_url, **r)
-            for r in results
-        ]
+        tables = [RemoteExtractedTable(page_url, **r) for r in results]
 
         # convert relative links to absolute links
         parsed_resp = urlparse(page_url)
@@ -334,10 +368,10 @@ class HTMLTableExtractor:
                 for cell in row.cells:
                     for el in cell.travel_elements_post_order():
                         if el.tag == "a":
-                            if 'href' in el.attrs:
-                                href = el.attrs['href']
-                                if href[0] == '/':
-                                    el.attrs['href'] = domain + href
+                            if "href" in el.attrs:
+                                href = el.attrs["href"]
+                                if href[0] == "/":
+                                    el.attrs["href"] = domain + href
 
         if parsed_resp.netloc.endswith("wikipedia.org"):
             for table in tables:
@@ -371,7 +405,7 @@ class HTMLTableExtractor:
             if c.name == "style":
                 continue
             assert (
-                    c.name == "thead" or c.name == "tbody"
+                c.name == "thead" or c.name == "tbody"
             ), f"not implemented {c.name} tag"
             for row_el in c.contents:
                 if isinstance(row_el, NavigableString):
@@ -388,7 +422,7 @@ class HTMLTableExtractor:
                         continue
 
                     assert (
-                            cell_el.name == "th" or cell_el.name == "td"
+                        cell_el.name == "th" or cell_el.name == "td"
                     ), f"Invalid tag: {row_el.name}"
 
                     if contain_nested_table:
@@ -405,7 +439,9 @@ class HTMLTableExtractor:
                             return
 
                 if not contain_nested_table:
-                    rows.append(RemoteExtractedTableRow(cells=cells, attrs=row_el.attrs))
+                    rows.append(
+                        RemoteExtractedTableRow(cells=cells, attrs=row_el.attrs)
+                    )
 
         if not contain_nested_table:
             results.append(dict(rows=rows, caption=caption, attrs=el.attrs))
@@ -491,21 +527,30 @@ class HTMLTableExtractor:
                 self._extract_cell_recur(c, result)
             else:
                 start = len(result["text"])
-                children_result = {"text": result['text'], "elements": []}
+                children_result = {"text": result["text"], "elements": []}
                 self._extract_cell_recur(c, children_result)
                 # -1 for the trailing space
-                if len(children_result['text']) > 0 and children_result['text'][-1] == " ":
-                    if start == len(children_result['text']):
+                if (
+                    len(children_result["text"]) > 0
+                    and children_result["text"][-1] == " "
+                ):
+                    if start == len(children_result["text"]):
                         # no new text
                         start -= 1
-                    end = len(children_result['text']) - 1
+                    end = len(children_result["text"]) - 1
                 else:
-                    end = len(children_result['text'])
+                    end = len(children_result["text"])
                 assert end >= start
-                result['text'] = children_result['text']
-                result["elements"].append(RemoteExtractedTableCellHTMLElement(
-                    tag=c_name, start=start, end=end, attrs=c.attrs, children=children_result['elements']
-                ))
+                result["text"] = children_result["text"]
+                result["elements"].append(
+                    RemoteExtractedTableCellHTMLElement(
+                        tag=c_name,
+                        start=start,
+                        end=end,
+                        attrs=c.attrs,
+                        children=children_result["elements"],
+                    )
+                )
 
     def _locate_context_flatten_hierarchy(self, el):
         if el.name is None:
@@ -513,7 +558,7 @@ class HTMLTableExtractor:
             return [self.Text(str(el))]
 
         # flatten the tree to list of text? -> (header -> text)*
-        if el.name in {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}:
+        if el.name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             return [self.Header(level=int(el.name[1:]), value=el.get_text())]
         else:
             assert el.name == "hr" or not el.name.startswith("h")
@@ -537,7 +582,7 @@ class HTMLTableExtractor:
         return new_lst
 
     def _locate_context_recur(self, el):
-        if el.name in {'body', 'html'}:
+        if el.name in {"body", "html"}:
             # hit the top
             return []
 
@@ -553,7 +598,9 @@ class HTMLTableExtractor:
         for sib in prev_sibs:
             lst += self._locate_context_flatten_hierarchy(sib)
         lst = self._locate_context_optimize_flatten_hierarchy(lst)
-        return self._locate_context_optimize_flatten_hierarchy(self._locate_context_recur(el.parent) + lst)
+        return self._locate_context_optimize_flatten_hierarchy(
+            self._locate_context_recur(el.parent) + lst
+        )
 
     def _locate_context(self, el):
         """Locate the context of the elements"""
@@ -562,7 +609,9 @@ class HTMLTableExtractor:
         optimized_context = []
         last_header = None
         if isinstance(context[-1], self.Header):
-            last_header = ContextLevel(context[-1].level, header=context[-1].value, content="")
+            last_header = ContextLevel(
+                context[-1].level, header=context[-1].value, content=""
+            )
             context.pop()
         if isinstance(context[0], self.Text):
             assert isinstance(context[1], self.Header) and context[1].level == 1
@@ -572,7 +621,11 @@ class HTMLTableExtractor:
 
         for i in range(0, len(context), 2):
             header, text = context[i], context[i + 1]
-            optimized_context.append(ContextLevel(level=header.level, header=header.value, content=text.value))
+            optimized_context.append(
+                ContextLevel(
+                    level=header.level, header=header.value, content=text.value
+                )
+            )
         if last_header is not None:
             optimized_context.append(last_header)
 
@@ -588,10 +641,12 @@ class HTMLTableExtractor:
                 for el in cell.travel_elements_post_order():
                     if el.tag == "a":
                         if "href" not in el.attrs:
-                            if 'selflink' in el.attrs['class']:
-                                el.attrs['href'] = table.page_url
+                            if "selflink" in el.attrs["class"]:
+                                el.attrs["href"] = table.page_url
                             else:
-                                raise Exception(f"An anchor in a Wikipedia table does not have href: {el}")
+                                raise Exception(
+                                    f"An anchor in a Wikipedia table does not have href: {el}"
+                                )
 
 
 @M.cache_func()
@@ -599,7 +654,9 @@ def requests_get(url):
     return requests.get(url)
 
 
-def fetch_tables(url: str, auto_span: bool = True, auto_pad: bool = True, cache: bool = False):
+def fetch_tables(
+    url: str, auto_span: bool = True, auto_pad: bool = True, cache: bool = False
+):
     if cache:
         resp = requests_get(url)
     else:
@@ -624,10 +681,12 @@ def fetch_tables(url: str, auto_span: bool = True, auto_pad: bool = True, cache:
     return tables
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # tables = fetch_tables("https://en.wikipedia.org/wiki/President_of_the_National_Council_(Austria)")
     # tables = fetch_tables("https://en.wikipedia.org/wiki/List_of_largest_selling_pharmaceutical_products")
-    tables = fetch_tables("https://en.wikipedia.org/wiki/President_of_the_National_Council_(Austria)")
+    tables = fetch_tables(
+        "https://en.wikipedia.org/wiki/President_of_the_National_Council_(Austria)"
+    )
     tables[10].as_relational_linked_table()
     # print(tables[1].as_df())
     # M.serialize_json(tables[6].as_relational_linked_table().to_dict(),

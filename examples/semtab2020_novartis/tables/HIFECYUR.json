@@ -1,1 +1,394 @@
-{"table":{"table":{"columns":[{"index":0,"name":"col0","values":["Mycoplasma pneumoniae infection","ehrlichiosis","cryptosporidiosis","ascariasis","babesiosis","erythema infectiosum","Japanese encephalitis","campylobacteriosis","shigellosis","tick-borne encephalitis","salmonellosis","chikungunya","infectious mononucleosis","scarlet fever","ornithosis","listeriosis","hepatitis A","brucellosis","legionnaires' disease","yellow fever"]},{"index":1,"name":"col1","values":["28","2","10","3","4","18","15","7","4","14","14","12","4","5","19","67","48","5","16","6"]},{"index":2,"name":"col2","values":["7","1","2","1","1","10","5","1","1","7","6","3","4","2","5","1","15","5","2","3"]}],"table_id":"HIFECYUR","version":"2"},"context":{"page_title":null,"page_url":null,"page_qnode":null},"links":[[[{"start":0,"end":31,"url":"http://www.wikidata.org/entity/Q79054860","qnode_id":"Q79054860"}],[],[]],[[{"start":0,"end":12,"url":"http://www.wikidata.org/entity/Q2845432","qnode_id":"Q2845432"}],[],[]],[[{"start":0,"end":17,"url":"http://www.wikidata.org/entity/Q1359898","qnode_id":"Q1359898"}],[],[]],[[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q842428","qnode_id":"Q842428"}],[],[]],[[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q797668","qnode_id":"Q797668"}],[],[]],[[{"start":0,"end":20,"url":"http://www.wikidata.org/entity/Q753654","qnode_id":"Q753654"}],[],[]],[[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q738292","qnode_id":"Q738292"}],[],[]],[[{"start":0,"end":18,"url":"http://www.wikidata.org/entity/Q683861","qnode_id":"Q683861"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q327298","qnode_id":"Q327298"}],[],[]],[[{"start":0,"end":23,"url":"http://www.wikidata.org/entity/Q326663","qnode_id":"Q326663"}],[],[]],[[{"start":0,"end":13,"url":"http://www.wikidata.org/entity/Q326648","qnode_id":"Q326648"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q243257","qnode_id":"Q243257"}],[],[]],[[{"start":0,"end":24,"url":"http://www.wikidata.org/entity/Q207367","qnode_id":"Q207367"}],[],[]],[[{"start":0,"end":13,"url":"http://www.wikidata.org/entity/Q180266","qnode_id":"Q180266"}],[],[]],[[{"start":0,"end":10,"url":"http://www.wikidata.org/entity/Q164727","qnode_id":"Q164727"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q160653","qnode_id":"Q160653"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q157661","qnode_id":"Q157661"}],[],[]],[[{"start":0,"end":11,"url":"http://www.wikidata.org/entity/Q156050","qnode_id":"Q156050"}],[],[]],[[{"start":0,"end":21,"url":"http://www.wikidata.org/entity/Q154882","qnode_id":"Q154882"}],[],[]],[[{"start":0,"end":12,"url":"http://www.wikidata.org/entity/Q154874","qnode_id":"Q154874"}],[],[]]],"version":"1"},"semantic_models":[{"version":1,"nodes":[{"id":"col-0","col_index":0,"label":"col0"},{"id":"http://www.wikidata.org/entity/Q18123741:0","abs_uri":"http://www.wikidata.org/entity/Q18123741","rel_uri":"wd:Q18123741","approximation":false,"readable_label":"infectious disease (Q18123741)"},{"id":"col-1","col_index":1,"label":"col1"},{"id":"col-2","col_index":2,"label":"col2"}],"edges":[{"source":"http://www.wikidata.org/entity/Q18123741:0","target":"col-0","abs_uri":"http://www.w3.org/2000/01/rdf-schema#label","rel_uri":"rdfs:label","approximation":false,"readable_label":null,"id":1},{"source":"http://www.wikidata.org/entity/Q18123741:0","target":"col-1","abs_uri":"http://www.wikidata.org/prop/P3487","rel_uri":"p:P3487","approximation":false,"readable_label":"maximal incubation period in humans (P3487)","id":2},{"source":"http://www.wikidata.org/entity/Q18123741:0","target":"col-2","abs_uri":"http://www.wikidata.org/prop/P3488","rel_uri":"p:P3488","approximation":false,"readable_label":"minimal incubation period in humans (P3488)","id":3}]}]}
+{
+  "table": {
+    "table": {
+      "columns": [
+        {
+          "index": 0,
+          "name": "col0",
+          "values": [
+            "Mycoplasma pneumoniae infection",
+            "ehrlichiosis",
+            "cryptosporidiosis",
+            "ascariasis",
+            "babesiosis",
+            "erythema infectiosum",
+            "Japanese encephalitis",
+            "campylobacteriosis",
+            "shigellosis",
+            "tick-borne encephalitis",
+            "salmonellosis",
+            "chikungunya",
+            "infectious mononucleosis",
+            "scarlet fever",
+            "ornithosis",
+            "listeriosis",
+            "hepatitis A",
+            "brucellosis",
+            "legionnaires' disease",
+            "yellow fever"
+          ]
+        },
+        {
+          "index": 1,
+          "name": "col1",
+          "values": [
+            "28",
+            "2",
+            "10",
+            "3",
+            "4",
+            "18",
+            "15",
+            "7",
+            "4",
+            "14",
+            "14",
+            "12",
+            "4",
+            "5",
+            "19",
+            "67",
+            "48",
+            "5",
+            "16",
+            "6"
+          ]
+        },
+        {
+          "index": 2,
+          "name": "col2",
+          "values": [
+            "7",
+            "1",
+            "2",
+            "1",
+            "1",
+            "10",
+            "5",
+            "1",
+            "1",
+            "7",
+            "6",
+            "3",
+            "4",
+            "2",
+            "5",
+            "1",
+            "15",
+            "5",
+            "2",
+            "3"
+          ]
+        }
+      ],
+      "table_id": "HIFECYUR",
+      "version": "2"
+    },
+    "context": {
+      "page_title": null,
+      "page_url": null,
+      "page_entity_id": null
+    },
+    "links": [
+      [
+        [
+          {
+            "start": 0,
+            "end": 31,
+            "url": "http://www.wikidata.org/entity/Q79054860",
+            "entity_id": "Q79054860"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 12,
+            "url": "http://www.wikidata.org/entity/Q2845432",
+            "entity_id": "Q2845432"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 17,
+            "url": "http://www.wikidata.org/entity/Q1359898",
+            "entity_id": "Q1359898"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q842428",
+            "entity_id": "Q842428"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q797668",
+            "entity_id": "Q797668"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 20,
+            "url": "http://www.wikidata.org/entity/Q753654",
+            "entity_id": "Q753654"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q738292",
+            "entity_id": "Q738292"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 18,
+            "url": "http://www.wikidata.org/entity/Q683861",
+            "entity_id": "Q683861"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q327298",
+            "entity_id": "Q327298"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 23,
+            "url": "http://www.wikidata.org/entity/Q326663",
+            "entity_id": "Q326663"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 13,
+            "url": "http://www.wikidata.org/entity/Q326648",
+            "entity_id": "Q326648"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q243257",
+            "entity_id": "Q243257"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 24,
+            "url": "http://www.wikidata.org/entity/Q207367",
+            "entity_id": "Q207367"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 13,
+            "url": "http://www.wikidata.org/entity/Q180266",
+            "entity_id": "Q180266"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 10,
+            "url": "http://www.wikidata.org/entity/Q164727",
+            "entity_id": "Q164727"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q160653",
+            "entity_id": "Q160653"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q157661",
+            "entity_id": "Q157661"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 11,
+            "url": "http://www.wikidata.org/entity/Q156050",
+            "entity_id": "Q156050"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 21,
+            "url": "http://www.wikidata.org/entity/Q154882",
+            "entity_id": "Q154882"
+          }
+        ],
+        [],
+        []
+      ],
+      [
+        [
+          {
+            "start": 0,
+            "end": 12,
+            "url": "http://www.wikidata.org/entity/Q154874",
+            "entity_id": "Q154874"
+          }
+        ],
+        [],
+        []
+      ]
+    ],
+    "version": "1.1"
+  },
+  "semantic_models": [
+    {
+      "version": 1,
+      "nodes": [
+        {
+          "id": "col-0",
+          "col_index": 0,
+          "label": "col0"
+        },
+        {
+          "id": "http://www.wikidata.org/entity/Q18123741:0",
+          "abs_uri": "http://www.wikidata.org/entity/Q18123741",
+          "rel_uri": "wd:Q18123741",
+          "approximation": false,
+          "readable_label": "infectious disease (Q18123741)"
+        },
+        {
+          "id": "col-1",
+          "col_index": 1,
+          "label": "col1"
+        },
+        {
+          "id": "col-2",
+          "col_index": 2,
+          "label": "col2"
+        }
+      ],
+      "edges": [
+        {
+          "source": "http://www.wikidata.org/entity/Q18123741:0",
+          "target": "col-0",
+          "abs_uri": "http://www.w3.org/2000/01/rdf-schema#label",
+          "rel_uri": "rdfs:label",
+          "approximation": false,
+          "readable_label": null,
+          "id": 1
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q18123741:0",
+          "target": "col-1",
+          "abs_uri": "http://www.wikidata.org/prop/P3487",
+          "rel_uri": "p:P3487",
+          "approximation": false,
+          "readable_label": "maximal incubation period in humans (P3487)",
+          "id": 2
+        },
+        {
+          "source": "http://www.wikidata.org/entity/Q18123741:0",
+          "target": "col-2",
+          "abs_uri": "http://www.wikidata.org/prop/P3488",
+          "rel_uri": "p:P3488",
+          "approximation": false,
+          "readable_label": "minimal incubation period in humans (P3488)",
+          "id": 3
+        }
+      ]
+    }
+  ]
+}

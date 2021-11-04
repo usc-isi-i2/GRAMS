@@ -11,6 +11,7 @@ import grams.inputs as I
 import sm.misc as M
 from grams.config import ROOT_DIR
 from grams.main import GRAMS
+from tqdm.auto import tqdm
 
 
 @dataclass
@@ -56,8 +57,17 @@ class IOFile:
 @click.option(
     "-r", "--viz", is_flag=True, default=False, help="visualize the annotated models"
 )
+@click.option(
+    "-v", "--verbose", is_flag=True, default=False, help="print the annotating progress"
+)
 def cli(
-    infiles: str, outfiles: str, data_dir: str, proxy: bool, cfg_file: str, viz: bool
+    infiles: str,
+    outfiles: str,
+    data_dir: str,
+    proxy: bool,
+    cfg_file: str,
+    viz: bool,
+    verbose: bool,
 ):
     """Annotate tables using GRAMS
 
@@ -71,6 +81,8 @@ def cli(
         data_dir: pass through option to GRAMS.data_dir
         proxy: pass through option to GRAMS.proxy
         cfg_file: cfg_file contains configuration of GRAMS
+        viz: visualize the annotated models
+        verbose: print the annotating progress
     """
     cfg = OmegaConf.load(cfg_file)
     io_files = io_parser(infiles=infiles, outfiles=outfiles)
@@ -87,8 +99,8 @@ def cli(
         tables.append(tbl)
 
     grams = GRAMS(data_dir=data_dir, cfg=cfg, proxy=proxy)
-    
-    for io_file, tbl in zip(io_files, tables):
+
+    for io_file, tbl in tqdm(zip(io_files, tables), disable=not verbose):
         annotation = grams.annotate(tbl)
         M.serialize_json(
             {"semantic_models": [annotation.sm.to_dict()]}, io_file.outfile
