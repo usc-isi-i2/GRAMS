@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sm-grams"
-version = "1.1.4"
+version = "1.2.0"
 description = ""
 authors = ["Binh Vu <binh@toan2.com>"]
 license = "MIT"
@@ -40,7 +40,7 @@ python-Levenshtein = "^0.12.2"
 sem-desc = "^1.2.0"
 kgdata = "^1.2.5"
 click = "^8.0.1"
-
+steiner-tree = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 neptune-client = "^0.9.5"

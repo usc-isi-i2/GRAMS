@@ -4,7 +4,9 @@ from operator import attrgetter, itemgetter
 
 import networkx as nx
 import matplotlib.pyplot as plt
+import sm.misc as M
 from typing import Set, List, Dict, Tuple, Callable, FrozenSet, Optional, Any
+from collections import defaultdict
 
 """
 Find a top-k approximate minimum steiner arborescence using the BANK algorithm
@@ -30,7 +32,7 @@ class Solution:
 
     def get_n_edges(self):
         if not hasattr(self, "n_edges"):
-            self.n_edges = sum(e.n_edges for _, _, e in self.graph.edges(data='data'))
+            self.n_edges = sum(e.n_edges for _, _, e in self.graph.edges(data="data"))
         return self.n_edges
 
 
@@ -40,21 +42,22 @@ class NoSingleRootException(Exception):
 
 # noinspection PyMethodMayBeStatic
 class SteinerTreeBankSolver:
-
-    def __init__(self,
-                 original_graph: nx.MultiDiGraph,
-                 terminal_nodes: Set[str],
-                 weight_fn: Callable[[dict], float],
-                 solution_cmp_fn: Optional[Callable[[Solution], Any]]=None,
-                 top_k_st: int = 10,
-                 top_k_path: int = 10,
-                 allow_shorten_graph: bool = True):
+    def __init__(
+        self,
+        original_graph: nx.MultiDiGraph,
+        terminal_nodes: Set[str],
+        weight_fn: Callable[[dict], float],
+        solution_cmp_fn: Optional[Callable[[Solution], Any]] = None,
+        top_k_st: int = 10,
+        top_k_path: int = 10,
+        allow_shorten_graph: bool = True,
+    ):
         # original graph
         self.original_graph = original_graph
         # function that extract weights
         self.weight_fn = weight_fn
         # function to compare & sort solutions
-        self.solution_cmp_fn = solution_cmp_fn or attrgetter('weight')
+        self.solution_cmp_fn = solution_cmp_fn or attrgetter("weight")
         # graph that the bank algorithm will work with
         self.graph: nx.MultiDiGraph = None
         # output graphs
@@ -68,27 +71,38 @@ class SteinerTreeBankSolver:
         self.graph = self._preprocessing(self.original_graph, self.weight_fn)
 
         if nx.is_weakly_connected(self.graph):
-            self.solutions = self._solve(self.graph, self.terminal_nodes, self.top_k_st, self.top_k_path)
+            self.solutions = self._solve(
+                self.graph, self.terminal_nodes, self.top_k_st, self.top_k_path
+            )
         else:
             graphs = self._split_connected_components(self.graph)
             final_solutions = None
             for g in graphs:
                 terminal_nodes = self.terminal_nodes.intersection(list(g.nodes))
-                solutions = self._solve(g, terminal_nodes, self.top_k_st, self.top_k_path)
+                solutions = self._solve(
+                    g, terminal_nodes, self.top_k_st, self.top_k_path
+                )
                 if final_solutions is None:
                     final_solutions = solutions
                 else:
                     next_solutions = []
                     for current_sol in final_solutions:
                         for sol in solutions:
-                            next_solutions.append(self._merge_graph(current_sol.graph, sol.graph))
-                    final_solutions = self._sort_solutions(next_solutions, return_solution=True)[:self.top_k_st]
+                            next_solutions.append(
+                                self._merge_graph(current_sol.graph, sol.graph)
+                            )
+                    final_solutions = self._sort_solutions(
+                        next_solutions, return_solution=True
+                    )[: self.top_k_st]
 
             self.solutions = final_solutions
 
         # [self._get_roots(sol.graph) for sol in self.solutions]
         # [sol.weight for sol in self.solutions]
-        return [self._postprocessing(self.original_graph, self.graph, sol.graph) for sol in self.solutions], self.solutions
+        return [
+            self._postprocessing(self.original_graph, self.graph, sol.graph)
+            for sol in self.solutions
+        ], self.solutions
 
     def _preprocessing(self, g: nx.MultiDiGraph, weight_fn: Callable[[dict], float]):
         ng = nx.MultiDiGraph()
@@ -96,8 +110,19 @@ class SteinerTreeBankSolver:
         # convert edges
         edge_id_count = 0
         for uid, vid, eid, edata in g.edges(data=True, keys=True):
-            ng.add_edge(uid, vid, key=eid, data=Edge(id=str(edge_id_count), source_id=uid, target_id=vid, edge_key=eid,
-                                                     weight=weight_fn(edata), n_edges=1))
+            ng.add_edge(
+                uid,
+                vid,
+                key=eid,
+                data=Edge(
+                    id=str(edge_id_count),
+                    source_id=uid,
+                    target_id=vid,
+                    edge_key=eid,
+                    weight=weight_fn(edata),
+                    n_edges=1,
+                ),
+            )
             edge_id_count += 1
 
         if self.allow_shorten_graph:
@@ -106,42 +131,64 @@ class SteinerTreeBankSolver:
             # map from the replaced edge to the removed nodes
             removed_nodes = {}
             for uid in list(ng.nodes):
-                if uid not in self.terminal_nodes and g.in_degree(uid) == 1 and g.out_degree(uid) == 1:
-                    inedge: Edge = next(iter(ng.in_edges(uid, data='data')))[-1]
-                    outedge: Edge = next(iter(ng.out_edges(uid, data='data')))[-1]
+                if (
+                    uid not in self.terminal_nodes
+                    and g.in_degree(uid) == 1
+                    and g.out_degree(uid) == 1
+                ):
+                    inedge: Edge = next(iter(ng.in_edges(uid, data="data")))[-1]
+                    outedge: Edge = next(iter(ng.out_edges(uid, data="data")))[-1]
                     if inedge.edge_key == outedge.edge_key:
                         new_edge_key = inedge.edge_key
                     else:
                         new_edge_key = f"{inedge.edge_key}-{outedge.edge_key}"
-                    if not ng.has_edge(inedge.source_id, outedge.target_id, key=new_edge_key):
+                    if not ng.has_edge(
+                        inedge.source_id, outedge.target_id, key=new_edge_key
+                    ):
                         # replace it only if we don't have that link before
                         ng.remove_node(uid)
-                        ng.add_edge(inedge.source_id, outedge.target_id, key=new_edge_key, data=Edge(id=str(edge_id_count),
-                                                                                                    source_id=inedge.source_id,
-                                                                                                    target_id=outedge.target_id,
-                                                                                                    edge_key=new_edge_key,
-                                                                                                    weight=inedge.weight + outedge.weight,
-                                                                                                    n_edges=2))
+                        ng.add_edge(
+                            inedge.source_id,
+                            outedge.target_id,
+                            key=new_edge_key,
+                            data=Edge(
+                                id=str(edge_id_count),
+                                source_id=inedge.source_id,
+                                target_id=outedge.target_id,
+                                edge_key=new_edge_key,
+                                weight=inedge.weight + outedge.weight,
+                                n_edges=2,
+                            ),
+                        )
                         removed_nodes[str(edge_id_count)] = (uid, inedge, outedge)
                         edge_id_count += 1
 
             # store the removed nodes to restore it later
-            ng.graph['removed_nodes'] = removed_nodes
+            ng.graph["removed_nodes"] = removed_nodes
         return ng
 
-    def _postprocessing(self, origin_graph: nx.MultiDiGraph, prep_graph: nx.MultiDiGraph, out_graph: nx.MultiDiGraph):
+    def _postprocessing(
+        self,
+        origin_graph: nx.MultiDiGraph,
+        prep_graph: nx.MultiDiGraph,
+        out_graph: nx.MultiDiGraph,
+    ):
         if self.allow_shorten_graph:
-            removed_nodes = prep_graph.graph['removed_nodes']
+            removed_nodes = prep_graph.graph["removed_nodes"]
         else:
             removed_nodes = set()
 
         g = origin_graph.copy()
         selected_edges = set()
-        for uid, vid, edge in out_graph.edges(data='data'):
+        for uid, vid, edge in out_graph.edges(data="data"):
             if edge.id in removed_nodes:
                 removed_node, inedge, outedge = removed_nodes[edge.id]
-                selected_edges.add((inedge.source_id, inedge.target_id, inedge.edge_key))
-                selected_edges.add((outedge.source_id, outedge.target_id, outedge.edge_key))
+                selected_edges.add(
+                    (inedge.source_id, inedge.target_id, inedge.edge_key)
+                )
+                selected_edges.add(
+                    (outedge.source_id, outedge.target_id, outedge.edge_key)
+                )
             else:
                 selected_edges.add((uid, vid, edge.edge_key))
 
@@ -179,7 +226,13 @@ class SteinerTreeBankSolver:
             subgs[node2comp[uid]].add_edge(uid, vid, key=eid, **edata)
         return subgs
 
-    def _solve(self, g: nx.MultiDiGraph, terminal_nodes: Set[str], top_k_st: int, top_k_path: int):
+    def _solve(
+        self,
+        g: nx.MultiDiGraph,
+        terminal_nodes: Set[str],
+        top_k_st: int,
+        top_k_path: int,
+    ):
         """Despite the name, this is finding steiner tree. Assuming their is a root node that connects all
         terminal nodes together.
         """
@@ -198,8 +251,11 @@ class SteinerTreeBankSolver:
             if nx.is_weakly_connected(g):
                 # perhaps, we can break the weakly connected components by breaking one of the link (a -> b <- c)
                 raise NoSingleRootException(
-                    "You pass a weakly connected component and there are parts of the graph like this (a -> b <- c). Fix it before running this algorithm")
-            raise Exception("Your graph is disconnected. Consider splitting them before calling bank solver")
+                    "You pass a weakly connected component and there are parts of the graph like this (a -> b <- c). Fix it before running this algorithm"
+                )
+            raise Exception(
+                "Your graph is disconnected. Consider splitting them before calling bank solver"
+            )
 
         # to ensure the order again & remove randomness
         roots = sorted(roots)
@@ -216,7 +272,9 @@ class SteinerTreeBankSolver:
                 pg.add_node(uid)
                 for e in path.path:
                     pg.add_node(e.source_id)
-                    pg.add_edge(e.source_id, e.target_id, e.edge_key, weight=e.weight, data=e)
+                    pg.add_edge(
+                        e.source_id, e.target_id, e.edge_key, weight=e.weight, data=e
+                    )
                 current_states.append(pg)
 
             if len(current_states) > top_k_st:
@@ -236,12 +294,54 @@ class SteinerTreeBankSolver:
                             # TODO: here we don't check by edge_key because we may create another edge of different key
                             # hope this new path has been exploited before.
                             if not pg.has_edge(e.source_id, e.target_id):
-                                pg.add_edge(e.source_id, e.target_id, key=e.edge_key, weight=e.weight, data=e)
+                                pg.add_edge(
+                                    e.source_id,
+                                    e.target_id,
+                                    key=e.edge_key,
+                                    weight=e.weight,
+                                    data=e,
+                                )
 
+                        # if there are more than path between two nodes within
+                        # two hop, we'll select one
+                        update_graph = False
+                        for nid in pg.nodes:
+                            if pg.in_degree(nid) >= 2:
+                                grand_parents = defaultdict(list)
+                                for inedge in pg.in_edges(nid, keys=True, data="data"):
+                                    grand_parents[inedge[0]].append((inedge,))
+                                    for grand_inedge in pg.in_edges(
+                                        inedge[0], keys=True, data="data"
+                                    ):
+                                        grand_parents[grand_inedge[0]].append(
+                                            (grand_inedge, inedge)
+                                        )
+
+                                for grand_parent, edges in grand_parents.items():
+                                    if len(edges) > 1:
+                                        # we need to select one path from this grand parent to the rest
+                                        # they have the same length, so we select the one has smaller weight
+                                        edges = sorted(
+                                            edges,
+                                            key=lambda x: x[0][-1].weight
+                                            + x[1][-1].weight
+                                            if len(x) == 2
+                                            else x[0][-1].weight * 2,
+                                        )
+                                        for lst in edges[1:]:
+                                            for edge in lst:
+                                                pg.remove_edge(
+                                                    edge[0], edge[1], edge[2]
+                                                )
+                                        update_graph = True
+                        if update_graph:
+                            for nid in list(pg.nodes):
+                                if pg.in_degree(nid) == 0 and pg.out_degree(nid) == 0:
+                                    pg.remove_node(nid)
                         # after add a path to the graph, it can create new cycle, detect and fix it
                         try:
                             # note that the function I'm using doesn't return parallel edges
-                            cycles_iter = nx.find_cycle(pg, uid, orientation='reverse')
+                            cycles_iter = nx.find_cycle(pg, uid, orientation="reverse")
                             # we can show that if the graph contain cycle, there is a better path
                             #
                             # cycles_iter = [(uid, vid) for uid, vid, eid, orien in cycles_iter]
@@ -249,7 +349,9 @@ class SteinerTreeBankSolver:
                             #     next_states.append(_g)
                         except nx.NetworkXNoCycle:
                             next_states.append(pg)
-                        if len(list(pg.edges)) != len({(uid, vid) for uid, vid, eid in pg.edges(keys=True)}):
+                        if len(list(pg.edges)) != len(
+                            {(uid, vid) for uid, vid, eid in pg.edges(keys=True)}
+                        ):
                             assert False
                 if len(next_states) > top_k_st:
                     next_states = self._sort_solutions(next_states)[:top_k_st]
@@ -258,15 +360,20 @@ class SteinerTreeBankSolver:
                 # nx.draw_networkx(cgs[0]); plt.show()
                 # nx.draw(cgs[0]); plt.show()
             results += current_states
+
         return self._sort_solutions(results, return_solution=True)
 
-    def _break_cycles(self, root: str, g: nx.MultiDiGraph, cycles_iter: List[Tuple[str, str]]):
+    def _break_cycles(
+        self, root: str, g: nx.MultiDiGraph, cycles_iter: List[Tuple[str, str]]
+    ):
         # g = current_states[0]; g = self.output_graphs[0]
         # pos = nx.kamada_kawai_layout(g); nx.draw_networkx(g, pos); nx.draw_networkx_edge_labels(g, pos, edge_labels={(u, v): d for u, v, d in g.edges(keys=True)}); plt.show()
         # nx.draw(g); plt.show()
         return self._break_cycles_brute_force(root, g, cycles_iter)
 
-    def _break_cycles_brute_force(self, root: str, g: nx.MultiDiGraph, cycles_iter: List[Tuple[str, str]]):
+    def _break_cycles_brute_force(
+        self, root: str, g: nx.MultiDiGraph, cycles_iter: List[Tuple[str, str]]
+    ):
         # one side effect of this approach is that it may separate the graph
         # currently we say it only happen when the target node of the remove edge only has one incoming edge
         # if it has two edges, then the other source (not of the remove edge) must have a path from root -> itself
@@ -279,8 +386,8 @@ class SteinerTreeBankSolver:
                 # we can't remove this edge, as removing it will make it's unreachable from the root
                 # so just skip edge
                 continue
-            edges = [edata['data'] for eid, edata in g[uid][vid].items()]
-            edge_weight = min(edges, key=attrgetter('weight')).weight
+            edges = [edata["data"] for eid, edata in g[uid][vid].items()]
+            edge_weight = min(edges, key=attrgetter("weight")).weight
             parallel_edges.append((uid, vid, edges, edge_weight))
 
         # not comparing based on weight anymore since psl can be quite difficult to select correct edge
@@ -298,7 +405,7 @@ class SteinerTreeBankSolver:
         #         ng = self._remove_redundant_nodes(root, ng)
         #         new_graphs.append(ng)
         # else:
-            # so bad, we have to try one by one
+        # so bad, we have to try one by one
         new_graphs = []
         for uid, vid, edges, edge_weight in parallel_edges:
             ng: nx.MultiDiGraph = g.copy()
@@ -312,15 +419,17 @@ class SteinerTreeBankSolver:
             assert len(list(nx.simple_cycles(ng))) == 0
         return new_graphs
 
-    def _sort_solutions(self, graphs: List[nx.MultiDiGraph], return_solution: bool = False):
+    def _sort_solutions(
+        self, graphs: List[nx.MultiDiGraph], return_solution: bool = False
+    ):
         """Sort the solution by th"""
         solutions = {}
         for g in graphs:
-            id = frozenset((e.id for _, _, e in g.edges(data='data')))
+            id = frozenset((e.id for _, _, e in g.edges(data="data")))
             if id in solutions:
                 continue
 
-            weight = sum(e.weight for _, _, e in g.edges(data='data'))
+            weight = sum(e.weight for _, _, e in g.edges(data="data"))
             solutions[id] = Solution(id, g, weight)
 
         solutions = sorted(solutions.values(), key=self.solution_cmp_fn)
@@ -352,21 +461,28 @@ class SteinerTreeBankSolver:
         """This function is mainly used for debugging"""
         pos = nx.kamada_kawai_layout(g)
         nx.draw_networkx(g, pos)
-        nx.draw_networkx_edge_labels(g, pos, edge_labels={(u, v): d for u, v, d in g.edges(keys=True)})
+        nx.draw_networkx_edge_labels(
+            g, pos, edge_labels={(u, v): d for u, v, d in g.edges(keys=True)}
+        )
         plt.show()
 
 
 class CycleBreaker:
-    def spanning_arborescence(self, g: nx.MultiDiGraph, root: str, terminal_nodes: Set[str]):
-        resp = nx.algorithms.tree.branchings.minimum_spanning_arborescence(g, attr='weight', default=None,
-                                                                           preserve_attrs=True)
+    def spanning_arborescence(
+        self, g: nx.MultiDiGraph, root: str, terminal_nodes: Set[str]
+    ):
+        resp = nx.algorithms.tree.branchings.minimum_spanning_arborescence(
+            g, attr="weight", default=None, preserve_attrs=True
+        )
         ng = nx.MultiDiGraph()
-        for uid, vid, edge in resp.edges(data='data'):
+        for uid, vid, edge in resp.edges(data="data"):
             ng.add_edge(uid, vid, key=edge.edge_key, weight=edge.weight, data=edge)
         # after breaking we may have multiple root nodes or leaf so we just need to clean them
         return [self._truncate_redundant_nodes(ng, root, terminal_nodes)]
 
-    def one_edge_at_a_time(self, og: nx.MultiDiGraph, root: str, terminal_nodes: Set[str]):
+    def one_edge_at_a_time(
+        self, og: nx.MultiDiGraph, root: str, terminal_nodes: Set[str]
+    ):
         """This approach doesn't allow us to select the graph that has shorter length due to multiple cycles in the graph"""
         current_graphs = [og]
         has_cycle = True
@@ -379,14 +495,16 @@ class CycleBreaker:
                     edge_groups = []
                     for i in range(len(cycle) - 1):
                         uid = cycle[i]
-                        vid = cycle[i+1]
+                        vid = cycle[i + 1]
                         # we may have more than one edge between two nodes
-                        edges = [edata['data'] for eid, edata in g[uid][vid].items()]
-                        edge_weight = min(edges, key=attrgetter('weight'))
+                        edges = [edata["data"] for eid, edata in g[uid][vid].items()]
+                        edge_weight = min(edges, key=attrgetter("weight"))
                         edge_groups.append((uid, vid, edges, edge_weight))
 
                     min_edge_weight = min(edge_groups, itemgetter(3))
-                    unbreakable = {i for i, x in enumerate(edge_groups) if x[3] == min_edge_weight}
+                    unbreakable = {
+                        i for i, x in enumerate(edge_groups) if x[3] == min_edge_weight
+                    }
                     if len(unbreakable) < len(edge_groups):
                         # it's great! we have some edge to break!
                         # for each breakable edge, we will have a new graph
@@ -396,7 +514,9 @@ class CycleBreaker:
                             ng: nx.MultiDiGraph = g.copy()
                             # we remove all instead of just one
                             ng.remove_edge(item[0], item[1])
-                            ng = self._truncate_redundant_nodes(ng, root, terminal_nodes)
+                            ng = self._truncate_redundant_nodes(
+                                ng, root, terminal_nodes
+                            )
                             new_graphs.append(ng)
                     else:
                         # so bad, we have to try one by one
@@ -404,7 +524,9 @@ class CycleBreaker:
                         for uid, vid, edges, edge_weight in edge_groups:
                             ng: nx.MultiDiGraph = g.copy()
                             ng.remove_edge(uid, vid)
-                            ng = self._truncate_redundant_nodes(ng, root, terminal_nodes)
+                            ng = self._truncate_redundant_nodes(
+                                ng, root, terminal_nodes
+                            )
                             # given a score for each split, we prefer the one that is smaller?
                             # however, we can't calculate the depth since the graph may contain multiple cycles
                             # this make this approach not good.
@@ -414,7 +536,9 @@ class CycleBreaker:
 
                     pass
 
-    def _truncate_redundant_nodes(self, g: nx.MultiDiGraph, root: str, terminal_nodes: Set[str]):
+    def _truncate_redundant_nodes(
+        self, g: nx.MultiDiGraph, root: str, terminal_nodes: Set[str]
+    ):
         while True:
             removed_nodes = []
             for uid in g.nodes:
@@ -441,7 +565,7 @@ class UpwardPath:
     def empty(start_node_id: str):
         return UpwardPath({start_node_id}, [], 0.0)
 
-    def push(self, edge: Edge) -> 'UpwardPath':
+    def push(self, edge: Edge) -> "UpwardPath":
         c = self.clone()
         c.path.append(edge)
         c.visited_nodes.add(edge.source_id)
@@ -449,7 +573,9 @@ class UpwardPath:
         return c
 
     def clone(self):
-        return UpwardPath(copy.copy(self.visited_nodes), copy.copy(self.path), self.weight)
+        return UpwardPath(
+            copy.copy(self.visited_nodes), copy.copy(self.path), self.weight
+        )
 
 
 @dataclass
@@ -465,11 +591,13 @@ class UpwardTraversal:
     def top_k_beamsearch(g: nx.MultiDiGraph, start_node_id: str, top_k_path: int):
         travel_hist = UpwardTraversal(start_node_id, dict())
         travel_hist.paths[start_node_id] = [UpwardPath.empty(start_node_id)]
-        for source_id, target_id, edge_id, orientation in nx.edge_bfs(g, start_node_id, orientation='reverse'):
+        for source_id, target_id, edge_id, orientation in nx.edge_bfs(
+            g, start_node_id, orientation="reverse"
+        ):
             if source_id not in travel_hist.paths:
                 travel_hist.paths[source_id] = []
 
-            edge: Edge = g.edges[source_id, target_id, edge_id]['data']
+            edge: Edge = g.edges[source_id, target_id, edge_id]["data"]
             #
             # for edata in g[source_id][target_id].values():
             #     edge: Edge = edata['data']
@@ -488,4 +616,4 @@ class UpwardTraversal:
         return travel_hist
 
     def sort_paths(self, node_id: str):
-        self.paths[node_id] = sorted(self.paths[node_id], key=attrgetter('weight'))
+        self.paths[node_id] = sorted(self.paths[node_id], key=attrgetter("weight"))
