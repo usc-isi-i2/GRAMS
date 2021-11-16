@@ -1,20 +1,20 @@
-import glob
+from pathlib import Path
+import tempfile
 
-from omegaconf import OmegaConf
+from grams.cli import cli
+from grams.prelude import ROOT_DIR
 
-from grams.prelude import *
 
-cwd = ROOT_DIR / "examples/semtab2020_novartis"
-cfg = OmegaConf.load(ROOT_DIR / "grams.yaml")
-grams = GRAMS(DATA_DIR, cfg)
-
-gt = [
-    ([O.SemanticModel.from_dict(sm) for sm in r['semantic_models']], I.LinkedTable.from_dict(r['table']))
-    for r in [M.deserialize_json(infile) for infile in glob.glob(str(cwd / "tables/*.json"))]
-]
-
-def annotate(table):
-    global grams
-    return grams.annotate(table)
-
-annotations = M.parallel_map(annotate, [tbl for sms, tbl in gt], show_progress=True, is_parallel=True)
+def test_semtab2020_novartis():
+    with tempfile.TemporaryDirectory() as tempdir:
+        tempdir = Path(tempdir)
+        cli(
+            # fmt: off
+            [
+                "-i", ROOT_DIR / "examples/semtab2020_novartis/tables/3MQ7IT3G.csv",
+                "-o", tempdir / "3MQ7IT3G.json",
+                "-pv",
+            ],
+            # fmt: on
+            standalone_mode=False,
+        )

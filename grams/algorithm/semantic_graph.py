@@ -681,7 +681,7 @@ class SemanticGraphConstructor:
                     q0 = self.qnodes[q0_id]
                     # location or located in the administrative entity
                     vals = {
-                        stmt.value.as_qnode_id()
+                        stmt.value.as_entity_id()
                         for stmt in chain(
                             q0.props.get("P131", []), q0.props.get("P276", [])
                         )
@@ -735,7 +735,7 @@ class SemanticGraphConstructor:
                         c
                         for cell in cells
                         for c in (
-                            stmt.value.as_qnode_id()
+                            stmt.value.as_entity_id()
                             for qnode in cell2qnodes[cell.id]
                             for stmt in qnode.props.get("P31", [])
                         )
@@ -786,8 +786,8 @@ class SemanticGraphConstructor:
                     sm.add_node(
                         O.LiteralNode(
                             u.id,
-                            u.value.as_qnode_id(),
-                            readable_label=readable_label_fn(u.value.as_qnode_id()),
+                            u.value.as_entity_id(),
+                            readable_label=readable_label_fn(u.value.as_entity_id()),
                         )
                     )
 

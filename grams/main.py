@@ -206,10 +206,10 @@ class GRAMS:
                 for p, stmts in qnode.props.items():
                     for stmt in stmts:
                         if stmt.value.is_qnode():
-                            next_qnode_ids.add(stmt.value.as_qnode_id())
+                            next_qnode_ids.add(stmt.value.as_entity_id())
                         for qvals in stmt.qualifiers.values():
                             next_qnode_ids = next_qnode_ids.union(
-                                qval.as_qnode_id() for qval in qvals if qval.is_qnode()
+                                qval.as_entity_id() for qval in qvals if qval.is_qnode()
                             )
             next_qnode_ids = list(next_qnode_ids.difference(qnodes.keys()))
             for qnode_id in next_qnode_ids:

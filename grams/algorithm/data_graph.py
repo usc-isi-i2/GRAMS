@@ -536,26 +536,27 @@ def kg_path_discovering(
                 # to simplify the design, we do not consider a statement that its value do not exist in KQ
                 # due to an error on KG
                 if stmt.value.is_qnode():
-                    if stmt.value.as_qnode_id() not in qnodes:
+                    if stmt.value.as_entity_id() not in qnodes:
                         # this can happen due to some of the qnodes is in the link, but is missing in the KG
                         # this is very rare so we can employ some check to make sure this is not due to
                         # our wikidata subset
                         is_error_in_kg = any(
                             any(
-                                _s.value.is_qnode() and _s.value.as_qnode_id() in qnodes
+                                _s.value.is_qnode()
+                                and _s.value.as_entity_id() in qnodes
                                 for _s in _stmts
                             )
                             for _p, _stmts in source.props.items()
-                        ) or stmt.value.as_qnode_id().startswith("L")
+                        ) or stmt.value.as_entity_id().startswith("L")
                         if not is_error_in_kg:
                             raise Exception(
-                                f"Missing qnodes in your KG subset: {stmt.value.as_qnode_id()}"
+                                f"Missing qnodes in your KG subset: {stmt.value.as_entity_id()}"
                             )
                         continue
 
                 if stmt.value.is_qnode():
                     # found by match entity
-                    if stmt.value.as_qnode_id() == target.id:
+                    if stmt.value.as_entity_id() == target.id:
                         matches.append(
                             DGPath(
                                 sequence=[
@@ -569,7 +570,7 @@ def kg_path_discovering(
                         )
                         has_stmt_value = True
                     elif max_n_hop > 1:
-                        stmt_value_qnode_id = stmt.value.as_qnode_id()
+                        stmt_value_qnode_id = stmt.value.as_entity_id()
                         if stmt_value_qnode_id.startswith("L"):
                             assert (
                                 stmt_value_qnode_id not in qnodes
@@ -591,7 +592,7 @@ def kg_path_discovering(
                                             source.id, p, stmt_i
                                         ),
                                         DGPathEdge.p(p),
-                                        DGPathNodeQNode(stmt.value.as_qnode_id()),
+                                        DGPathNodeQNode(stmt_value_qnode_id),
                                     ]
                                     + nextpath.sequence
                                 )
@@ -601,11 +602,11 @@ def kg_path_discovering(
                 for q, qvals in stmt.qualifiers.items():
                     for qval in qvals:
                         if qval.is_qnode():
-                            if qval.as_qnode_id() == target.id:
+                            if qval.as_entity_id() == target.id:
                                 if not has_stmt_value:
                                     if stmt.value.is_qnode():
                                         pn_stmt_value = DGPathNodeQNode(
-                                            stmt.value.as_qnode_id()
+                                            stmt.value.as_entity_id()
                                         )
                                     else:
                                         pn_stmt_value = DGPathNodeLiteralValue(
@@ -637,7 +638,7 @@ def kg_path_discovering(
                                     )
                                 )
                             elif max_n_hop > 1:
-                                qval_qnode_id = qval.as_qnode_id()
+                                qval_qnode_id = qval.as_entity_id()
                                 if qval_qnode_id.startswith("L"):
                                     assert (
                                         qval_qnode_id not in qnodes
@@ -651,7 +652,7 @@ def kg_path_discovering(
                                     is_error_in_kg = any(
                                         any(
                                             _s.value.is_qnode()
-                                            and _s.value.as_qnode_id() in qnodes
+                                            and _s.value.as_entity_id() in qnodes
                                             for _s in _stmts
                                         )
                                         for _p, _stmts in source.props.items()
@@ -678,7 +679,7 @@ def kg_path_discovering(
                                                     source.id, p, stmt_i
                                                 ),
                                                 DGPathEdge.q(q),
-                                                DGPathNodeQNode(qval.as_qnode_id()),
+                                                DGPathNodeQNode(qval.as_entity_id()),
                                             ]
                                             + nextpath.sequence
                                         )
@@ -687,7 +688,7 @@ def kg_path_discovering(
                                 if len(matches) > _n_matches and not has_stmt_value:
                                     if stmt.value.is_qnode():
                                         pn_stmt_value = DGPathNodeQNode(
-                                            stmt.value.as_qnode_id()
+                                            stmt.value.as_entity_id()
                                         )
                                     else:
                                         pn_stmt_value = DGPathNodeLiteralValue(
@@ -732,7 +733,7 @@ def kg_path_discovering(
             if len(rel.quals) > 0 and not rel.both:
                 # the prop doesn't match, have to add it
                 if stmt.value.is_qnode():
-                    pn_stmt_value = DGPathNodeQNode(stmt.value.as_qnode_id())
+                    pn_stmt_value = DGPathNodeQNode(stmt.value.as_entity_id())
                 else:
                     pn_stmt_value = DGPathNodeLiteralValue(stmt.value)
                 matches.append(
@@ -795,7 +796,7 @@ def kg_path_discovering(
                         # the prop doesn't match, have to add it, we don't worry about duplication
                         # as it is resolve during the merge provenance phase
                         if stmt.value.is_qnode():
-                            pn_stmt_value = DGPathNodeQNode(stmt.value.as_qnode_id())
+                            pn_stmt_value = DGPathNodeQNode(stmt.value.as_entity_id())
                         else:
                             pn_stmt_value = DGPathNodeLiteralValue(stmt.value)
                         matches.append(
@@ -813,7 +814,7 @@ def kg_path_discovering(
                     else:
                         # add prop to the seqs that we need to expand next, and so stmt.value must be a qnode
                         # as it is the middle qnode
-                        assert stmt.value.as_qnode_id() == middle_qnode.id
+                        assert stmt.value.as_entity_id() == middle_qnode.id
                         hop1_seqs.append(
                             [
                                 DGPathEdge.p(rel.prop),
@@ -844,7 +845,7 @@ def kg_path_discovering(
 
                     if len(rel.quals) > 0 and not rel.both:
                         if stmt.value.is_qnode():
-                            pn_stmt_value = DGPathNodeQNode(stmt.value.as_qnode_id())
+                            pn_stmt_value = DGPathNodeQNode(stmt.value.as_entity_id())
                         else:
                             pn_stmt_value = DGPathNodeLiteralValue(stmt.value)
 
@@ -918,23 +919,24 @@ def kg_path_discovering(
                     if not stmt.value.is_qnode():
                         # lexical
                         continue
-                    if stmt.value.as_qnode_id() not in qnodes:
+                    if stmt.value.as_entity_id() not in qnodes:
                         # this can happen due to some of the qnodes is in the link, but is missing in the KG
                         # this is very rare so we can employ some check to make sure this is not due to
                         # our wikidata subset
                         is_error_in_kg = any(
                             any(
-                                _s.value.is_qnode() and _s.value.as_qnode_id() in qnodes
+                                _s.value.is_qnode()
+                                and _s.value.as_entity_id() in qnodes
                                 for _s in _stmts
                             )
                             for _p, _stmts in source.props.items()
-                        ) or stmt.value.as_qnode_id().startswith("L")
+                        ) or stmt.value.as_entity_id().startswith("L")
                         if not is_error_in_kg:
                             raise Exception(
-                                f"Missing qnodes in your KG subset: {stmt.value.as_qnode_id()}"
+                                f"Missing qnodes in your KG subset: {stmt.value.as_entity_id()}"
                             )
                         continue
-                    stmt_value = qnodes[stmt.value.as_qnode_id()]
+                    stmt_value = qnodes[stmt.value.as_entity_id()]
                 for fn in funcs[stmt.value.type]:
                     match, confidence = fn(stmt_value, value)
                     if match:
@@ -966,31 +968,31 @@ def kg_path_discovering(
                                 "id"
                             ].startswith("P"):
                                 continue
-                            if qval.as_qnode_id() not in qnodes:
+                            if qval.as_entity_id() not in qnodes:
                                 # this can happen due to some of the qnodes is in the link, but is missing in the KG
                                 # this is very rare so we can employ some check to make sure this is not due to
                                 # our wikidata subset
                                 is_error_in_kg = any(
                                     any(
                                         _s.value.is_qnode()
-                                        and _s.value.as_qnode_id() in qnodes
+                                        and _s.value.as_entity_id() in qnodes
                                         for _s in _stmts
                                     )
                                     for _p, _stmts in source.props.items()
-                                ) or not qval.as_qnode_id().startswith("L")
+                                ) or not qval.as_entity_id().startswith("L")
                                 if not is_error_in_kg:
                                     raise Exception(
-                                        f"Missing qnodes in your KG subset: {qval.as_qnode_id()}"
+                                        f"Missing qnodes in your KG subset: {qval.as_entity_id()}"
                                     )
                                 continue
-                            qval_value = qnodes[qval.as_qnode_id()]
+                            qval_value = qnodes[qval.as_entity_id()]
                         for fn in funcs[qval.type]:
                             match, confidence = fn(qval_value, value)
                             if match:
                                 if not has_stmt_value:
                                     if stmt.value.is_qnode():
                                         pn_stmt_value = DGPathNodeQNode(
-                                            stmt.value.as_qnode_id()
+                                            stmt.value.as_entity_id()
                                         )
                                     else:
                                         pn_stmt_value = DGPathNodeLiteralValue(
