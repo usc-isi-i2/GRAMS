@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass, asdict
 from hashlib import md5
 from pathlib import Path
-from typing import List, Optional, Union, Set
+from typing import Iterable, List, Optional, Union, Set
 from urllib.parse import urlparse
 
 import fastnumbers
@@ -39,6 +39,7 @@ class LinkedTable:
                     link.remove_nonexisting_entities(nonexisting_entities)
 
     def size(self):
+        """Number of rows of the table"""
         if len(self.table.columns) == 0:
             return 0
         return len(self.table.columns[0].values)
