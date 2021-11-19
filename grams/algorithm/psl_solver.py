@@ -2,6 +2,7 @@ import copy
 import math
 import os
 from pathlib import Path
+from networkx.exception import NetworkXUnfeasible
 import sm.misc as M
 from grams.algorithm.semtab2020 import SemTab2020PostProcessing
 from typing import Optional, Dict, List, Set, Tuple
@@ -212,7 +213,7 @@ class PSLSteinerTreeSolver:
             self.TypeNegPrior: 1,
             self.LinkNegParentPropPrior: 0.1,
             self.CascadingError: 2,
-            self.TypeMustInPropRange: 1,
+            self.TypeMustInPropRange: 2,
             self.FreqLinkOverRow: 2,
             self.FreqLinkOverEntRow: 2,
             self.FreqLinkOverPosLink: 2,
@@ -342,7 +343,7 @@ class PSLSteinerTreeSolver:
             "NotRange",
             "CanType",
             f"TypeFeature_{self.FreqTypeOverRow}",
-            f"RelFeature_{self.LinkNotFuncDep}"
+            f"RelFeature_{self.LinkNotFuncDep}",
         }
         RelPredicate = (
             self.model.get_predicate("Rel")
@@ -725,6 +726,18 @@ class PSLSteinerTreeSolver:
             candidate_sts, solutions = bank_solver.run()
         except NoSingleRootException:
             # fallback
+            return self.postprocessing_select_simplepath(
+                table, sg, dg, pred_with_probs, threshold
+            )
+        except NetworkXUnfeasible:
+            # TODO: fix me
+            assert table.id == "Diamond_League"
+            # fallback
+            return self.postprocessing_select_simplepath(
+                table, sg, dg, pred_with_probs, threshold
+            )
+        # TODO fix me when the bank algorithm return empty result
+        if len(candidate_sts) == 0:
             return self.postprocessing_select_simplepath(
                 table, sg, dg, pred_with_probs, threshold
             )

@@ -95,7 +95,8 @@ class SteinerTreeBankSolver:
                         next_solutions, return_solution=True
                     )[: self.top_k_st]
 
-            self.solutions = final_solutions
+            if final_solutions is not None:
+                self.solutions = final_solutions
 
         # [self._get_roots(sol.graph) for sol in self.solutions]
         # [sol.weight for sol in self.solutions]
@@ -328,11 +329,16 @@ class SteinerTreeBankSolver:
                                             if len(x) == 2
                                             else x[0][-1].weight * 2,
                                         )
+
                                         for lst in edges[1:]:
                                             for edge in lst:
-                                                pg.remove_edge(
-                                                    edge[0], edge[1], edge[2]
-                                                )
+                                                # TODO: handle removing edges multiple times
+                                                try:
+                                                    pg.remove_edge(
+                                                        edge[0], edge[1], edge[2]
+                                                    )
+                                                except:
+                                                    continue
                                         update_graph = True
                         if update_graph:
                             for nid in list(pg.nodes):
