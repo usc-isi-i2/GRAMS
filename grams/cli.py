@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 
 import grams.inputs as I
 import sm.misc as M
-from grams.config import ROOT_DIR
+from grams.config import PKG_DIR, ROOT_DIR
 from grams.main import GRAMS
 from tqdm.auto import tqdm
 
@@ -51,7 +51,7 @@ class IOFile:
 )
 @click.option(
     "--cfg_file",
-    default=str(ROOT_DIR / "grams.yaml"),
+    default=str(PKG_DIR / "grams.yaml"),
     help="cfg_file contains configuration of GRAMS",
 )
 @click.option(
@@ -100,7 +100,9 @@ def cli(
 
     grams = GRAMS(data_dir=data_dir, cfg=cfg, proxy=proxy)
 
-    for io_file, tbl in tqdm(zip(io_files, tables), disable=not verbose):
+    for io_file, tbl in tqdm(
+        zip(io_files, tables), total=len(tables), disable=not verbose
+    ):
         annotation = grams.annotate(tbl)
         M.serialize_json(
             {"semantic_models": [annotation.sm.to_dict()]}, io_file.outfile

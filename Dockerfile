@@ -6,4 +6,4 @@ RUN mkdir -p /usr/share/man/man1 && apt install -y default-jre
 
 RUN pip install poetry && poetry config virtualenvs.create false
 
-RUN pip install -U sm-grams
+RUN pip install -U "sm-grams >= 1.2.6"

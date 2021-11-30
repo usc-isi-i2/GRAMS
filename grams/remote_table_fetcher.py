@@ -4,7 +4,7 @@ from operator import itemgetter
 from urllib.parse import urlparse, unquote_plus
 
 import requests, re, pandas as pd
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore
 from typing import List, Dict, Optional
 
 from sm.prelude import I, M
