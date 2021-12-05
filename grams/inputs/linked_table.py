@@ -44,7 +44,7 @@ class LinkedTable:
         if len(self.table.columns) == 0:
             return 0
         return len(self.table.columns[0].values)
-    
+
     def iter_cell_index(self):
         nrows, ncols = self.table.shape()
         for ri in range(nrows):
@@ -53,11 +53,11 @@ class LinkedTable:
 
     def to_dict(self):
         return {
-            "version": "1",
+            "version": "1.1",
             "table": self.table.to_dict(),
             "context": asdict(self.context),
             "links": [
-                [[asdict(link) for link in links] for links in rlinks]
+                [[link.to_dict() for link in links] for links in rlinks]
                 for rlinks in self.links
             ],
         }
@@ -248,6 +248,15 @@ class Link:
             entity_id=obj["entity_id"],
             candidates=[CandidateEntity(**c) for c in obj.get("candidates", [])],
         )
+
+    def to_dict(self) -> dict:
+        return {
+            "start": self.start,
+            "end": self.end,
+            "url": self.url,
+            "entity_id": self.entity_id,
+            "candidates": [asdict(c) for c in self.candidates],
+        }
 
     def remove_nonexisting_entities(self, nonexisting_entities: Set[str]):
         if self.entity_id in nonexisting_entities:
