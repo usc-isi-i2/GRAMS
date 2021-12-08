@@ -1,6 +1,7 @@
+from __future__ import annotations
 from collections import defaultdict
 import re
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from hashlib import md5
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple, Union, Set
@@ -20,10 +21,10 @@ class LinkedTable:
     table: ColumnBasedTable
 
     # context of the table
-    context: "Context"
+    context: Context
 
     # a mapping from (row id, column id) to the list of links attach to that cell (not include header)
-    links: List[List[List["Link"]]]
+    links: List[List[List[Link]]]
 
     @property
     def id(self):
@@ -53,9 +54,9 @@ class LinkedTable:
 
     def to_dict(self):
         return {
-            "version": "1.1",
+            "version": "1.2",
             "table": self.table.to_dict(),
-            "context": asdict(self.context),
+            "context": self.context.to_dict(),
             "links": [
                 [[link.to_dict() for link in links] for links in rlinks]
                 for rlinks in self.links
@@ -84,9 +85,9 @@ class LinkedTable:
 
     @staticmethod
     def from_dict(odict: dict):
-        assert str(odict.get("version", None)) == "1.1"
+        assert float(odict.get("version", "0.0")) >= 1.1
         tbl = ColumnBasedTable.from_dict(odict["table"])
-        context = Context(**odict["context"])
+        context = Context.from_dict(odict["context"])
         links = [
             [[Link.from_dict(link) for link in links] for links in rlinks]
             for rlinks in odict["links"]
@@ -110,7 +111,7 @@ class LinkedTable:
         first_row_header: bool = True,
         table_id: Optional[str] = None,
         top_k: int = 100,
-    ) -> "LinkedTable":
+    ) -> LinkedTable:
         """Load table from a csv file, and its links from a tsv file (if exist).
 
         For format of the link file, see `LinkedTable.parse_link_file`
@@ -156,7 +157,7 @@ class LinkedTable:
     @staticmethod
     def parse_link_file(
         table: ColumnBasedTable, infile: Union[Path, str], top_k: int = 100
-    ) -> List[List[List["Link"]]]:
+    ) -> List[List[List[Link]]]:
         """
         Each row of a link file has the following format: `<row_index>\t<col_index>\t(<link>|(<entity_id>(\t<entity_id>)*))`, where:
             * `row_index` and `col_index` start from 0
@@ -217,12 +218,43 @@ class LinkedTable:
 
 
 @dataclass
+class ContentHierarchy:
+    """Content at each level that leads to the table"""
+
+    level: int  # level of the heading
+    heading: str  # title of the level (header)
+    content_before: str
+    content_after: str  # only not empty if this is the same level as the table
+
+
+@dataclass
 class Context:
     """Table's context"""
 
     page_title: Optional[str] = None
     page_url: Optional[str] = None
     page_entity_id: Optional[str] = None
+
+    content_hierarchy: List[ContentHierarchy] = field(default_factory=list)
+
+    def to_dict(self):
+        return {
+            "page_title": self.page_title,
+            "page_url": self.page_url,
+            "page_entity_id": self.page_entity_id,
+            "content_hierarchy": [asdict(c.__dict__) for c in self.content_hierarchy],
+        }
+
+    @staticmethod
+    def from_dict(odict: dict):
+        return Context(
+            page_title=odict.get("page_title"),
+            page_url=odict.get("page_url"),
+            page_entity_id=odict.get("page_entity_id"),
+            content_hierarchy=[
+                ContentHierarchy(**c) for c in odict.get("content_hierarchy", [])
+            ],
+        )
 
 
 @dataclass
@@ -240,7 +272,7 @@ class Link:
     candidates: List[CandidateEntity]
 
     @staticmethod
-    def from_dict(obj: dict) -> "Link":
+    def from_dict(obj: dict) -> Link:
         return Link(
             start=obj["start"],
             end=obj["end"],
