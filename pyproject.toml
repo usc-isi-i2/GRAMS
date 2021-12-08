@@ -13,7 +13,7 @@ grams = 'grams.cli:cli'
 
 [tool.poetry.dependencies]
 python = "^3.8"
-requests = "^2.25.1"
+requests = "^2.26.0"
 beautifulsoup4 = "^4.9.3"
 orjson = "^3.6.4"
 python-slugify = "^5.0.2"
