@@ -182,7 +182,8 @@ class GRAMS:
             missing_qnode_ids = [
                 qnode_id
                 for qnode_id in qnode_ids
-                if qnode_id not in qnodes and not self.qnodes.does_not_exist(qnode_id)
+                if qnode_id not in qnodes
+                and not self.qnodes.does_not_exist_locally(qnode_id)
             ]
             if len(missing_qnode_ids) > 0:
                 resp = M.parallel_map(
@@ -222,7 +223,7 @@ class GRAMS:
                     qnode_id
                     for qnode_id in next_qnode_ids
                     if qnode_id not in qnodes
-                    and not self.qnodes.does_not_exist(qnode_id)
+                    and not self.qnodes.does_not_exist_locally(qnode_id)
                 ]
                 if len(next_qnode_ids) > 0:
                     resp = M.parallel_map(
