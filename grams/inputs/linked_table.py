@@ -13,6 +13,7 @@ from slugify import slugify
 
 import sm.misc as M
 from sm.inputs.table import ColumnBasedTable, Column
+from grams.inputs.context import ContentHierarchy
 
 
 @dataclass
@@ -218,16 +219,6 @@ class LinkedTable:
 
 
 @dataclass
-class ContentHierarchy:
-    """Content at each level that leads to the table"""
-
-    level: int  # level of the heading
-    heading: str  # title of the level (header)
-    content_before: str
-    content_after: str  # only not empty if this is the same level as the table
-
-
-@dataclass
 class Context:
     """Table's context"""
 
@@ -242,7 +233,7 @@ class Context:
             "page_title": self.page_title,
             "page_url": self.page_url,
             "page_entity_id": self.page_entity_id,
-            "content_hierarchy": [asdict(c.__dict__) for c in self.content_hierarchy],
+            "content_hierarchy": [c.to_dict() for c in self.content_hierarchy],
         }
 
     @staticmethod
@@ -252,7 +243,8 @@ class Context:
             page_url=odict.get("page_url"),
             page_entity_id=odict.get("page_entity_id"),
             content_hierarchy=[
-                ContentHierarchy(**c) for c in odict.get("content_hierarchy", [])
+                ContentHierarchy.from_dict(c)
+                for c in odict.get("content_hierarchy", [])
             ],
         )
 
