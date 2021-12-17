@@ -2,10 +2,9 @@ import os
 from dataclasses import dataclass
 from operator import itemgetter
 from pathlib import Path
-from typing import Any, Dict, Set, Tuple, Union
+from typing import Any, Dict, Optional, Set, Tuple, Union
 
 import networkx as nx
-from omegaconf import OmegaConf
 from rdflib import RDFS
 
 import grams.inputs as I
@@ -18,7 +17,7 @@ from grams.algorithm.semantic_graph import (
     SemanticGraphConstructor,
 )
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
-from grams.config import DEFAULT_CONFIG, ROOT_DIR
+from grams.config import DEFAULT_CONFIG
 from kgdata.wikidata.db import (
     get_qnode_db,
     get_wdprop_db,
@@ -44,9 +43,14 @@ class Annotation:
 class GRAMS:
     """Implementation of GRAMS. The main method is `annotate`"""
 
-    def __init__(self, data_dir: Union[Path, str], cfg=None, proxy: bool = True):
+    def __init__(
+        self,
+        data_dir: Union[Path, str],
+        cfg=None,
+        proxy: bool = True,
+    ):
         self.timer = M.Timer()
-        self.cfg = cfg if cfg is None else DEFAULT_CONFIG
+        self.cfg = cfg if cfg is not None else DEFAULT_CONFIG
         self.is_proxy_db = proxy
 
         with self.timer.watch("init grams db"):
@@ -76,8 +80,8 @@ class GRAMS:
                 os.path.join(data_dir, "quantity_prop_stats")
             )
 
-        self.build_dg_option = getattr(BuildDGOption, cfg.data_graph.options[0])
-        for op in cfg.data_graph.options[1:]:
+        self.build_dg_option = getattr(BuildDGOption, self.cfg.data_graph.options[0])
+        for op in self.cfg.data_graph.options[1:]:
             self.build_dg_option = self.build_dg_option | getattr(BuildDGOption, op)
 
     def annotate(self, table: I.LinkedTable, verbose: bool = False) -> Annotation:
