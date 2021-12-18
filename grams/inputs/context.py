@@ -36,6 +36,9 @@ class Text:
             id2attrs=obj["id2attrs"],
         )
 
+    def __str__(self):
+        return self.value
+
 
 @dataclass
 class Linebreak:
@@ -49,6 +52,9 @@ class Linebreak:
         return Linebreak(
             n_lines=obj["n_lines"],
         )
+
+    def __str__(self):
+        return f"\n{{{self.n_lines}}}"
 
 
 @dataclass

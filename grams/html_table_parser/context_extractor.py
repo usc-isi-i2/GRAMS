@@ -14,7 +14,6 @@ from typing import (
     cast,
 )
 from bs4 import BeautifulSoup
-from bs4 import element
 from bs4.element import NavigableString, Tag
 from dataclasses import dataclass, field
 from grams.inputs.context import Attribute, Text, Linebreak, ContentHierarchy
@@ -260,6 +259,7 @@ class ContextExtractor:
 
         id_container["id"] += 1
         tree_id = id_container["id"]
+        value = ""
 
         if el.name in self.SKIP_CONTENT_BLOCK_ELEMENTS:
             children = []
@@ -268,6 +268,11 @@ class ContextExtractor:
                 self.get_tree(c, id_container)
                 for c in cast(List[PageElement], el.contents)
             ]
+            if len(children) == 1 and children[0].tag is None:
+                # one child and it's a string, so we undo it to reduce the tree depth
+                value = children[0].value
+                children = []
+                id_container["id"] -= 1
 
         if el.name in self.RICH_ELEMENTS:
             attrs = self.extract_rich_text_attrs(el)
@@ -276,7 +281,7 @@ class ContextExtractor:
 
         return Tree(
             id=tree_id,
-            value="",
+            value=value,
             block=el.name in self.BLOCK_ELEMENTS,
             tag=el.name,
             attrs=attrs,
@@ -288,8 +293,23 @@ class ContextExtractor:
         assert tree.is_verified
         output = []
         if tree.block:
+            assert tree.tag is not None
+            if tree.value != "":
+                assert len(tree.attrs) == 0
+                output.append(
+                    Text(
+                        id=str(tree.id),
+                        value=tree.value,
+                        tags={tree.tag},
+                        id2attrs={},
+                    )
+                )
+
             for c in tree.children:
-                output += self.flatten_tree(c)
+                for sc in self.flatten_tree(c):
+                    if isinstance(sc, Text):
+                        sc.tags.add(tree.tag)
+                    output.append(sc)
                 if c.block:
                     output.append(Linebreak())
 
@@ -323,15 +343,33 @@ class ContextExtractor:
         return output
 
     def optimize_flatten_tree(
-        self, lst: List[Union[Text, Linebreak]]
+        self, lst: List[Union[Text, Linebreak]], merge_empty_lines: bool = True
     ) -> List[Union[Text, Linebreak]]:
         """Merge consecutive elements to make the list more compact"""
         if len(lst) == 0:
             return lst
-        new_lst = [lst[0]]
+
+        if (
+            merge_empty_lines
+            and isinstance(lst[0], Text)
+            and lst[0].value.strip() == ""
+        ):
+            new_lst: List[Union[Text, Linebreak]] = [
+                Linebreak(lst[0].value.count("\n"))
+            ]
+        else:
+            new_lst: List[Union[Text, Linebreak]] = [lst[0]]
+
         for i in range(1, len(lst)):
             last_item = new_lst[-1]
             item = lst[i]
+            if (
+                merge_empty_lines
+                and isinstance(item, Text)
+                and item.value.strip() == ""
+            ):
+                item = Linebreak(item.value.count("\n"))
+
             if isinstance(item, Linebreak):
                 if isinstance(last_item, Linebreak):
                     last_item.n_lines += item.n_lines
@@ -347,6 +385,8 @@ class ContextExtractor:
                     )
                     if mergable:
                         last_item.value += item.value
+                    else:
+                        new_lst.append(item)
         return new_lst
 
     def extract_rich_text_attrs(self, e: Tag) -> Attribute:
