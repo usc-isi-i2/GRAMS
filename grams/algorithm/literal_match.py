@@ -31,20 +31,24 @@ class DatetimeParsedRepr:
     second: Optional[int] = None
 
     def has_only_year(self):
-        return self.year is not None and \
-               self.month is None and \
-               self.day is None and \
-               self.hour is None and \
-               self.minute is None and \
-               self.second is None
+        return (
+            self.year is not None
+            and self.month is None
+            and self.day is None
+            and self.hour is None
+            and self.minute is None
+            and self.second is None
+        )
 
     def first_day_of_year(self):
-        return self.year is not None and \
-               self.month == 1 and \
-               self.day == 1 and \
-               self.hour is None and \
-               self.minute is None and \
-               self.second is None
+        return (
+            self.year is not None
+            and self.month == 1
+            and self.day == 1
+            and self.hour is None
+            and self.minute is None
+            and self.second is None
+        )
 
 
 @dataclass
@@ -60,7 +64,7 @@ class TextParser:
     def __init__(self):
         self.cache = {}
         self.default_dt = datetime(MINYEAR, 1, 1)
-        self.default_dt2 = datetime(MINYEAR+3, 2, 28)
+        self.default_dt2 = datetime(MINYEAR + 3, 2, 28)
         self.number_chars = re.compile("[^0-9\.+-]")
 
     def parse(self, text: str) -> ParsedTextRepr:
@@ -75,27 +79,36 @@ class TextParser:
             month = dt.month
             day = dt.day
 
-            if dt.year == self.default_dt.year or dt.month == self.default_dt.month or dt.day == self.default_dt.day:
+            if (
+                dt.year == self.default_dt.year
+                or dt.month == self.default_dt.month
+                or dt.day == self.default_dt.day
+            ):
                 dt2 = dt_parse(text, default=self.default_dt2)
 
-                if dt.year == self.default_dt.year and dt2.year == self.default_dt2.year:
+                if (
+                    dt.year == self.default_dt.year
+                    and dt2.year == self.default_dt2.year
+                ):
                     year = None
-                if dt.month == self.default_dt.month and dt2.month == self.default_dt2.month:
+                if (
+                    dt.month == self.default_dt.month
+                    and dt2.month == self.default_dt2.month
+                ):
                     month = None
                 if dt.day == self.default_dt.day and dt2.day == self.default_dt2.day:
                     day = None
 
-            dt = DatetimeParsedRepr(
-                year=year,
-                month=month,
-                day=day
-            )
+            dt = DatetimeParsedRepr(year=year, month=month, day=day)
         except (ParserError, TypeError, OverflowError):
             dt = None
 
         number_string = self._parse_number_string(text)
         normed_string = self._norm_string(text)
-        if fastnumbers.isfloat(number_string) and (len(number_string) / min(1, len(normed_string))) > 0.95:
+        if (
+            fastnumbers.isfloat(number_string)
+            and (len(number_string) / max(1, len(normed_string))) > 0.95
+        ):
             number = fastnumbers.fast_real(number_string, coerce=False)
         else:
             number = None
@@ -104,7 +117,7 @@ class TextParser:
             normed_string=normed_string,
             number_string=number_string,
             number=number,
-            datetime=dt
+            datetime=dt,
         )
 
     def _parse_number_string(self, text: str):
@@ -117,36 +130,47 @@ class TextParser:
 
 class LiteralMatcher:
     literal_types = {
-        WikidataValueType.string.value, WikidataValueType.time.value,
-        WikidataValueType.quantity.value, WikidataValueType.mono_lingual_text.value,
-        WikidataValueType.globe_coordinate.value}
+        WikidataValueType.string.value,
+        WikidataValueType.time.value,
+        WikidataValueType.quantity.value,
+        WikidataValueType.mono_lingual_text.value,
+        WikidataValueType.globe_coordinate.value,
+    }
     non_literal_types = {WikidataValueType.entity_id.value}
 
     @classmethod
-    def string_test_exact(cls, p_val: DataValue, val: ParsedTextRepr) -> Tuple[bool, float]:
+    def string_test_exact(
+        cls, p_val: DataValue, val: ParsedTextRepr
+    ) -> Tuple[bool, float]:
         if val.normed_string == p_val.value:
             return True, 1.0
         return False, 0.0
 
     @classmethod
-    def string_test_fuzzy(cls, p_val: DataValue, val: ParsedTextRepr) -> Tuple[bool, float]:
+    def string_test_fuzzy(
+        cls, p_val: DataValue, val: ParsedTextRepr
+    ) -> Tuple[bool, float]:
         return cls.match_string(val.normed_string, p_val.value)
 
     @classmethod
-    def globe_coordinate_test(cls, p_val: DataValue, val: ParsedTextRepr) -> Tuple[bool, float]:
+    def globe_coordinate_test(
+        cls, p_val: DataValue, val: ParsedTextRepr
+    ) -> Tuple[bool, float]:
         return False, 0.0
 
     @classmethod
     def time_test(cls, p_val: DataValue, val: ParsedTextRepr) -> Tuple[bool, float]:
         if val.datetime is None:
             return False, 0.0
-        timestr = p_val.value['time']
+        timestr = p_val.value["time"]
         # there are two calendar:
         # gregorian calendar, and julian calendar (just 13 days behind gregorian)
         # https://www.timeanddate.com/calendar/julian-gregorian-switch.html#:~:text=13%20Days%20Behind%20Today,days%20behind%20the%20Gregorian%20calendar.
         # TODO: we need to consider a range for julian calendar
-        assert p_val.value['calendarmodel'] in {'http://www.wikidata.org/entity/Q1985786',
-                                                'http://www.wikidata.org/entity/Q1985727'}, p_val.value['calendarmodel']
+        assert p_val.value["calendarmodel"] in {
+            "http://www.wikidata.org/entity/Q1985786",
+            "http://www.wikidata.org/entity/Q1985727",
+        }, p_val.value["calendarmodel"]
         # TODO: handle timezone, before/after and precision
         # pass
 
@@ -161,11 +185,11 @@ class LiteralMatcher:
             minute=int(match.group(5)),
             second=int(match.group(6)),
         )
-        if timestr[0] == '-':
+        if timestr[0] == "-":
             target_val.year = -target_val.year
         else:
-            assert timestr[0] == '+'
-        for p in ['year', 'month', 'day', 'hour', 'minute', 'second']:
+            assert timestr[0] == "+"
+        for p in ["year", "month", "day", "hour", "minute", "second"]:
             if getattr(target_val, p) == 0:
                 setattr(target_val, p, None)
 
@@ -198,19 +222,25 @@ class LiteralMatcher:
         return False, 0.0
 
     @classmethod
-    def mono_lingual_text_test_exact(cls, p_val: DataValue, val: ParsedTextRepr) -> Tuple[bool, float]:
-        target_val = p_val.value['text']
+    def mono_lingual_text_test_exact(
+        cls, p_val: DataValue, val: ParsedTextRepr
+    ) -> Tuple[bool, float]:
+        target_val = p_val.value["text"]
         if val.normed_string == target_val:
             return True, 1.0
         return False, 0.0
 
     @classmethod
-    def mono_lingual_text_test_fuzzy(cls, p_val: DataValue, val: ParsedTextRepr) -> Tuple[bool, float]:
-        target_val = p_val.value['text']
+    def mono_lingual_text_test_fuzzy(
+        cls, p_val: DataValue, val: ParsedTextRepr
+    ) -> Tuple[bool, float]:
+        target_val = p_val.value["text"]
         return cls.match_string(val.normed_string, target_val)
 
     @classmethod
-    def entity_id_test_fuzzy(cls, qnode: QNode, val: ParsedTextRepr) -> Tuple[bool, float]:
+    def entity_id_test_fuzzy(
+        cls, qnode: QNode, val: ParsedTextRepr
+    ) -> Tuple[bool, float]:
         string = val.normed_string
         lst = [x.strip() for x in string.split(",")]
         for label in [qnode.label] + qnode.aliases:
@@ -231,4 +261,3 @@ class LiteralMatcher:
         elif distance > 1 and distance / max(1, min(len(s1), len(s2))) < 0.03:
             return True, 0.85
         return False, 0.0
-

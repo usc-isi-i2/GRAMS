@@ -47,7 +47,7 @@ hugedict = "~1.0.0"
 
 [tool.poetry.dev-dependencies]
 neptune-client = "^0.9.5"
-ipykernel = "^5.5.4"
+ipykernel = "^6.6.0"
 pytest = "^6.2.5"
 
 [build-system]

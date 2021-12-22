@@ -36,6 +36,10 @@ class Text:
             id2attrs=obj["id2attrs"],
         )
 
+    @staticmethod
+    def from_tuple(obj: tuple):
+        return Text(obj[0], obj[1], set(obj[2]), obj[3])
+
     def __str__(self):
         return self.value
 
@@ -89,5 +93,18 @@ class ContentHierarchy:
             content_after=[
                 Text.from_dict(c) if "id" in c else Linebreak.from_dict(c)
                 for c in obj["content_after"]
+            ],
+        )
+
+    @staticmethod
+    def from_tuple(obj: tuple):
+        return ContentHierarchy(
+            level=obj[0],
+            heading=obj[1],
+            content_before=[
+                Text.from_tuple(c) if len(c) > 1 else Linebreak(c[0]) for c in obj[2]
+            ],
+            content_after=[
+                Text.from_tuple(c) if len(c) > 1 else Linebreak(c[0]) for c in obj[3]
             ],
         )

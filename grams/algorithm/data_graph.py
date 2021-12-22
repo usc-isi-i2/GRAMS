@@ -1975,11 +1975,17 @@ def build_data_graph(
             }
             cell_qnode_spans = {}
             for link in table.links[ri][ci]:
-                if link.entity_id is not None or len(link.candidates) > 0:
-                    if len(link.candidates) > 0:
-                        tmpid = link.candidates[0].entity_id
-                    else:
-                        tmpid = link.entity_id
+                # TODO: old code
+                # if link.entity_id is not None or len(link.candidates) > 0:
+                #     if len(link.candidates) > 0:
+                #         tmpid = link.candidates[0].entity_id
+                #     else:
+                #         tmpid = link.entity_id
+                #     if tmpid not in cell_qnode_spans:
+                #         cell_qnode_spans[tmpid] = []
+                #     cell_qnode_spans[tmpid].append(Span(link.start, link.end))
+                if len(link.candidates) > 0:
+                    tmpid = link.candidates[0].entity_id
                     if tmpid not in cell_qnode_spans:
                         cell_qnode_spans[tmpid] = []
                     cell_qnode_spans[tmpid].append(Span(link.start, link.end))
