@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import Dict
+from typing import Dict, Mapping
 
 from kgdata.wikidata.models import QNode, WDClass, WDProperty
 from sm.misc import identity_func
@@ -15,9 +15,9 @@ class WDOnt:
 
     def __init__(
         self,
-        qnodes: Dict[str, QNode],
-        wdclasses: Dict[str, WDClass],
-        wdprops: Dict[str, WDProperty],
+        qnodes: Mapping[str, QNode],
+        wdclasses: Mapping[str, WDClass],
+        wdprops: Mapping[str, WDProperty],
     ):
         self.qnodes = qnodes
         self.wdclasses = wdclasses

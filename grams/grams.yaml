@@ -1,9 +1,13 @@
 data_graph:
   max_n_hop: 1
-  options:
-    - DISABLE_SAME_ENT_SEARCH
-    - PRUNING_REDUNDANT_ENT
-    # - NO_KG_INDEX
+  configs:
+    ALLOW_SAME_ENT_SEARCH: false
+    PRUNE_REDUNDANT_ENT: true
+    USE_KG_INDEX: true
+    USE_CONTEXT: true
+literal_matcher:
+  text_parser:
+    NUM_COVER_FRACTION_THRESHOLD: 0.9
 # possible values: psl, oracle, steiner_tree
 st_method: psl
 steiner_tree:

@@ -2,7 +2,7 @@ import enum
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, Set, Union, List, NamedTuple, Optional
+from typing import Dict, Iterable, Mapping, Set, Union, List, NamedTuple, Optional
 
 import sm.misc as M
 from loguru import logger
@@ -49,8 +49,8 @@ class KGObjectIndex:
     @staticmethod
     def from_qnodes(
         index_qnode_ids: List[str],
-        qnodes: Dict[str, QNode],
-        wdprops: Dict[str, WDProperty],
+        qnodes: Mapping[str, QNode],
+        wdprops: Mapping[str, WDProperty],
         n_hop: int = 1,
         traversal_option: TraversalOption = TraversalOption.TransitiveOnly,
         verbose: bool = False,

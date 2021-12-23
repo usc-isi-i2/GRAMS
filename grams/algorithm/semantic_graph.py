@@ -1,10 +1,22 @@
 import copy
+from grams.algorithm.data_graph.dg_graph import EntityValueNode, LiteralValueNode
 import numpy as np
 from collections import Counter
 from dataclasses import dataclass
 from itertools import chain, combinations
 from operator import itemgetter
-from typing import Dict, Optional, Union, List, Set, Tuple, NamedTuple, Any, Callable
+from typing import (
+    Dict,
+    Mapping,
+    Optional,
+    Union,
+    List,
+    Set,
+    Tuple,
+    NamedTuple,
+    Any,
+    Callable,
+)
 from uuid import uuid4
 
 import networkx as nx
@@ -15,7 +27,6 @@ from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
 from sm.misc.graph import viz_graph
 from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.data_graph import (
-    build_data_graph,
     DGNode,
     StatementNode,
     CellNode,
@@ -410,9 +421,9 @@ class SemanticGraphConstructor:
     def __init__(
         self,
         steps: List,
-        qnodes: Dict[str, QNode],
-        wdclasses: Dict[str, WDClass],
-        wdprops: Dict[str, WDProperty],
+        qnodes: Mapping[str, QNode],
+        wdclasses: Mapping[str, WDClass],
+        wdprops: Mapping[str, WDProperty],
     ):
         self.steps = steps
         self.qnodes = qnodes
@@ -436,17 +447,17 @@ class SemanticGraphConstructor:
 
     @staticmethod
     def get_sg_node_id(u: DGNode):
-        if u.is_cell:
+        if isinstance(u, CellNode):
             return f"column-{u.column}"
         return u.id
 
     def get_sg_node_label(self, args: SemanticGraphConstructorArgs, u: DGNode):
-        if u.is_cell:
+        if isinstance(u, CellNode):
             return args.table.table.columns[u.column].name
-        if u.is_entity_value:
+        if isinstance(u, EntityValueNode):
             qnode = self.qnodes[u.qnode_id]
             return f"{qnode.label} ({qnode.id})"
-        if u.is_literal_value:
+        if isinstance(u, LiteralValueNode):
             return u.value.to_string_repr()
         raise M.UnreachableError(
             "This function doesn't supposed to be called with statement node"
@@ -556,18 +567,18 @@ class SemanticGraphConstructor:
         # first step: add node to the graph
         for uid, udata in dg.nodes(data=True):
             u: DGNode = udata["data"]
-            if u.is_statement:
+            if isinstance(u, StatementNode):
                 # we can have more than one predicates per entity column, these are represented in the statement
                 continue
 
             sgi = self.get_sg_node_id(u)
             if not sg.has_node(sgi):
                 label = self.get_sg_node_label(args, u)
-                if u.is_cell:
+                if isinstance(u, CellNode):
                     sgu = SGColumnNode(
                         id=sgi, label=label, column=u.column, nodes=set()
                     )
-                elif u.is_entity_value:
+                elif isinstance(u, EntityValueNode):
                     sgu = SGEntityValueNode(
                         id=sgi,
                         label=label,
@@ -575,7 +586,7 @@ class SemanticGraphConstructor:
                         context_span=u.context_span,
                     )
                 else:
-                    assert u.is_literal_value
+                    assert isinstance(u, LiteralValueNode)
                     sgu = SGLiteralValueNode(
                         id=sgi, label=label, value=u.value, context_span=u.context_span
                     )
@@ -587,7 +598,7 @@ class SemanticGraphConstructor:
         # second step: add link
         for uid, udata in dg.nodes(data=True):
             u: DGNode = udata["data"]
-            if u.is_statement:
+            if isinstance(u, StatementNode):
                 continue
 
             # add statement

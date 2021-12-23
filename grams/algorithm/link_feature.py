@@ -2,6 +2,8 @@ import functools
 from collections import defaultdict
 from enum import Enum
 from operator import xor, attrgetter
+from grams.algorithm.data_graph import CellNode
+from grams.algorithm.data_graph.dg_graph import EntityValueNode
 
 import networkx as nx
 from typing import Dict, Iterable, Tuple, Set, List, Optional, Callable
@@ -34,12 +36,17 @@ class LinkFeatureExtraction:
     NotFuncDep = "NotFuncDep"
     DataTypeMismatch = "DataTypeMismatch"
     HeaderSimilarity = "HeaderSimimilarity"
-    
-    def __init__(self,
-                 table: LinkedTable, sg: nx.MultiDiGraph, dg: nx.MultiDiGraph,
-                 qnodes: Dict[str, QNode], wdprops: Dict[str, WDProperty],
-                 wd_num_prop_stats: Dict[str, WDQuantityPropertyStats],
-                 sim_fn: Optional[Callable[[str, str], float]] = None):
+
+    def __init__(
+        self,
+        table: LinkedTable,
+        sg: nx.MultiDiGraph,
+        dg: nx.MultiDiGraph,
+        qnodes: Dict[str, QNode],
+        wdprops: Dict[str, WDProperty],
+        wd_num_prop_stats: Dict[str, WDQuantityPropertyStats],
+        sim_fn: Optional[Callable[[str, str], float]] = None,
+    ):
         self.table = table
         self.sg = sg
         self.dg = dg
@@ -68,17 +75,17 @@ class LinkFeatureExtraction:
         pair2max_possible_link = defaultdict(int)
 
         for sid, sdata in self.sg.nodes(data=True):
-            stmt: SGStatementNode = self.sg.nodes[sid]['data']
+            stmt: SGStatementNode = self.sg.nodes[sid]["data"]
             if not stmt.is_statement:
                 continue
 
             in_edge: SGEdge
             out_edge: SGEdge
 
-            (uid, _, in_edge), = list(self.sg.in_edges(stmt.id, data='data'))
-            unode: SGNode = self.sg.nodes[uid]['data']
-            for _, vid, out_edge in self.sg.out_edges(stmt.id, data='data'):
-                vnode: SGNode = self.sg.nodes[vid]['data']
+            ((uid, _, in_edge),) = list(self.sg.in_edges(stmt.id, data="data"))
+            unode: SGNode = self.sg.nodes[uid]["data"]
+            for _, vid, out_edge in self.sg.out_edges(stmt.id, data="data"):
+                vnode: SGNode = self.sg.nodes[vid]["data"]
                 dg_flows = stmt.get_edges_provenance([out_edge])
                 dg_links: Set[Tuple[str, str]] = set()
 
@@ -88,46 +95,74 @@ class LinkFeatureExtraction:
                     if unode.is_column:
                         # we should only have one target flow as we consider row by row only
                         target_flow, provenances = self._unpack_size1_dict(target_flows)
-                        dg_links.add((source_flow.dg_source_id, target_flow.dg_target_id))
-                        sum_prob += max(provenances, key=attrgetter('prob')).prob
+                        dg_links.add(
+                            (source_flow.dg_source_id, target_flow.dg_target_id)
+                        )
+                        sum_prob += max(provenances, key=attrgetter("prob")).prob
                     else:
                         # this is entity and we may have more than one target flow (to different row)
                         assert unode.is_entity_value
                         for target_flow, provenances in target_flows.items():
-                            dg_links.add((source_flow.dg_source_id, target_flow.dg_target_id))
-                            sum_prob += max(provenances, key=attrgetter('prob')).prob
+                            dg_links.add(
+                                (source_flow.dg_source_id, target_flow.dg_target_id)
+                            )
+                            sum_prob += max(provenances, key=attrgetter("prob")).prob
 
                 # what is the maximum possible links we can have? this ignore the the link so this is used to calculate FreqOverEntRow
-                max_possible_ent_rows = self._get_maximum_possible_ent_links_between_two_nodes(
-                    uid, vid, self.wdprops[out_edge.predicate].is_data_property())
+                max_possible_ent_rows = (
+                    self._get_maximum_possible_ent_links_between_two_nodes(
+                        uid, vid, self.wdprops[out_edge.predicate].is_data_property()
+                    )
+                )
 
                 # calculate the number of links that the source node doesn't have the values as in the target nodes
                 # we should consider on what kind of missing. e.g., object missing is more obvious than value mis-match
                 # in value mis-match: datetime mis-match is more profound than area/population mis-match
                 n_unmatch_links = self._get_n_unmatch_discovered_links(
-                    uid, vid, in_edge.predicate, out_edge.predicate,
-                    dg_links, self.wdprops[out_edge.predicate].is_data_property())
+                    uid,
+                    vid,
+                    in_edge.predicate,
+                    out_edge.predicate,
+                    dg_links,
+                    self.wdprops[out_edge.predicate].is_data_property(),
+                )
                 n_possible_links = n_unmatch_links + len(dg_links)
-                pair2max_possible_link[uid, vid] = max(n_possible_links, pair2max_possible_link[uid, vid])
+                pair2max_possible_link[uid, vid] = max(
+                    n_possible_links, pair2max_possible_link[uid, vid]
+                )
 
                 # compute the features
                 pair_freq_over_row = sum_prob / n_rows
-                pair_freq_over_ent_row = (sum_prob / max_possible_ent_rows) if max_possible_ent_rows > 0 else 0
+                pair_freq_over_ent_row = (
+                    (sum_prob / max_possible_ent_rows)
+                    if max_possible_ent_rows > 0
+                    else 0
+                )
                 # re-calculate it later
                 pair_freq_over_pos_link = (sum_prob, (uid, vid))
-                pair_freq_unmatch_over_ent_row = (n_unmatch_links / max_possible_ent_rows) if max_possible_ent_rows > 0 else 0
+                pair_freq_unmatch_over_ent_row = (
+                    (n_unmatch_links / max_possible_ent_rows)
+                    if max_possible_ent_rows > 0
+                    else 0
+                )
                 # re-calculate it later
                 pair_freq_unmatch_over_pos_link = (n_unmatch_links, (uid, vid))
                 dtype_mismatch = None
                 header_sim = None
 
                 if vnode.is_column:
-                    assert out_edge.predicate[0] == 'P', 'Sanity Check'
-                    if in_edge.predicate in self.wd_num_prop_stats and (in_edge.predicate == out_edge.predicate or out_edge.predicate in self.wd_num_prop_stats[in_edge.predicate].qualifiers):
+                    assert out_edge.predicate[0] == "P", "Sanity Check"
+                    if in_edge.predicate in self.wd_num_prop_stats and (
+                        in_edge.predicate == out_edge.predicate
+                        or out_edge.predicate
+                        in self.wd_num_prop_stats[in_edge.predicate].qualifiers
+                    ):
                         if in_edge.predicate == out_edge.predicate:
                             stat = self.wd_num_prop_stats[in_edge.predicate].value
                         else:
-                            stat = self.wd_num_prop_stats[in_edge.predicate].qualifiers[out_edge.predicate]
+                            stat = self.wd_num_prop_stats[in_edge.predicate].qualifiers[
+                                out_edge.predicate
+                            ]
 
                         dtype = self._estimate_col_quantity_type(vnode.column)
                         if dtype is not None and stat.size > 0:
@@ -138,7 +173,9 @@ class LinkFeatureExtraction:
                             else:
                                 dtype_mismatch = int(is_prop_int)
                     if self.sim_fn is not None:
-                        header_sim = self.sim_fn(self.wdprops[out_edge.predicate].label, vnode.label)
+                        header_sim = self.sim_fn(
+                            self.wdprops[out_edge.predicate].label, vnode.label
+                        )
 
                 if in_edge.predicate == out_edge.predicate:
                     # copy to the parent property as well
@@ -151,9 +188,16 @@ class LinkFeatureExtraction:
                     freq_unmatch_over_pos_link[key] = pair_freq_unmatch_over_pos_link
 
                     if unode.is_column and vnode.is_column:
-                        not_fd_links[key] = int(not self._functional_dependency_test(unode.column, vnode.column))
+                        not_fd_links[key] = int(
+                            not self._functional_dependency_test(
+                                unode.column, vnode.column
+                            )
+                        )
 
-                    for threshold, indicator in zip(gte_link_thresholds, self._categorize_num_gte(len(dg_links), gte_link_thresholds)):
+                    for threshold, indicator in zip(
+                        gte_link_thresholds,
+                        self._categorize_num_gte(len(dg_links), gte_link_thresholds),
+                    ):
                         gte_link_bins[threshold][key] = indicator
 
                     if dtype_mismatch is not None:
@@ -170,12 +214,16 @@ class LinkFeatureExtraction:
                 freq_unmatch_over_ent_row[key] = pair_freq_unmatch_over_ent_row
                 freq_unmatch_over_pos_link[key] = pair_freq_unmatch_over_pos_link
 
-                for threshold, indicator in zip(gte_link_thresholds,
-                                                self._categorize_num_gte(len(dg_links), gte_link_thresholds)):
+                for threshold, indicator in zip(
+                    gte_link_thresholds,
+                    self._categorize_num_gte(len(dg_links), gte_link_thresholds),
+                ):
                     gte_link_bins[threshold][key] = indicator
 
                 if unode.is_column and vnode.is_column:
-                    not_fd_links[key] = int(not self._functional_dependency_test(unode.column, vnode.column))
+                    not_fd_links[key] = int(
+                        not self._functional_dependency_test(unode.column, vnode.column)
+                    )
 
                 if dtype_mismatch is not None:
                     dtype_mismatch_links[key] = dtype_mismatch
@@ -187,7 +235,7 @@ class LinkFeatureExtraction:
         for key, (freq, pair) in freq_over_pos_link.items():
             if pair2max_possible_link[pair] == 0:
                 freq_over_pos_link[key] = 0
-            else:    
+            else:
                 freq_over_pos_link[key] = freq / pair2max_possible_link[pair]
         for key, (freq, pair) in freq_unmatch_over_pos_link.items():
             if pair2max_possible_link[pair] == 0:
@@ -210,7 +258,7 @@ class LinkFeatureExtraction:
             self.GTE50Link: gte_link_bins[50],
             self.NotFuncDep: not_fd_links,
             self.DataTypeMismatch: dtype_mismatch_links,
-            self.HeaderSimilarity: header_sim_links
+            self.HeaderSimilarity: header_sim_links,
         }
 
     def add_debug_info(self, features: dict, sg=None):
@@ -223,7 +271,7 @@ class LinkFeatureExtraction:
                 continue
             for (uid, vid, eid), val in feat_data.items():
                 if sg.has_edge(uid, vid, eid):
-                    edge: SGEdge = sg.edges[uid, vid, eid]['data']
+                    edge: SGEdge = sg.edges[uid, vid, eid]["data"]
                     assert feat not in edge.features
                     edge.features[feat] = val
 
@@ -245,39 +293,41 @@ class LinkFeatureExtraction:
     def _iter_dg_pair(self, uid: str, vid: str) -> Iterable[Tuple[DGNode, DGNode]]:
         """This function iterate through each pair of data graph nodes between two semantic graph nodes.
 
-                    If both sg nodes are entities, we only have one pair.
-                    If one or all of them are columns, the number of pairs will be the size of the table.
-                    Otherwise, not support iterating between nodes & statements
-                    """
-        u: SGNode = self.sg.nodes[uid]['data']
-        v: SGNode = self.sg.nodes[vid]['data']
+        If both sg nodes are entities, we only have one pair.
+        If one or all of them are columns, the number of pairs will be the size of the table.
+        Otherwise, not support iterating between nodes & statements
+        """
+        u: SGNode = self.sg.nodes[uid]["data"]
+        v: SGNode = self.sg.nodes[vid]["data"]
 
         if u.is_column and v.is_column:
             uci = u.column
             vci = v.column
             for ri in range(self.table.size()):
-                ucell = self.dg.nodes[f"{ri}-{uci}"]['data']
-                vcell = self.dg.nodes[f"{ri}-{vci}"]['data']
+                ucell = self.dg.nodes[f"{ri}-{uci}"]["data"]
+                vcell = self.dg.nodes[f"{ri}-{vci}"]["data"]
                 yield ucell, vcell
         elif u.is_column:
             assert v.is_value
             uci = u.column
-            vcell = self.dg.nodes[v.id]['data']
+            vcell = self.dg.nodes[v.id]["data"]
             for ri in range(self.table.size()):
-                ucell = self.dg.nodes[f"{ri}-{uci}"]['data']
+                ucell = self.dg.nodes[f"{ri}-{uci}"]["data"]
                 yield ucell, vcell
         elif v.is_column:
             assert u.is_value
             vci = v.column
-            ucell = self.dg.nodes[u.id]['data']
+            ucell = self.dg.nodes[u.id]["data"]
             for ri in range(self.table.size()):
-                vcell = self.dg.nodes[f"{ri}-{vci}"]['data']
+                vcell = self.dg.nodes[f"{ri}-{vci}"]["data"]
                 yield ucell, vcell
         else:
             assert not u.is_column and not v.is_column
-            yield self.dg.nodes[u.id]['data'], self.dg.nodes[v.id]['data']
+            yield self.dg.nodes[u.id]["data"], self.dg.nodes[v.id]["data"]
 
-    def _get_maximum_possible_ent_links_between_two_nodes(self, uid: str, vid: str, is_data_predicate: bool):
+    def _get_maximum_possible_ent_links_between_two_nodes(
+        self, uid: str, vid: str, is_data_predicate: bool
+    ):
         """Find the maximum possible links between two nodes (ignore the possible predicates):
 
         Let M be the maximum possible links we want to find, N is the number of rows in the table.
@@ -293,8 +343,8 @@ class LinkFeatureExtraction:
                     - else then the source node must be is a column and target is a literal value: a cell in the column links to no entity
                 * object predicate: a cell in the column links to no entity.
         """
-        u: SGNode = self.sg.nodes[uid]['data']
-        v: SGNode = self.sg.nodes[vid]['data']
+        u: SGNode = self.sg.nodes[uid]["data"]
+        v: SGNode = self.sg.nodes[vid]["data"]
 
         if not u.is_column and not v.is_column:
             return 1
@@ -313,16 +363,16 @@ class LinkFeatureExtraction:
 
             ci = u.column if u.is_column else v.column
             for ri in range(n_rows):
-                if len(self.dg.nodes[f"{ri}-{ci}"]['data'].qnode_ids) == 0:
+                if len(self.dg.nodes[f"{ri}-{ci}"]["data"].qnode_ids) == 0:
                     n_null_entities += 1
         else:
             uci = u.column
             vci = v.column
 
             for ri in range(n_rows):
-                ucell_unk = len(self.dg.nodes[f"{ri}-{uci}"]['data'].qnode_ids) == 0
-                vcell_unk = len(self.dg.nodes[f"{ri}-{vci}"]['data'].qnode_ids) == 0
-                
+                ucell_unk = len(self.dg.nodes[f"{ri}-{uci}"]["data"].qnode_ids) == 0
+                vcell_unk = len(self.dg.nodes[f"{ri}-{vci}"]["data"].qnode_ids) == 0
+
                 if is_data_predicate:
                     if ucell_unk:
                         n_null_entities += 1
@@ -331,8 +381,10 @@ class LinkFeatureExtraction:
 
         return n_rows - n_null_entities
 
-    def _dg_pair_has_possible_ent_links(self, dgu: DGNode, dgv: DGNode, is_data_predicate: bool):
-        if dgu.is_cell and dgv.is_cell:
+    def _dg_pair_has_possible_ent_links(
+        self, dgu: DGNode, dgv: DGNode, is_data_predicate: bool
+    ):
+        if isinstance(dgu, CellNode) and isinstance(dgv, CellNode):
             # both are cells
             if is_data_predicate:
                 # data predicate: source cell must link to some entities to have possible links
@@ -340,11 +392,11 @@ class LinkFeatureExtraction:
             else:
                 # object predicate: source cell and target cell must link to some entities to have possible links
                 return len(dgu.qnode_ids) > 0 and len(dgv.qnode_ids) > 0
-        elif dgu.is_cell:
+        elif isinstance(dgu, CellNode):
             # the source is cell, the target will be literal/entity value
             # we have link when source cell link to some entities, doesn't depend on type of predicate
             return len(dgu.qnode_ids) > 0
-        elif dgv.is_cell:
+        elif isinstance(dgv, CellNode):
             # the target is cell, the source will be literal/entity value
             if is_data_predicate:
                 # data predicate: always has possibe links
@@ -356,14 +408,21 @@ class LinkFeatureExtraction:
             # all cells are values, always have link due to how the link is generated in the first place
             return True
 
-    def _get_n_unmatch_discovered_links(self, uid: str, vid: str, inpred: str, outpred: str, uv_links: Set[Tuple[str, str]],
-                                       is_outpred_data_predicate: bool):
+    def _get_n_unmatch_discovered_links(
+        self,
+        uid: str,
+        vid: str,
+        inpred: str,
+        outpred: str,
+        uv_links: Set[Tuple[str, str]],
+        is_outpred_data_predicate: bool,
+    ):
         """Get number of discovered links that don't match due to value differences. This function do not count if:
         * the link between two DG nodes is impossible
         * the property/qualifier do not exist in the QNode
         """
-        u: SGNode = self.sg.nodes[uid]['data']
-        v: SGNode = self.sg.nodes[vid]['data']
+        u: SGNode = self.sg.nodes[uid]["data"]
+        v: SGNode = self.sg.nodes[vid]["data"]
         is_outpred_qualifier = inpred != outpred
 
         n_unmatch_links = 0
@@ -373,10 +432,12 @@ class LinkFeatureExtraction:
                 continue
 
             # ignore pairs that can't have any links
-            if not self._dg_pair_has_possible_ent_links(dgu, dgv, is_outpred_data_predicate):
+            if not self._dg_pair_has_possible_ent_links(
+                dgu, dgv, is_outpred_data_predicate
+            ):
                 continue
 
-            if dgu.is_cell:
+            if isinstance(dgu, CellNode):
                 # the source is cell node
                 # property doesn't exist in any qnode
                 dgu_qnodes = [self.qnodes[qnode_id] for qnode_id in dgu.qnode_ids]
@@ -401,12 +462,15 @@ class LinkFeatureExtraction:
                 # #########################
             else:
                 # the source is entity
-                assert dgu.is_entity_value
+                assert isinstance(dgu, EntityValueNode)
                 dgu_qnode = self.qnodes[dgu.qnode_id]
                 if inpred not in dgu_qnode.props:
                     continue
                 if is_outpred_qualifier:
-                    if all(outpred not in stmt.qualifiers for stmt in dgu_qnode.props[inpred]):
+                    if all(
+                        outpred not in stmt.qualifiers
+                        for stmt in dgu_qnode.props[inpred]
+                    ):
                         continue
                 # #########################
                 # TODO: remove me, modify on Apr 29, should have a better solution
@@ -417,7 +481,9 @@ class LinkFeatureExtraction:
             n_unmatch_links += 1
         return n_unmatch_links
 
-    def _functional_dependency_test(self, source_column_index: int, target_column_index: int):
+    def _functional_dependency_test(
+        self, source_column_index: int, target_column_index: int
+    ):
         """Test whether values in the target column is uniquely determiend by the values in the source column. True if
         it's FD.
 

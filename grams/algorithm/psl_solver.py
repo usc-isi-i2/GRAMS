@@ -5,7 +5,7 @@ from pathlib import Path
 from networkx.exception import NetworkXUnfeasible
 import sm.misc as M
 from grams.algorithm.semtab2020 import SemTab2020PostProcessing
-from typing import Optional, Dict, List, Set, Tuple
+from typing import Mapping, Optional, Dict, List, Set, Tuple
 import networkx as nx
 
 from grams.inputs.linked_table import LinkedTable
@@ -106,10 +106,10 @@ class PSLSteinerTreeSolver:
 
     def __init__(
         self,
-        qnodes: Dict[str, QNode],
-        wdclasses: Dict[str, WDClass],
-        wdprops: Dict[str, WDProperty],
-        wd_numprop_stats: Dict[str, WDQuantityPropertyStats],
+        qnodes: Mapping[str, QNode],
+        wdclasses: Mapping[str, WDClass],
+        wdprops: Mapping[str, WDProperty],
+        wd_numprop_stats: Mapping[str, WDQuantityPropertyStats],
         disable_rules: Set[str] = None,
         sim_fn: Optional[Callable[[str, str], float]] = None,
         cache_dir: Optional[str] = None,

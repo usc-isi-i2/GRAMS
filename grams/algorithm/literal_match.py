@@ -61,6 +61,8 @@ class ParsedTextRepr:
 
 
 class TextParser:
+    NUM_COVER_FRACTION_THRESHOLD = 0.9
+
     def __init__(self):
         self.cache = {}
         self.default_dt = datetime(MINYEAR, 1, 1)
@@ -107,7 +109,8 @@ class TextParser:
         normed_string = self._norm_string(text)
         if (
             fastnumbers.isfloat(number_string)
-            and (len(number_string) / max(1, len(normed_string))) > 0.95
+            and (len(number_string) / max(1, len(normed_string)))
+            > TextParser.NUM_COVER_FRACTION_THRESHOLD
         ):
             number = fastnumbers.fast_real(number_string, coerce=False)
         else:

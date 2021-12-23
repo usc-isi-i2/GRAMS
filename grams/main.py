@@ -3,28 +3,28 @@ from dataclasses import dataclass
 from operator import itemgetter
 from pathlib import Path
 from typing import Any, Dict, Optional, Set, Tuple, Union
+from grams.algorithm.literal_match import TextParser
 
 import networkx as nx
+import sm.misc as M
+import sm.outputs as O
+from kgdata.wikidata.db import (
+    WDProxyDB,
+    get_qnode_db,
+    get_wdclass_db,
+    get_wdprop_db,
+    query_wikidata_entities,
+)
+from kgdata.wikidata.models import QNode, WDClass, WDProperty, WDQuantityPropertyStats
 from rdflib import RDFS
 
 import grams.inputs as I
-import sm.misc as M
-import sm.outputs as O
-from grams.algorithm.data_graph import build_data_graph, BuildDGOption
-from grams.algorithm.kg_index import TraversalOption, KGObjectIndex
+from grams.algorithm.data_graph import DGConfigs, DGFactory
+from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
 from grams.algorithm.psl_solver import PSLSteinerTreeSolver
-from grams.algorithm.semantic_graph import (
-    SemanticGraphConstructor,
-)
+from grams.algorithm.semantic_graph import SemanticGraphConstructor
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 from grams.config import DEFAULT_CONFIG
-from kgdata.wikidata.db import (
-    get_qnode_db,
-    get_wdprop_db,
-    get_wdclass_db,
-    query_wikidata_entities,
-)
-from kgdata.wikidata.models import QNode, WDProperty, WDClass, WDQuantityPropertyStats
 
 
 @dataclass
@@ -51,7 +51,6 @@ class GRAMS:
     ):
         self.timer = M.Timer()
         self.cfg = cfg if cfg is not None else DEFAULT_CONFIG
-        self.is_proxy_db = proxy
 
         with self.timer.watch("init grams db"):
             read_only = not proxy
@@ -62,6 +61,8 @@ class GRAMS:
                 proxy=proxy,
                 is_singleton=True,
             )
+            if proxy:
+                assert isinstance(self.qnodes, WDProxyDB)
             self.wdclasses = get_wdclass_db(
                 os.path.join(data_dir, "wdclasses.db"),
                 compression=False,
@@ -80,9 +81,18 @@ class GRAMS:
                 os.path.join(data_dir, "quantity_prop_stats")
             )
 
-        self.build_dg_option = getattr(BuildDGOption, self.cfg.data_graph.options[0])
-        for op in self.cfg.data_graph.options[1:]:
-            self.build_dg_option = self.build_dg_option | getattr(BuildDGOption, op)
+        self.update_config()
+
+    def update_config(self):
+        """Update the current configuration of the algorithm based on the current configuration stored in this object"""
+        for name, value in self.cfg.data_graph.configs.items():
+            if not hasattr(DGConfigs, name):
+                raise Exception(f"Invalid configuration for data gram: {name}")
+            setattr(DGConfigs, name, value)
+
+        TextParser.NUM_COVER_FRACTION_THRESHOLD = (
+            self.cfg.literal_matcher.text_parser.NUM_COVER_FRACTION_THRESHOLD
+        )
 
     def annotate(self, table: I.LinkedTable, verbose: bool = False) -> Annotation:
         """Annotate a linked table"""
@@ -124,13 +134,9 @@ class GRAMS:
             )
 
         with self.timer.watch("build dg & sg"):
-            dg = build_data_graph(
-                table,
-                qnodes,
-                wdprops,
-                kg_object_index,
-                max_n_hop=self.cfg.data_graph.max_n_hop,
-                options=self.build_dg_option,
+            dg_factory = DGFactory(qnodes, wdprops)
+            dg = dg_factory.create_dg(
+                table, kg_object_index, max_n_hop=self.cfg.data_graph.max_n_hop
             )
             constructor = SemanticGraphConstructor(
                 [
@@ -155,7 +161,7 @@ class GRAMS:
                 enable_logging=self.cfg.psl.enable_logging,
             )
             pred_sg, pred_cta = psl_solver.run(
-                dict(table=table, semanticgraph=sg, datagraph=dg)
+                {"table": table, "semanticgraph": sg, "datagraph": dg}
             )
             pred_cta = {
                 int(ci.replace("column-", "")): classes
@@ -182,7 +188,7 @@ class GRAMS:
             if qnode is not None:
                 qnodes[qnode_id] = qnode
 
-        if self.is_proxy_db:
+        if isinstance(self.qnodes, WDProxyDB):
             missing_qnode_ids = [
                 qnode_id
                 for qnode_id in qnode_ids
@@ -222,7 +228,7 @@ class GRAMS:
                 if qnode is not None:
                     qnodes[qnode_id] = qnode
 
-            if self.is_proxy_db:
+            if isinstance(self.qnodes, WDProxyDB):
                 next_qnode_ids = [
                     qnode_id
                     for qnode_id in next_qnode_ids
