@@ -7,7 +7,15 @@ data_graph:
     USE_CONTEXT: true
 literal_matcher:
   text_parser:
-    NUM_COVER_FRACTION_THRESHOLD: 0.9
+    NUM_PARSER: grams.algorithm.literal_matchers.text_parser.BasicNumberParser
+    DATETIME_PARSER: grams.algorithm.literal_matchers.text_parser.BasicDatetimeParser
+  matchers:
+    STRING: .string_exact_test
+    QUANTITY: .quantity_test
+    GLOBECOORDINATE: .globecoordinate_test
+    TIME: .time_test
+    MONOLINGUAL_TEXT: .monolingual_exact_test
+    ENTITY: ""
 # possible values: psl, oracle, steiner_tree
 st_method: psl
 steiner_tree:

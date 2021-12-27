@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from operator import itemgetter
 from pathlib import Path
 from typing import Any, Dict, Optional, Set, Tuple, Union
-from grams.algorithm.literal_match import TextParser
+from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
 
 import networkx as nx
 import sm.misc as M
@@ -87,12 +87,22 @@ class GRAMS:
         """Update the current configuration of the algorithm based on the current configuration stored in this object"""
         for name, value in self.cfg.data_graph.configs.items():
             if not hasattr(DGConfigs, name):
-                raise Exception(f"Invalid configuration for data gram: {name}")
+                raise Exception(f"Invalid configuration for data_graph: {name}")
             setattr(DGConfigs, name, value)
 
-        TextParser.NUM_COVER_FRACTION_THRESHOLD = (
-            self.cfg.literal_matcher.text_parser.NUM_COVER_FRACTION_THRESHOLD
-        )
+        for name, value in self.cfg.literal_matcher.text_parser.items():
+            if not hasattr(TextParserConfigs, name):
+                raise Exception(
+                    f"Invalid configuration for literal_matcher.text_parser: {name}"
+                )
+            setattr(TextParserConfigs, name, value)
+
+        for name, value in self.cfg.literal_matcher.matchers.items():
+            if not hasattr(LiteralMatch, name):
+                raise Exception(
+                    f"Invalid configuration for literal_matcher.matchers: {name}"
+                )
+            setattr(LiteralMatch, name, value)
 
     def annotate(self, table: I.LinkedTable, verbose: bool = False) -> Annotation:
         """Annotate a linked table"""

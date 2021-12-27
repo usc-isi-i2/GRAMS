@@ -1,4 +1,4 @@
-from grams.algorithm.literal_match import WikidataValueType, TextParser, LiteralMatcher
+from grams.algorithm.literal_matchers import TextParser, LiteralMatch
 from grams.inputs import LinkedTable
 import networkx as nx
 from typing import Dict, Mapping, Set, Union
@@ -35,18 +35,7 @@ class DGFactory:
         self.qnodes = qnodes
         self.wdprops = wdprops
         self.textparser = TextParser()
-        self.funcs = {
-            WikidataValueType.string.value: [LiteralMatcher.string_test_exact],
-            WikidataValueType.globe_coordinate.value: [
-                LiteralMatcher.globe_coordinate_test
-            ],
-            WikidataValueType.time.value: [LiteralMatcher.time_test],
-            WikidataValueType.quantity.value: [LiteralMatcher.quantity_test],
-            WikidataValueType.mono_lingual_text.value: [
-                LiteralMatcher.mono_lingual_text_test_exact
-            ],
-            WikidataValueType.entity_id.value: [],  # [LiteralMatcher.entity_id_test_fuzzy]
-        }
+        self.literal_match = LiteralMatch(qnodes)
 
         if DGConfigs.USE_KG_INDEX:
             self._path_object_search = self._path_object_search_v2
@@ -346,124 +335,70 @@ class DGFactory:
 
             for stmt_i, stmt in enumerate(stmts):
                 has_stmt_value = False
-                if stmt.value.type in LiteralMatcher.literal_types:
-                    stmt_value = stmt.value
-                else:
-                    assert stmt.value.type in LiteralMatcher.non_literal_types
-                    if not stmt.value.is_qnode():
-                        # lexical
-                        continue
-                    if stmt.value.as_entity_id() not in self.qnodes:
-                        # this can happen due to some of the qnodes is in the link, but is missing in the KG
-                        # this is very rare so we can employ some check to make sure this is not due to
-                        # our wikidata subset
-                        is_error_in_kg = any(
-                            any(
-                                _s.value.is_qnode()
-                                and _s.value.as_entity_id() in self.qnodes
-                                for _s in _stmts
-                            )
-                            for _p, _stmts in source.props.items()
-                        ) or stmt.value.as_entity_id().startswith("L")
-                        if not is_error_in_kg:
-                            raise Exception(
-                                f"Missing qnodes in your KG subset: {stmt.value.as_entity_id()}"
-                            )
-                        continue
-                    stmt_value = self.qnodes[stmt.value.as_entity_id()]
-                for fn in self.funcs[stmt.value.type]:
-                    match, confidence = fn(stmt_value, value)
-                    if match:
-                        matches.append(
-                            DGPath(
-                                sequence=[
-                                    DGPathEdge.p(p),
-                                    DGPathNodeStatement.from_FromLiteralMatchingFunc(
-                                        source.id,
-                                        p,
-                                        stmt_i,
-                                        {"func": fn.__name__, "value": stmt.value},
-                                        confidence,
-                                    ),
-                                    DGPathEdge.p(p),
-                                ]
-                            )
+                for fn, (match, confidence) in self.literal_match.match(
+                    stmt.value, value, skip_unmatch=True
+                ):
+                    matches.append(
+                        DGPath(
+                            sequence=[
+                                DGPathEdge.p(p),
+                                DGPathNodeStatement.from_FromLiteralMatchingFunc(
+                                    source.id,
+                                    p,
+                                    stmt_i,
+                                    {"func": fn.__name__, "value": stmt.value},
+                                    confidence,
+                                ),
+                                DGPathEdge.p(p),
+                            ]
                         )
-                        has_stmt_value = True
+                    )
+                    has_stmt_value = True
 
                 for q, qvals in stmt.qualifiers.items():
                     for qval in qvals:
-                        if qval.type in LiteralMatcher.literal_types:
-                            qval_value = qval
-                        else:
-                            assert qval.type in LiteralMatcher.non_literal_types
-                            # TODO: fix me handle L not correct
-                            if qval.value["id"].startswith("L") or qval.value[
-                                "id"
-                            ].startswith("P"):
-                                continue
-                            if qval.as_entity_id() not in self.qnodes:
-                                # this can happen due to some of the qnodes is in the link, but is missing in the KG
-                                # this is very rare so we can employ some check to make sure this is not due to
-                                # our wikidata subset
-                                is_error_in_kg = any(
-                                    any(
-                                        _s.value.is_qnode()
-                                        and _s.value.as_entity_id() in self.qnodes
-                                        for _s in _stmts
+                        for fn, (match, confidence) in self.literal_match.match(
+                            qval, value, skip_unmatch=True
+                        ):
+                            if not has_stmt_value:
+                                if stmt.value.is_qnode():
+                                    pn_stmt_value = DGPathNodeQNode(
+                                        stmt.value.as_entity_id()
                                     )
-                                    for _p, _stmts in source.props.items()
-                                ) or not qval.as_entity_id().startswith("L")
-                                if not is_error_in_kg:
-                                    raise Exception(
-                                        f"Missing qnodes in your KG subset: {qval.as_entity_id()}"
-                                    )
-                                continue
-                            qval_value = self.qnodes[qval.as_entity_id()]
-                        for fn in self.funcs[qval.type]:
-                            match, confidence = fn(qval_value, value)
-                            if match:
-                                if not has_stmt_value:
-                                    if stmt.value.is_qnode():
-                                        pn_stmt_value = DGPathNodeQNode(
-                                            stmt.value.as_entity_id()
-                                        )
-                                    else:
-                                        pn_stmt_value = DGPathNodeLiteralValue(
-                                            stmt.value
-                                        )
-                                    matches.append(
-                                        DGPath(
-                                            sequence=[
-                                                DGPathEdge.p(p),
-                                                DGPathNodeStatement.from_FromWikidataLink(
-                                                    source.id, p, stmt_i
-                                                ),
-                                                DGPathEdge.p(p),
-                                                pn_stmt_value,
-                                            ]
-                                        )
-                                    )
-                                    has_stmt_value = True
-
+                                else:
+                                    pn_stmt_value = DGPathNodeLiteralValue(stmt.value)
                                 matches.append(
                                     DGPath(
                                         sequence=[
                                             DGPathEdge.p(p),
-                                            DGPathNodeStatement.from_FromLiteralMatchingFunc(
-                                                source.id,
-                                                p,
-                                                stmt_i,
-                                                {
-                                                    "func": fn.__name__,
-                                                    "value": qval,
-                                                },
-                                                confidence,
+                                            DGPathNodeStatement.from_FromWikidataLink(
+                                                source.id, p, stmt_i
                                             ),
-                                            DGPathEdge.q(q),
+                                            DGPathEdge.p(p),
+                                            pn_stmt_value,
                                         ]
                                     )
                                 )
+                                has_stmt_value = True
+
+                            matches.append(
+                                DGPath(
+                                    sequence=[
+                                        DGPathEdge.p(p),
+                                        DGPathNodeStatement.from_FromLiteralMatchingFunc(
+                                            source.id,
+                                            p,
+                                            stmt_i,
+                                            {
+                                                "func": fn.__name__,
+                                                "value": qval,
+                                            },
+                                            confidence,
+                                        ),
+                                        DGPathEdge.q(q),
+                                    ]
+                                )
+                            )
         return matches
 
     def _path_object_search_v1(

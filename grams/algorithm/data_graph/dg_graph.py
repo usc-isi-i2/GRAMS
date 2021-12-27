@@ -14,7 +14,6 @@ from tqdm import tqdm
 from typing_extensions import TypedDict
 
 from grams.algorithm.kg_index import KGObjectIndex
-from grams.algorithm.literal_match import WikidataValueType, TextParser, LiteralMatcher
 from grams.inputs.linked_table import LinkedTable
 from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
 import sm.misc as M

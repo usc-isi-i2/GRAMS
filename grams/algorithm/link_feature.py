@@ -12,7 +12,7 @@ from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
 from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.data_graph import DGNode
 from grams.algorithm.semantic_graph import SGNode, SGStatementNode, SGEdge
-from grams.algorithm.literal_match import TextParser
+from grams.algorithm.literal_matchers import TextParser
 
 
 class QuantityType(Enum):

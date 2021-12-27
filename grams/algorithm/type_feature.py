@@ -5,7 +5,7 @@ import networkx as nx
 import numpy as np
 
 from grams.algorithm.data_graph import CellNode
-from grams.algorithm.literal_match import TextParser
+from grams.algorithm.literal_matchers import TextParser
 from grams.algorithm.semantic_graph import SGColumnNode
 from grams.inputs.linked_table import LinkedTable
 from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
