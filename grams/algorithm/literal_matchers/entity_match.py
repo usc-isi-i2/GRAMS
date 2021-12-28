@@ -24,31 +24,7 @@ def entity_similarity_test(
         # not handle lexical or property yet
         return False, 0.0
 
-    ent_id = kgval.as_entity_id()
-    if ent_id not in kit.qnodes:
-        # NOTE: original code to check for missing qnodes in KG subset
-        # if not stmt.value.is_qnode():
-        #     # lexical
-        #     continue
-        # if stmt.value.as_entity_id() not in self.qnodes:
-        #     # this can happen due to some of the qnodes is in the link, but is missing in the KG
-        #     # this is very rare so we can employ some check to make sure this is not due to
-        #     # our wikidata subset
-        #     is_error_in_kg = any(
-        #         any(
-        #             _s.value.is_qnode()
-        #             and _s.value.as_entity_id() in self.qnodes
-        #             for _s in _stmts
-        #         )
-        #         for _p, _stmts in source.props.items()
-        #     ) or stmt.value.as_entity_id().startswith("L")
-        #     if not is_error_in_kg:
-        #         raise Exception(
-        #             f"Missing qnodes in your KG subset: {stmt.value.as_entity_id()}"
-        #         )
-        #     continue
-        return False, 0.0
-    qnode = kit.qnodes[ent_id]
+    qnode = kit.qnodes[kgval.as_entity_id()]
     lst = [x.strip() for x in val.normed_string.split(",")]
     for label in [str(qnode.label)] + [str(x) for x in qnode.aliases]:
         for item in lst:
