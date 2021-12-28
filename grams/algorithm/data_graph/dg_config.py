@@ -6,6 +6,8 @@ class DGConfigs:
     ALLOW_SAME_ENT_SEARCH = False
     # removing unnecessary entities to keep the graph size reasonable
     PRUNE_REDUNDANT_ENT = True
+    # remove leaf entities that is property of other nodes but the node doesn't have any other qualifiers
+    PRUNE_SINGLE_LEAF_ENT = False
     # path discovering using index.
     # recommend to turn this on
     USE_KG_INDEX = True

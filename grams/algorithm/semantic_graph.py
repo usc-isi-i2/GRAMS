@@ -422,27 +422,20 @@ class SemanticGraphConstructor:
         self,
         steps: List,
         qnodes: Mapping[str, QNode],
+        qnode_labels: Mapping[str, str],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
     ):
         self.steps = steps
         self.qnodes = qnodes
+        self.qnode_labels = qnode_labels
         self.wdclasses = wdclasses
         self.wdprops = wdprops
 
-    def run(self, table: LinkedTable, dg: nx.MultiDiGraph, debug=False):
+    def run(self, table: LinkedTable, dg: nx.MultiDiGraph):
         args = SemanticGraphConstructorArgs(table, dg, None)
         for i, step in enumerate(self.steps):
             step(self, args)
-            if debug:
-                viz_sg(
-                    args.sg,
-                    self.qnodes,
-                    self.wdclasses,
-                    self.wdprops,
-                    HOME_DIR / "graph_viz" / "debug",
-                    f"g_{i:02}",
-                )
         return args
 
     @staticmethod
@@ -455,8 +448,8 @@ class SemanticGraphConstructor:
         if isinstance(u, CellNode):
             return args.table.table.columns[u.column].name
         if isinstance(u, EntityValueNode):
-            qnode = self.qnodes[u.qnode_id]
-            return f"{qnode.label} ({qnode.id})"
+            qnode_label = self.qnode_labels.get(u.qnode_id, u.qnode_id)
+            return f"{qnode_label} ({u.qnode_id})"
         if isinstance(u, LiteralValueNode):
             return u.value.to_string_repr()
         raise M.UnreachableError(

@@ -1,16 +1,19 @@
+from gc import disable
 import os
 from dataclasses import dataclass
 from operator import itemgetter
 from pathlib import Path
-from typing import Any, Dict, Optional, Set, Tuple, Union
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Set, Tuple, Union
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
-
+from kgdata.wikidata.models.qnode import QNodeLabel
+from tqdm import tqdm
 import networkx as nx
 import sm.misc as M
 import sm.outputs as O
 from kgdata.wikidata.db import (
     WDProxyDB,
     get_qnode_db,
+    get_qnode_label_db,
     get_wdclass_db,
     get_wdprop_db,
     query_wikidata_entities,
@@ -34,7 +37,9 @@ class Annotation:
     dg: nx.MultiDiGraph
     # semantic graph
     sg: nx.MultiDiGraph
-    # predicted semantic graph where incorrect relations are removed
+    # probabilities of each edge in sg
+    sg_edge_probs: Dict[Tuple[str, str, str], float]
+    # predicted semantic graph where incorrect relations are removed by threshold & post-processing algorithm
     pred_sg: nx.MultiDiGraph
     # predicted column types
     pred_cta: Dict[int, Dict[str, float]]
@@ -63,6 +68,13 @@ class GRAMS:
             )
             if proxy:
                 assert isinstance(self.qnodes, WDProxyDB)
+            if os.path.exists(os.path.join(data_dir, "qnode_labels.db")):
+                self.qnode_labels = get_qnode_label_db(
+                    os.path.join(data_dir, "qnode_labels.db"),
+                    compression=False,
+                )
+            else:
+                self.qnode_labels: MutableMapping[str, QNodeLabel] = {}
             self.wdclasses = get_wdclass_db(
                 os.path.join(data_dir, "wdclasses.db"),
                 compression=False,
@@ -126,13 +138,18 @@ class GRAMS:
             qnode_ids.add(table.context.page_entity_id)
 
         with self.timer.watch("retrieving qnodes"):
-            qnodes = self.get_entities(qnode_ids, n_hop=2, verbose=verbose)
+            qnodes = self.get_entities(
+                qnode_ids, n_hop=self.cfg.data_graph.max_n_hop, verbose=verbose
+            )
         wdclasses = self.wdclasses.cache_dict()
         wdprops = self.wdprops.cache_dict()
 
-        if len(qnode_ids) != len(qnodes):
-            nonexistent_qnode_ids = qnode_ids.difference(qnodes.keys())
+        nonexistent_qnode_ids = qnode_ids.difference(qnodes.keys())
+        if len(nonexistent_qnode_ids) > 0:
             table.remove_nonexistent_entities(nonexistent_qnode_ids)
+
+        with self.timer.watch("retrieving qnodes label"):
+            qnode_labels = self.get_entity_labels(qnodes, verbose=verbose)
 
         with self.timer.watch("build kg object index"):
             kg_object_index = KGObjectIndex.from_qnodes(
@@ -153,10 +170,11 @@ class GRAMS:
                     SemanticGraphConstructor.init_sg,
                 ],
                 qnodes,
+                qnode_labels,
                 wdclasses,
                 wdprops,
             )
-            sg = constructor.run(table, dg, debug=False).sg
+            sg = constructor.run(table, dg).sg
 
         with self.timer.watch("run inference"):
             psl_solver = PSLSteinerTreeSolver(
@@ -166,12 +184,12 @@ class GRAMS:
                 self.wd_numprop_stats,
                 disable_rules=set(self.cfg.psl.disable_rules),
                 sim_fn=None,
-                # cache_dir=outdir / f"{override_psl_cachedir}cache/psl",
                 postprocessing_method=self.cfg.psl.postprocessing,
                 enable_logging=self.cfg.psl.enable_logging,
             )
-            pred_sg, pred_cta = psl_solver.run(
-                {"table": table, "semanticgraph": sg, "datagraph": dg}
+            edge_probs, pred_sg, pred_cta = psl_solver.run(
+                {"table": table, "semanticgraph": sg, "datagraph": dg},
+                threshold=self.cfg.psl.threshold,
             )
             pred_cta = {
                 int(ci.replace("column-", "")): classes
@@ -182,10 +200,14 @@ class GRAMS:
                 for ci, classes in pred_cta.items()
             }
 
-        sm_helper = WikidataSemanticModelHelper(qnodes, wdclasses, wdprops)
+        sm_helper = WikidataSemanticModelHelper(
+            qnodes, qnode_labels, wdclasses, wdprops
+        )
         sm = sm_helper.create_sm(table, pred_sg, cta)
         sm = sm_helper.minify_sm(sm)
-        return Annotation(sm=sm, dg=dg, sg=sg, pred_sg=pred_sg, pred_cta=cta)
+        return Annotation(
+            sm=sm, dg=dg, sg=sg, sg_edge_probs=edge_probs, pred_sg=pred_sg, pred_cta=cta
+        )
 
     def get_entities(
         self, qnode_ids: Set[str], n_hop: int = 1, verbose: bool = False
@@ -261,3 +283,30 @@ class GRAMS:
                             qnodes[k] = v
                             self.qnodes[k] = v
         return qnodes
+
+    def get_entity_labels(
+        self, qnodes: Dict[str, QNode], verbose: bool = False
+    ) -> Dict[str, str]:
+        id2label = {}
+        for qnode in tqdm(qnodes.values(), disable=not verbose, desc=""):
+            qnode: QNode
+            id2label[qnode.id] = str(qnode.label)
+            for stmts in qnode.props.values():
+                for stmt in stmts:
+                    if stmt.value.is_qnode():
+                        qnode_id = stmt.value.as_entity_id()
+                        if qnode_id in self.qnode_labels:
+                            label = self.qnode_labels[qnode_id]
+                        else:
+                            label = qnode_id
+                        id2label[qnode_id] = label
+                    for qvals in stmt.qualifiers.values():
+                        for qval in qvals:
+                            if qval.is_qnode():
+                                qnode_id = qval.as_entity_id()
+                                if qnode_id in self.qnode_labels:
+                                    label = self.qnode_labels[qnode_id]
+                                else:
+                                    label = qnode_id
+                                id2label[qnode_id] = label
+        return id2label

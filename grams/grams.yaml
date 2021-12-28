@@ -2,9 +2,10 @@ data_graph:
   max_n_hop: 1
   configs:
     ALLOW_SAME_ENT_SEARCH: false
-    PRUNE_REDUNDANT_ENT: true
     USE_KG_INDEX: true
     USE_CONTEXT: true
+    PRUNE_REDUNDANT_ENT: true
+    PRUNE_SINGLE_LEAF_ENT: false
 literal_matcher:
   text_parser:
     NUM_PARSER: grams.algorithm.literal_matchers.text_parser.BasicNumberParser

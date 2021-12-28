@@ -385,9 +385,10 @@ class PSLSteinerTreeSolver:
     def run(self, r: PSLRunParallelArgs, threshold: float = 0.5):
         table, sg, dg = r["table"], r["semanticgraph"], r["datagraph"]
         pred_with_probs = self.solve(table, sg, dg)
-        sg = self.solve_post_process(table, sg, dg, pred_with_probs["links"], threshold)
+        link_probs = pred_with_probs["links"]
         cta = pred_with_probs["types"]
-        return sg, cta
+        sg = self.solve_post_process(table, sg, dg, link_probs, threshold)
+        return link_probs, sg, cta
 
     def run_with_parallel(
         self,

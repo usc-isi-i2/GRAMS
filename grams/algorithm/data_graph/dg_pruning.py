@@ -1,6 +1,7 @@
 from collections import defaultdict
+from grams.algorithm.data_graph.dg_config import DGConfigs
 import networkx as nx
-from typing import Dict, List, Tuple, TypedDict
+from typing import Dict, List, Tuple, TypedDict, Union
 
 from functools import cmp_to_key
 from grams.algorithm.data_graph.dg_graph import (
@@ -40,7 +41,7 @@ class DGPruning:
         ui will be an entity to entity that won't be in the final model anyway.
         Note: LEG* is better than LEG2 when it's shorter, also from wikidata link or if not, it must have better match confidence (i.e., better provenance)
 
-        **Step 2:**
+        **Step 2:** (?) this is questionable -- controlled by PRUNE_SINGLE_LEAF_ENT flag
         Let n' be an entity node in DG that do not link to other nodes (v doesn't exist).
         We have the following heuristics:
         * If there is no other node connect to it, this is a standable node and should be removed
@@ -48,7 +49,12 @@ class DGPruning:
         then we can remove LEG1.
 
         **Step 3:**
-        Finally, if a node is standable, we should remove it.
+        Let n be an entity/literal node in DG (not from cells & context)
+        * If there is only one entity node u that connects to n via the path: LEG1: u -> p -> s -> p' -> n, then we can remove n. If that renders the
+        statement s without value, we will remove s as well.
+
+        **Step 3:**
+        Finally, if a node is standalone, we should remove it.
         """
         # step 1: prune the second leg paths
         legprime: Dict[Tuple[str, str], FlowProvenance] = {}
@@ -143,21 +149,49 @@ class DGPruning:
         # logger.info("# 0-standalone: {}",
         #             sum(self.dg.out_degree(uid) + self.dg.in_degree(uid) == 0 for uid in self.dg.nodes))
 
-        # step 2: prune the first leg paths
-        rm_legs: List[Tuple[str, EdgeFlowSource, EdgeFlowTarget]] = []
-        for nid, ndata in self.dg.nodes(data=True):
-            n: EntityValueNode = ndata["data"]
-            if not isinstance(n, EntityValueNode) or self.dg.out_degree(nid) > 0:
-                continue
+        # step 2: prune the first leg paths (temporary disable)
+        if DGConfigs.PRUNE_SINGLE_LEAF_ENT:
+            rm_legs: List[Tuple[str, EdgeFlowSource, EdgeFlowTarget]] = []
+            for nid, ndata in self.dg.nodes(data=True):
+                n: EntityValueNode = ndata["data"]
+                if not isinstance(n, EntityValueNode) or self.dg.out_degree(nid) > 0:
+                    continue
 
+                for sid, _, sn_eid, sn_edata in self.dg.in_edges(
+                    nid, data=True, keys=True
+                ):
+                    stmt_outedges = self.out_edges(sid)
+                    if len(stmt_outedges) == 1:
+                        # stmt does not have other property/qualifier
+                        target_flow = EdgeFlowTarget(nid, sn_eid)
+                        stmt: StatementNode = self.dg.nodes[sid]["data"]
+                        for source_flow, _ in stmt.iter_source_flow(target_flow):
+                            rm_legs.append((sid, source_flow, target_flow))
+            self.remove_flow(rm_legs)
+
+        rm_legs: List[Tuple[str, EdgeFlowSource, EdgeFlowTarget]] = []
+        # step 3
+        for nid, ndata in self.dg.nodes(data=True):
+            n: Union[EntityValueNode, LiteralValueNode] = ndata["data"]
+            if (
+                not isinstance(n, (EntityValueNode, LiteralValueNode))
+                or self.dg.out_degree(nid) > 0
+                or n.is_context
+            ):
+                continue
             for sid, _, sn_eid, sn_edata in self.dg.in_edges(nid, data=True, keys=True):
-                stmt_outedges = self.out_edges(sid)
-                if len(stmt_outedges) == 1:
-                    # stmt does not have other property/qualifier
-                    target_flow = EdgeFlowTarget(nid, sn_eid)
-                    stmt: StatementNode = self.dg.nodes[sid]["data"]
-                    for source_flow, _ in stmt.iter_source_flow(target_flow):
-                        rm_legs.append((sid, source_flow, target_flow))
+                for uid, _, us_eid in self.dg.in_edges(sid, keys=True):
+                    if isinstance(self.dg.nodes[uid]["data"], EntityValueNode):
+                        # two consecutive entity nodes, we can remove this link
+                        stmt: StatementNode = self.dg.nodes[sid]["data"]
+                        if us_eid == sn_eid:
+                            # the link we are going to remove is the statement value, so we should remove the statement
+                            for source_flow, target_flow in stmt.flow:
+                                rm_legs.append((sid, source_flow, target_flow))
+                        else:
+                            target_flow = EdgeFlowTarget(nid, sn_eid)
+                            for source_flow, _ in stmt.iter_source_flow(target_flow):
+                                rm_legs.append((sid, source_flow, target_flow))
 
         # logger.info("#legs: {}", len(rm_legs))
         self.remove_flow(rm_legs)

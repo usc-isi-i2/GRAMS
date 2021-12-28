@@ -2,6 +2,7 @@ from enum import IntEnum
 from typing import Dict, Mapping
 
 from kgdata.wikidata.models import QNode, WDClass, WDProperty
+from kgdata.wikidata.models.qnode import QNodeLabel
 from sm.misc import identity_func
 
 
@@ -16,10 +17,12 @@ class WDOnt:
     def __init__(
         self,
         qnodes: Mapping[str, QNode],
+        qnode_labels: Mapping[str, str],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
     ):
         self.qnodes = qnodes
+        self.qnode_labels = qnode_labels
         self.wdclasses = wdclasses
         self.wdprops = wdprops
         self.get_qid_fn = {
@@ -73,8 +76,12 @@ class WDOnt:
     def get_qnode_label(self, uri_or_id: str):
         qid = self.get_qid_fn[uri_or_id[0]](uri_or_id)
         if qid in self.wdclasses:
-            return f"{self.wdclasses[qid].label} ({qid})"
-        return f"{self.qnodes[qid].label} ({qid})"
+            label = self.wdclasses[qid].label
+        elif qid in self.qnodes:
+            label = self.qnodes[qid].label
+        else:
+            label = self.qnode_labels.get(qid, qid)
+        return f"{label} ({qid})"
 
     def get_pnode_label(self, uri_or_id: str):
         pid = self.get_pid_fn[uri_or_id[0]](uri_or_id)
