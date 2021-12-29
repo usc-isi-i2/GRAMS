@@ -30,5 +30,6 @@ psl:
   disable_rules: # []
     - HeaderSimimilarity
     - DataTypeMismatch
+    # - FrequencyOfLinkOverPossibleLink
 hydra.run.dir: .
 hydra.output_subdir: null

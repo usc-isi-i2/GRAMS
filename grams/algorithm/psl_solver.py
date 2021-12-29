@@ -33,6 +33,8 @@ from typing import Set, Iterable, TypedDict, Union, Any, Callable
 
 from grams.algorithm.data_graph import DGNode
 from grams.algorithm.semantic_graph import (
+    SGEntityValueNode,
+    SGLiteralValueNode,
     SGNode,
     SGStatementNode,
     SGColumnNode,
@@ -220,7 +222,7 @@ class PSLSteinerTreeSolver:
             self.FreqLinkUnmatchOverEntRow: 2,
             self.FreqLinkUnmatchOverPossibleLink: 2,
             self.LinkHeaderSimilarity: 2,
-            self.LinkDataTypeMismatch: 100,
+            self.LinkDataTypeMismatch: 2,
             self.FreqTypeOverRow: 2,
             self.LinkNotFuncDep: 100,
         }
@@ -743,8 +745,8 @@ class PSLSteinerTreeSolver:
                 table, sg, dg, pred_with_probs, threshold
             )
 
-        # TODO: add back the context node or entity that are statements
         pred_tree: nx.MultiDiGraph = candidate_sts[0]
+        # remove statements that do not connected from any nodes
         remove_nodes = set()
         for sid, s in pred_tree.nodes(data="data"):
             if not s.is_statement:
@@ -786,6 +788,30 @@ class PSLSteinerTreeSolver:
                             pred_tree.add_edge(
                                 s.id, v.id, key=e.predicate, data=copy.deepcopy(e)
                             )
+
+        # add back the context node or entity that are appeared in the psl results but not in the predicted tree
+        for vid, v in steiner_tree.nodes(data="data"):
+            if not isinstance(v, (SGEntityValueNode, SGLiteralValueNode)):
+                continue
+            if pred_tree.has_node(vid):
+                continue
+            pred_tree.add_node(vid, data=copy.deepcopy(v))
+            # now travel the steiner tree to find the edge that connect to the node
+            for sid, _, sveid, sve in steiner_tree.in_edges(
+                vid, keys=True, data="data"
+            ):
+                if not pred_tree.has_node(sid):
+                    pred_tree.add_node(
+                        sid, data=copy.deepcopy(steiner_tree.nodes[sid]["data"])
+                    )
+                    for uid, _, useid, use in steiner_tree.in_edges(
+                        sid, keys=True, data="data"
+                    ):
+                        assert pred_tree.has_node(
+                            uid
+                        ), "Assume the node always exist so we do not have to add it back"
+                        pred_tree.add_edge(uid, sid, key=useid, data=copy.deepcopy(use))
+                pred_tree.add_edge(sid, vid, key=sveid, data=copy.deepcopy(sve))
 
         # TODO: uncomment for debugging
         # print(candidate_sts)
