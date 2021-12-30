@@ -706,6 +706,13 @@ class PSLSteinerTreeSolver:
             return sol_a.depth - sol_b.depth
 
         terminal_nodes = SemanticGraphConstructor.st_terminal_nodes(steiner_tree)
+        # terminal_nodes = set()
+        # for uid, udata in steiner_tree.nodes(data=True):
+        #     u: SGNode = udata["data"]
+        #     if u.is_column:
+        #         terminal_nodes.add(uid)
+        #     elif u.is_value and u.is_in_context:
+        #         terminal_nodes.add(uid)
         # TODO: this is a temporary fix for case where steiner tree does not contain any column
         if len(terminal_nodes) == 0:
             # TODO: fix me
@@ -790,28 +797,48 @@ class PSLSteinerTreeSolver:
                             )
 
         # add back the context node or entity that are appeared in the psl results but not in the predicted tree
-        for vid, v in steiner_tree.nodes(data="data"):
-            if not isinstance(v, (SGEntityValueNode, SGLiteralValueNode)):
-                continue
-            if pred_tree.has_node(vid):
-                continue
-            pred_tree.add_node(vid, data=copy.deepcopy(v))
-            # now travel the steiner tree to find the edge that connect to the node
-            for sid, _, sveid, sve in steiner_tree.in_edges(
-                vid, keys=True, data="data"
-            ):
-                if not pred_tree.has_node(sid):
-                    pred_tree.add_node(
-                        sid, data=copy.deepcopy(steiner_tree.nodes[sid]["data"])
-                    )
-                    for uid, _, useid, use in steiner_tree.in_edges(
-                        sid, keys=True, data="data"
-                    ):
-                        assert pred_tree.has_node(
-                            uid
-                        ), "Assume the node always exist so we do not have to add it back"
-                        pred_tree.add_edge(uid, sid, key=useid, data=copy.deepcopy(use))
-                pred_tree.add_edge(sid, vid, key=sveid, data=copy.deepcopy(sve))
+        # for vid, v in steiner_tree.nodes(data="data"):
+        #     if not isinstance(v, (SGEntityValueNode, SGLiteralValueNode)):
+        #         continue
+        #     if pred_tree.has_node(vid):
+        #         continue
+
+        #     # find the paths that connect the vid to the tree and select the one with highest score and do not create cycle
+        #     paths = []
+        #     for sid, _, sveid, sve in steiner_tree.in_edges(
+        #         vid, keys=True, data="data"
+        #     ):
+        #         for uid, _, useid, use in steiner_tree.in_edges(
+        #             sid, keys=True, data="data"
+        #         ):
+        #             if not pred_tree.has_node(uid):
+        #                 continue
+
+        #             paths.append(
+        #                 {
+        #                     "path": (uid, use, sid, sve),
+        #                     "score": pred_with_probs[(uid, sid, useid)]
+        #                     + pred_with_probs[(sid, vid, sveid)],
+        #                 }
+        #             )
+
+        #     paths = sorted(paths, key=itemgetter("score"), reverse=True)
+        #     # TODO: filter out the path that will create cycle
+
+        #     if len(paths) == 0:
+        #         continue
+
+        #     uid, use, sid, sve = paths[0]["path"]
+        #     pred_tree.add_node(vid, data=copy.deepcopy(v))
+        #     if not pred_tree.has_node(sid):
+        #         pred_tree.add_node(
+        #             sid, data=copy.deepcopy(steiner_tree.nodes[sid]["data"])
+        #         )
+        #     assert not pred_tree.has_edge(sid, vid, sve.predicate)
+        #     pred_tree.add_edge(sid, vid, key=sve.predicate, data=copy.deepcopy(sve))
+
+        #     if not pred_tree.has_edge(uid, sid, use.predicate):
+        #         pred_tree.add_edge(uid, sid, key=use.predicate, data=copy.deepcopy(use))
 
         # TODO: uncomment for debugging
         # print(candidate_sts)
