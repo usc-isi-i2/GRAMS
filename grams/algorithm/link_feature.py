@@ -454,12 +454,12 @@ class LinkFeatureExtraction:
                     if not has_qual:
                         continue
 
-                # #########################
-                # TODO: remove me, modify on Apr 29, should have a better solution
-                # this is to say like if that properties have multiple values, then it's more likely to miss
-                if all(len(qnode.props.get(inpred, [])) > 2 for qnode in dgu_qnodes):
-                    continue
-                # #########################
+                # # #########################
+                # # TODO: remove me, modify on Apr 29, should have a better solution
+                # # this is to say like if that properties have multiple values, then it's more likely to miss
+                # if all(len(qnode.props.get(inpred, [])) > 2 for qnode in dgu_qnodes):
+                #     continue
+                # # #########################
             else:
                 # the source is entity
                 assert isinstance(dgu, EntityValueNode)
@@ -472,12 +472,12 @@ class LinkFeatureExtraction:
                         for stmt in dgu_qnode.props[inpred]
                     ):
                         continue
-                # #########################
-                # TODO: remove me, modify on Apr 29, should have a better solution
-                # this is to say like if that properties have multiple values, then it's more likely to miss
-                if len(dgu_qnode.props.get(inpred, [])) > 2:
-                    continue
-                # #########################
+                # # #########################
+                # # TODO: remove me, modify on Apr 29, should have a better solution
+                # # this is to say like if that properties have multiple values, then it's more likely to miss
+                # if len(dgu_qnode.props.get(inpred, [])) > 2:
+                #     continue
+                # # #########################
             n_unmatch_links += 1
         return n_unmatch_links
 

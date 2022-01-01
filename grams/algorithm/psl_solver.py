@@ -80,6 +80,11 @@ class FakeIDMap(IDMap):
         return new_key
 
 
+class PSLConfigs:
+    POSTPROCESSING_METHOD = "steiner_tree"
+    POSTPROCESSING_STEINER_TREE_FORCE_ADDING_CONTEXT: bool = True
+
+
 PSLRunParallelArgs = TypedDict(
     "PSL.RunParallelArgs",
     table=LinkedTable,
@@ -796,49 +801,57 @@ class PSLSteinerTreeSolver:
                                 s.id, v.id, key=e.predicate, data=copy.deepcopy(e)
                             )
 
-        # add back the context node or entity that are appeared in the psl results but not in the predicted tree
-        # for vid, v in steiner_tree.nodes(data="data"):
-        #     if not isinstance(v, (SGEntityValueNode, SGLiteralValueNode)):
-        #         continue
-        #     if pred_tree.has_node(vid):
-        #         continue
+        if PSLConfigs.POSTPROCESSING_STEINER_TREE_FORCE_ADDING_CONTEXT:
+            # add back the context node or entity that are appeared in the psl results but not in the predicted tree
+            for vid, v in steiner_tree.nodes(data="data"):
+                if (
+                    not isinstance(v, (SGEntityValueNode, SGLiteralValueNode))
+                    or not v.is_in_context
+                ):
+                    continue
+                if pred_tree.has_node(vid):
+                    continue
 
-        #     # find the paths that connect the vid to the tree and select the one with highest score and do not create cycle
-        #     paths = []
-        #     for sid, _, sveid, sve in steiner_tree.in_edges(
-        #         vid, keys=True, data="data"
-        #     ):
-        #         for uid, _, useid, use in steiner_tree.in_edges(
-        #             sid, keys=True, data="data"
-        #         ):
-        #             if not pred_tree.has_node(uid):
-        #                 continue
+                # find the paths that connect the vid to the tree and select the one with highest score and do not create cycle
+                paths = []
+                for sid, _, sveid, sve in steiner_tree.in_edges(
+                    vid, keys=True, data="data"
+                ):
+                    if sveid == "P31":
+                        continue
+                    for uid, _, useid, use in steiner_tree.in_edges(
+                        sid, keys=True, data="data"
+                    ):
+                        if not pred_tree.has_node(uid):
+                            continue
 
-        #             paths.append(
-        #                 {
-        #                     "path": (uid, use, sid, sve),
-        #                     "score": pred_with_probs[(uid, sid, useid)]
-        #                     + pred_with_probs[(sid, vid, sveid)],
-        #                 }
-        #             )
+                        paths.append(
+                            {
+                                "path": (uid, use, sid, sve),
+                                "score": pred_with_probs[(uid, sid, useid)]
+                                + pred_with_probs[(sid, vid, sveid)],
+                            }
+                        )
 
-        #     paths = sorted(paths, key=itemgetter("score"), reverse=True)
-        #     # TODO: filter out the path that will create cycle
+                paths = sorted(paths, key=itemgetter("score"), reverse=True)
+                # TODO: filter out the path that will create cycle
 
-        #     if len(paths) == 0:
-        #         continue
+                if len(paths) == 0:
+                    continue
 
-        #     uid, use, sid, sve = paths[0]["path"]
-        #     pred_tree.add_node(vid, data=copy.deepcopy(v))
-        #     if not pred_tree.has_node(sid):
-        #         pred_tree.add_node(
-        #             sid, data=copy.deepcopy(steiner_tree.nodes[sid]["data"])
-        #         )
-        #     assert not pred_tree.has_edge(sid, vid, sve.predicate)
-        #     pred_tree.add_edge(sid, vid, key=sve.predicate, data=copy.deepcopy(sve))
+                uid, use, sid, sve = paths[0]["path"]
+                pred_tree.add_node(vid, data=copy.deepcopy(v))
+                if not pred_tree.has_node(sid):
+                    pred_tree.add_node(
+                        sid, data=copy.deepcopy(steiner_tree.nodes[sid]["data"])
+                    )
+                assert not pred_tree.has_edge(sid, vid, sve.predicate)
+                pred_tree.add_edge(sid, vid, key=sve.predicate, data=copy.deepcopy(sve))
 
-        #     if not pred_tree.has_edge(uid, sid, use.predicate):
-        #         pred_tree.add_edge(uid, sid, key=use.predicate, data=copy.deepcopy(use))
+                if not pred_tree.has_edge(uid, sid, use.predicate):
+                    pred_tree.add_edge(
+                        uid, sid, key=use.predicate, data=copy.deepcopy(use)
+                    )
 
         # TODO: uncomment for debugging
         # print(candidate_sts)

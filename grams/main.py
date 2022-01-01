@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Mapping, MutableMapping, Optional, Set, Tuple, Union
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
 from kgdata.wikidata.models.qnode import QNodeLabel
+from loguru import logger
 from tqdm import tqdm
 import networkx as nx
 import sm.misc as M
@@ -146,6 +147,7 @@ class GRAMS:
 
         nonexistent_qnode_ids = qnode_ids.difference(qnodes.keys())
         if len(nonexistent_qnode_ids) > 0:
+            logger.info("Removing non-existent qnodes: {}", list(nonexistent_qnode_ids))
             table.remove_nonexistent_entities(nonexistent_qnode_ids)
 
         with self.timer.watch("retrieving qnodes label"):
@@ -153,7 +155,7 @@ class GRAMS:
 
         with self.timer.watch("build kg object index"):
             kg_object_index = KGObjectIndex.from_qnodes(
-                list(qnodes.keys()),
+                list(qnode_ids.intersection(qnodes.keys())),
                 qnodes,
                 wdprops,
                 n_hop=self.cfg.data_graph.max_n_hop,

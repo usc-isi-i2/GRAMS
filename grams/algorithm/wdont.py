@@ -64,6 +64,10 @@ class WDOnt:
         return f"http://www.wikidata.org/entity/{qnode_id}"
 
     @classmethod
+    def get_qnode_rel_uri(cls, qnode_id: str):
+        return f"wd:{qnode_id}"
+
+    @classmethod
     def get_prop_id(cls, uri: str):
         if not cls.is_uri_property(uri):
             raise OutOfNamespace(f"{uri} is not in wikidata property namespace")
@@ -72,6 +76,10 @@ class WDOnt:
     @classmethod
     def get_prop_uri(cls, pid: str):
         return f"http://www.wikidata.org/prop/{pid}"
+
+    @classmethod
+    def get_prop_rel_uri(cls, pid: str):
+        return f"p:{pid}"
 
     def get_qnode_label(self, uri_or_id: str):
         qid = self.get_qid_fn[uri_or_id[0]](uri_or_id)
