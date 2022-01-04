@@ -65,24 +65,31 @@ class LinkedTable:
         }
 
     def get_friendly_fs_id(self):
-        id = self.id
+        return LinkedTable._get_friendly_fs_id(self.id)
+
+    @staticmethod
+    def _get_friendly_fs_id(id: str):
         if id.startswith("http://") or id.startswith("https://"):
             if id.find("dbpedia.org") != -1:
-                id = slugify(
-                    urlparse(id).path.replace("/resource/", "").replace("/", "_")
-                ).replace("-", "_")
-                id += "_" + md5(self.id.encode()).hexdigest()
-            elif id.find("wikipedia.org") != -1:
-                id = slugify(
-                    urlparse(id).path.replace("/wiki/", "").replace("/", "_")
-                ).replace("-", "_")
-                id += "_" + md5(self.id.encode()).hexdigest()
-            else:
-                raise NotImplementedError()
-        else:
-            id = slugify(self.id.replace("/", "_")).replace("-", "_")
+                return (
+                    slugify(
+                        urlparse(id).path.replace("/resource/", "").replace("/", "_")
+                    ).replace("-", "_")
+                    + "_"
+                    + md5(id.encode()).hexdigest()
+                )
 
-        return id
+            if id.find("wikipedia.org") != -1:
+                return (
+                    slugify(
+                        urlparse(id).path.replace("/wiki/", "").replace("/", "_")
+                    ).replace("-", "_")
+                    + "_"
+                    + md5(id.encode()).hexdigest()
+                )
+
+            raise NotImplementedError()
+        return slugify(id.replace("/", "_")).replace("-", "_")
 
     @staticmethod
     def from_dict(odict: dict):
