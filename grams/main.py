@@ -62,33 +62,26 @@ class GRAMS:
             read_only = not proxy
             self.qnodes = get_qnode_db(
                 os.path.join(data_dir, "qnodes.db"),
-                compression=True,
                 read_only=read_only,
                 proxy=proxy,
-                is_singleton=True,
             )
             if proxy:
                 assert isinstance(self.qnodes, WDProxyDB)
             if os.path.exists(os.path.join(data_dir, "qnode_labels.db")):
                 self.qnode_labels = get_qnode_label_db(
                     os.path.join(data_dir, "qnode_labels.db"),
-                    compression=False,
                 )
             else:
                 self.qnode_labels: MutableMapping[str, QNodeLabel] = {}
             self.wdclasses = get_wdclass_db(
                 os.path.join(data_dir, "wdclasses.db"),
-                compression=False,
                 read_only=read_only,
                 proxy=proxy,
-                is_singleton=True,
             )
             self.wdprops = get_wdprop_db(
                 os.path.join(data_dir, "wdprops.db"),
-                compression=False,
                 read_only=read_only,
                 proxy=proxy,
-                is_singleton=True,
             )
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(
                 os.path.join(data_dir, "quantity_prop_stats")
@@ -247,7 +240,9 @@ class GRAMS:
 
         if n_hop > 1:
             next_qnode_ids = set()
-            for qnode in qnodes.values():
+            for qnode in tqdm(
+                qnodes.values(), desc="gather entities in 2nd hop", disable=not verbose
+            ):
                 for p, stmts in qnode.props.items():
                     for stmt in stmts:
                         if stmt.value.is_qnode():
@@ -257,7 +252,11 @@ class GRAMS:
                                 qval.as_entity_id() for qval in qvals if qval.is_qnode()
                             )
             next_qnode_ids = list(next_qnode_ids.difference(qnodes.keys()))
-            for qnode_id in next_qnode_ids:
+            for qnode_id in tqdm(
+                next_qnode_ids,
+                desc="load entities in 2nd hop from db",
+                disable=not verbose,
+            ):
                 qnode = self.qnodes.get(qnode_id, None)
                 if qnode is not None:
                     qnodes[qnode_id] = qnode
