@@ -73,8 +73,18 @@ class WikidataSemanticModelHelper(WDOnt):
                 # this is direct link, we replace its edge
                 assert len(new_sm.get_edges_between_nodes(source.id, target.id)) == 1
                 new_sm.remove_edges_between_nodes(source.id, target.id)
+                stmt_id = f"stmt:{edge.source}-{edge.rel_uri}-{edge.target}"
+                if new_sm.has_node(stmt_id):
+                    for i in range(1, 1000):
+                        if not new_sm.has_node(f"{stmt_id} ({i})"):
+                            stmt_id = f"{stmt_id} ({i})"
+                            break
+                    else:
+                        stmt_id = str(uuid4())
+                    assert not new_sm.has_node(stmt_id)
+
                 stmt = O.ClassNode(
-                    str(uuid4()),
+                    stmt_id,
                     WDOnt.STATEMENT_URI,
                     WDOnt.STATEMENT_REL_URI,
                     False,

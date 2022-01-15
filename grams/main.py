@@ -38,12 +38,14 @@ class Annotation:
     dg: nx.MultiDiGraph
     # semantic graph
     sg: nx.MultiDiGraph
-    # probabilities of each edge in sg
+    # probabilities of each edge in sg (uid, vid, eid)
     sg_edge_probs: Dict[Tuple[str, str, str], float]
+    # probabilities of types of each column: column index -> type -> probability
+    cta_probs: Dict[int, Dict[str, float]]
     # predicted semantic graph where incorrect relations are removed by threshold & post-processing algorithm
     pred_sg: nx.MultiDiGraph
     # predicted column types
-    pred_cta: Dict[int, Dict[str, float]]
+    pred_cta: Dict[int, str]
 
 
 class GRAMS:
@@ -182,26 +184,32 @@ class GRAMS:
                 postprocessing_method=self.cfg.psl.postprocessing,
                 enable_logging=self.cfg.psl.enable_logging,
             )
-            edge_probs, pred_sg, pred_cta = psl_solver.run(
+            edge_probs, pred_sg, cta_probs = psl_solver.run(
                 {"table": table, "semanticgraph": sg, "datagraph": dg},
                 threshold=self.cfg.psl.threshold,
             )
-            pred_cta = {
+            cta_probs = {
                 int(ci.replace("column-", "")): classes
-                for ci, classes in pred_cta.items()
+                for ci, classes in cta_probs.items()
             }
-            cta = {
+            pred_cta = {
                 ci: max(classes.items(), key=itemgetter(1))[0]
-                for ci, classes in pred_cta.items()
+                for ci, classes in cta_probs.items()
             }
 
         sm_helper = WikidataSemanticModelHelper(
             qnodes, qnode_labels, wdclasses, wdprops
         )
-        sm = sm_helper.create_sm(table, pred_sg, cta)
+        sm = sm_helper.create_sm(table, pred_sg, pred_cta)
         sm = sm_helper.minify_sm(sm)
         return Annotation(
-            sm=sm, dg=dg, sg=sg, sg_edge_probs=edge_probs, pred_sg=pred_sg, pred_cta=cta
+            sm=sm,
+            dg=dg,
+            sg=sg,
+            sg_edge_probs=edge_probs,
+            cta_probs=cta_probs,
+            pred_sg=pred_sg,
+            pred_cta=pred_cta,
         )
 
     def get_entities(
