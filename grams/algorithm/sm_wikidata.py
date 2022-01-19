@@ -42,7 +42,7 @@ class WikidataSemanticModelHelper(WDOnt):
         1. Add readable label to edge and class
         2. Convert direct link (without statement) to have statement except the id props.
         """
-        new_sm = sm.clone()
+        new_sm = sm.deep_copy()
 
         # update readable label
         for n in new_sm.iter_nodes():
@@ -73,18 +73,7 @@ class WikidataSemanticModelHelper(WDOnt):
                 # this is direct link, we replace its edge
                 assert len(new_sm.get_edges_between_nodes(source.id, target.id)) == 1
                 new_sm.remove_edges_between_nodes(source.id, target.id)
-                stmt_id = f"stmt:{edge.source}-{edge.rel_uri}-{edge.target}"
-                if new_sm.has_node(stmt_id):
-                    for i in range(1, 1000):
-                        if not new_sm.has_node(f"{stmt_id} ({i})"):
-                            stmt_id = f"{stmt_id} ({i})"
-                            break
-                    else:
-                        stmt_id = str(uuid4())
-                    assert not new_sm.has_node(stmt_id)
-
                 stmt = O.ClassNode(
-                    stmt_id,
                     WDOnt.STATEMENT_URI,
                     WDOnt.STATEMENT_REL_URI,
                     False,
@@ -119,12 +108,12 @@ class WikidataSemanticModelHelper(WDOnt):
         """This is a reverse function of `norm_sm`:
         1. Remove an intermediate statement if it doesn't have any qualifiers
         """
-        new_sm = sm.clone()
+        new_sm = sm.copy()
 
         for n in sm.iter_nodes():
             if isinstance(n, O.ClassNode) and n.abs_uri == WDOnt.STATEMENT_URI:
-                inedges = sm.incoming_edges(n.id)
-                outedges = sm.outgoing_edges(n.id)
+                inedges = sm.in_edges(n.id)
+                outedges = sm.out_edges(n.id)
                 if len(outedges) == 1 and outedges[0].abs_uri == inedges[0].abs_uri:
                     # no qualifiers
                     new_sm.remove_node(n.id)
@@ -146,12 +135,9 @@ class WikidataSemanticModelHelper(WDOnt):
     def create_sm(self, table: LinkedTable, cpa: nx.MultiDiGraph, cta: Dict[int, str]):
         """Create a semantic model from outputs of CPA and CTA tasks"""
         sm = O.SemanticModel()
-        # create class nodes first
-        classcount = {}
         classmap = {}  # mapping from column to its class node
         for cid, qnode_id in cta.items():
             dnode = O.DataNode(
-                id=f"col-{cid}",
                 col_index=cid,
                 label=table.table.columns[cid].name or "",
             )
@@ -160,23 +146,19 @@ class WikidataSemanticModelHelper(WDOnt):
             if qnode_id.find(" ") != -1:
                 qnode_id = qnode_id.split(" ")[0]
             curl = self.get_qnode_uri(qnode_id)
-            cnode_id = f"{curl}:{classcount.get(qnode_id, 0)}"
-            classcount[qnode_id] = classcount.get(qnode_id, 0) + 1
 
             try:
                 cnode_label = self.get_qnode_label(curl)
             except KeyError:
                 cnode_label = f"wd:{qnode_id}"
             cnode = O.ClassNode(
-                id=cnode_id,
                 abs_uri=curl,
                 rel_uri=f"wd:{qnode_id}",
                 readable_label=cnode_label,
             )
-            classmap[dnode.id] = cnode.id
-
             sm.add_node(dnode)
             sm.add_node(cnode)
+            classmap[dnode.col_index] = cnode.id
             sm.add_edge(
                 O.Edge(
                     source=cnode.id,
@@ -192,27 +174,23 @@ class WikidataSemanticModelHelper(WDOnt):
             if not isinstance(unode, SGColumnNode):
                 continue
             outdegree: int = cpa.out_degree(uid)  # type: ignore
-            if outdegree > 0 and not sm.has_node(f"col-{unode.column}"):
+            if outdegree > 0 and not sm.has_data_node(unode.column):
                 # add data node to the graph and use the entity class (all instances belong to this class) to describe this data node
                 dnode = O.DataNode(
-                    id=f"col-{unode.column}",
                     col_index=unode.column,
                     label=table.table.columns[unode.column].name or "",
                 )
                 sm.add_node(dnode)
 
                 curl = self.get_qnode_uri(self.ENTITY_ID)
-                cnode_id = f"{curl}:{classcount.get(self.ENTITY_ID, 0)}"
-                classcount[self.ENTITY_ID] = classcount.get(self.ENTITY_ID, 0) + 1
-                sm.add_node(
+                cnode_id = sm.add_node(
                     O.ClassNode(
-                        id=cnode_id,
                         abs_uri=curl,
                         rel_uri=f"wd:{self.ENTITY_ID}",
                         readable_label=self.ENTITY_LABEL,
                     )
                 )
-                classmap[dnode.id] = cnode_id
+                classmap[dnode.col_index] = cnode_id
 
                 sm.add_edge(
                     O.Edge(
@@ -224,6 +202,7 @@ class WikidataSemanticModelHelper(WDOnt):
                 )
 
         # now add remaining edges and remember to use class node instead of data node
+        cpa_idmap = {}
         for uid, vid, edge in cpa.edges(data="data"):  # type: ignore
             edge: SGEdge
             unode: SGNode = cpa.nodes[uid]["data"]
@@ -231,67 +210,77 @@ class WikidataSemanticModelHelper(WDOnt):
 
             if isinstance(unode, SGColumnNode):
                 # outgoing edge is from a class node instead of a data node
-                suid = classmap[f"col-{unode.column}"]
+                suid = classmap[unode.column]
                 source = sm.get_node(suid)
             elif isinstance(unode, SGEntityValueNode):
-                source = O.LiteralNode(
-                    id=unode.id,
-                    value=self.get_qnode_uri(unode.qnode_id),
-                    readable_label=self.get_qnode_label(unode.qnode_id),
-                    datatype=O.LiteralNodeDataType.Entity,
-                    is_in_context=unode.qnode_id == table.context.page_entity_id,
-                )
-                sm.add_node(source)
+                if unode.id not in cpa_idmap:
+                    source = O.LiteralNode(
+                        value=self.get_qnode_uri(unode.qnode_id),
+                        readable_label=self.get_qnode_label(unode.qnode_id),
+                        datatype=O.LiteralNodeDataType.Entity,
+                        is_in_context=unode.qnode_id == table.context.page_entity_id,
+                    )
+                    cpa_idmap[unode.id] = sm.add_node(source)
+                else:
+                    source = sm.get_node(cpa_idmap[unode.id])
             else:
                 assert isinstance(
                     unode, SGStatementNode
                 ), "Outgoing edge can't not be from literal"
-                # create a statement node
-                source = O.ClassNode(
-                    id=unode.id,
-                    abs_uri=WDOnt.STATEMENT_URI,
-                    rel_uri=WDOnt.STATEMENT_REL_URI,
-                )
-                sm.add_node(source)
+                if unode.id not in cpa_idmap:
+                    # create a statement node
+                    source = O.ClassNode(
+                        abs_uri=WDOnt.STATEMENT_URI,
+                        rel_uri=WDOnt.STATEMENT_REL_URI,
+                    )
+                    cpa_idmap[unode.id] = sm.add_node(source)
+                else:
+                    source = sm.get_node(cpa_idmap[unode.id])
 
             if isinstance(vnode, SGColumnNode):
-                svid = f"col-{vnode.column}"
-                if svid in classmap:
-                    target = sm.get_node(classmap[svid])
-                elif sm.has_node(svid):
-                    target = sm.get_node(svid)
-                else:
+                if vnode.column in classmap:
+                    target = sm.get_node(classmap[vnode.column])
+                elif sm.has_data_node(vnode.column):
+                    target = sm.get_node(vnode.column)
+                elif vnode.id not in cpa_idmap:
                     target = O.DataNode(
-                        id=f"col-{vnode.column}",
                         col_index=vnode.column,
                         label=table.table.columns[vnode.column].name or "",
                     )
-                    sm.add_node(target)
+                    cpa_idmap[vnode.id] = sm.add_node(target)
+                else:
+                    target = sm.get_node(cpa_idmap[vnode.id])
             elif isinstance(vnode, SGEntityValueNode):
-                target = O.LiteralNode(
-                    id=vnode.id,
-                    value=self.get_qnode_uri(vnode.qnode_id),
-                    readable_label=self.get_qnode_label(vnode.qnode_id),
-                    datatype=O.LiteralNodeDataType.Entity,
-                    is_in_context=vnode.qnode_id == table.context.page_entity_id,
-                )
-                sm.add_node(target)
+                if vnode.id not in cpa_idmap:
+                    target = O.LiteralNode(
+                        value=self.get_qnode_uri(vnode.qnode_id),
+                        readable_label=self.get_qnode_label(vnode.qnode_id),
+                        datatype=O.LiteralNodeDataType.Entity,
+                        is_in_context=vnode.qnode_id == table.context.page_entity_id,
+                    )
+                    cpa_idmap[vnode.id] = sm.add_node(target)
+                else:
+                    target = sm.get_node(cpa_idmap[vnode.id])
             elif isinstance(vnode, SGLiteralValueNode):
-                target = O.LiteralNode(
-                    id=vnode.id,
-                    value=vnode.value.to_string_repr(),
-                    readable_label=vnode.label,
-                    datatype=O.LiteralNodeDataType.String,
-                )
-                sm.add_node(target)
+                if vnode.id not in cpa_idmap:
+                    target = O.LiteralNode(
+                        value=vnode.value.to_string_repr(),
+                        readable_label=vnode.label,
+                        datatype=O.LiteralNodeDataType.String,
+                    )
+                    cpa_idmap[vnode.id] = sm.add_node(target)
+                else:
+                    target = sm.get_node(cpa_idmap[vnode.id])
             else:
-                # create a statement node
-                target = O.ClassNode(
-                    id=vnode.id,
-                    abs_uri=WDOnt.STATEMENT_URI,
-                    rel_uri=WDOnt.STATEMENT_REL_URI,
-                )
-                sm.add_node(target)
+                if vnode.id not in cpa_idmap:
+                    # create a statement node
+                    target = O.ClassNode(
+                        abs_uri=WDOnt.STATEMENT_URI,
+                        rel_uri=WDOnt.STATEMENT_REL_URI,
+                    )
+                    cpa_idmap[vnode.id] = sm.add_node(target)
+                else:
+                    target = sm.get_node(cpa_idmap[vnode.id])
 
             prop_uri = self.get_prop_uri(edge.predicate)
             sm.add_edge(
@@ -337,14 +326,14 @@ class WikidataSemanticModelHelper(WDOnt):
         if incorrect_invertible_props is None:
             incorrect_invertible_props = set()
         invertible_stmts = []
-        is_class_fn = lambda n1: n1.is_class_node or (
-            n1.is_literal_node and self.is_uri_qnode(n1.value)
+        is_class_fn = lambda n1: isinstance(n1, O.ClassNode) or (
+            isinstance(n1, O.LiteralNode) and self.is_uri_qnode(n1.value)
         )
 
         for n in sm.iter_nodes():
-            if n.is_class_node and WDOnt.is_uri_statement(n.abs_uri):
-                inedges = sm.incoming_edges(n.id)
-                outedges = sm.outgoing_edges(n.id)
+            if isinstance(n, O.ClassNode) and WDOnt.is_uri_statement(n.abs_uri):
+                inedges = sm.in_edges(n.id)
+                outedges = sm.out_edges(n.id)
                 # only has one prop
                 (prop,) = list({inedge.abs_uri for inedge in inedges})
                 pid = self.get_prop_id(prop)
@@ -375,16 +364,16 @@ class WikidataSemanticModelHelper(WDOnt):
                     elif strict:
                         raise Exception(f"{pid} is not invertible")
                     elif force_inversion:
-                        assert sm.get_node(
-                            outedge.target
-                        ).is_data_node, "Clearly the model is wrong, you have an inverse property to a literal node"
+                        assert isinstance(
+                            sm.get_node(outedge.target), O.DataNode
+                        ), "Clearly the model is wrong, you have an inverse property to a literal node"
                         invertible_stmts.append(n)
 
         # we have N statement, so we are going to have N! - 1 ways. It's literally a cartesian product
         all_choices = []
         for stmt in invertible_stmts:
             # assume that each statement only has one incoming link! fix the for loop if this assumption doesn't hold
-            (inedge,) = sm.incoming_edges(stmt.id)
+            (inedge,) = sm.in_edges(stmt.id)
             choice = [(stmt, None, None)]
             for invprop in self.wdprops[
                 self.get_prop_id(inedge.abs_uri)
@@ -402,7 +391,7 @@ class WikidataSemanticModelHelper(WDOnt):
         ), "First choice is always the current semantic model"
         new_sms = [sm]
         for choice in all_choices[1:]:
-            new_sm = sm.clone()
+            new_sm = sm.copy()
             # we now change the statement from original prop to use the inverse prop (change direction)
             # if the invprop is not None
             for stmt, invprop_abs_uri, invprop_rel_uri in choice:
@@ -410,11 +399,11 @@ class WikidataSemanticModelHelper(WDOnt):
                     continue
                 readable_label = self.get_pnode_label(invprop_abs_uri)
                 # assume that each statement only has one incoming link! fix the for loop if this assumption doesn't hold
-                (inedge,) = sm.incoming_edges(stmt.id)
+                (inedge,) = sm.in_edges(stmt.id)
                 # statement must have only one property
                 (outedge,) = [
                     outedge
-                    for outedge in sm.outgoing_edges(stmt.id)
+                    for outedge in sm.out_edges(stmt.id)
                     if outedge.abs_uri == inedge.abs_uri
                 ]
                 assert (
@@ -427,9 +416,8 @@ class WikidataSemanticModelHelper(WDOnt):
 
                 target = sm.get_node(outedge.target)
                 if not is_class_fn(target):
-                    assert target.is_data_node
+                    assert isinstance(target, O.DataNode)
                     dummy_class_node = O.ClassNode(
-                        str(uuid4()),
                         abs_uri="http://wikiba.se/ontology#DummyClassForInversion",
                         rel_uri="wikibase:DummyClassForInversion",
                     )
@@ -468,84 +456,11 @@ class WikidataSemanticModelHelper(WDOnt):
             new_sms.append(new_sm)
         return new_sms
 
-    def viz_sm(
-        self, sm: O.SemanticModel, outdir, graph_id
-    ) -> "WikidataSemanticModelHelper":
-        colors = {
-            SMNodeType.Column: dict(fill="#ffd666", stroke="#874d00"),
-            SMNodeType.Class: dict(fill="#b7eb8f", stroke="#135200"),
-            SMNodeType.Statement: dict(fill="#d9d9d9", stroke="#434343"),
-            SMNodeType.Entity: dict(fill="#C6E5FF", stroke="#5B8FF9"),
-            SMNodeType.Literal: dict(fill="#C6E5FF", stroke="#5B8FF9"),
-        }
-
-        def node_fn(uid, udata):
-            u: O.Node = udata["data"]
-            nodetype = self.get_node_type(u)
-            if isinstance(u, O.DataNode):
-                label = u.label
-            elif isinstance(u, O.ClassNode):
-                if u.abs_uri == WDOnt.STATEMENT_URI:
-                    label = ""
-                elif u.readable_label is None:
-                    if self.is_uri_qnode(u.abs_uri):
-                        label = self.get_qnode_label(u.abs_uri)
-                    else:
-                        label = u.label
-                else:
-                    label = u.readable_label
-            else:
-                label = u.readable_label
-
-            return {
-                "label": label,
-                "style": colors[nodetype],
-                "labelCfg": {
-                    "style": {
-                        "fill": "black",
-                        "background": {
-                            "padding": [4, 4, 4, 4],
-                            "radius": 3,
-                            **colors[nodetype],
-                        },
-                    }
-                },
-            }
-
-        def edge_fn(eid, edata):
-            edge: O.Edge = edata["data"]
-            label = edge.readable_label
-            if label is None:
-                if edge.abs_uri not in self.ID_PROPS:
-                    label = self.get_pnode_label(edge.abs_uri)
-                else:
-                    label = edge.label
-
-            return {"label": label}
-
-        viz_graph(sm.g, node_fn, edge_fn, outdir, graph_id)
-        return self
-
-    def get_node_type(self, n: O.Node):
-        if isinstance(n, O.LiteralNode):
-            if self.is_uri_qnode(n.value):
-                return SMNodeType.Entity
-            return SMNodeType.Literal
-        if isinstance(n, O.DataNode) or (
-            isinstance(n, O.ClassNode) and self.is_uri_column(n.abs_uri)
-        ):
-            return SMNodeType.Column
-        if isinstance(n, O.ClassNode):
-            if n.abs_uri == WDOnt.STATEMENT_URI:
-                return SMNodeType.Statement
-            return SMNodeType.Class
-        raise Exception("Unreachable!")
-
     def get_entity_columns(self, sm: O.SemanticModel) -> List[int]:
         ent_columns = []
         for dnode in sm.iter_nodes():
-            if dnode.is_data_node:
-                inedges = sm.incoming_edges(dnode.id)
+            if isinstance(dnode, O.DataNode):
+                inedges = sm.in_edges(dnode.id)
                 if len(inedges) == 0:
                     continue
                 assert len({edge.abs_uri for edge in inedges}) == 1, inedges
@@ -582,20 +497,20 @@ class WikidataSemanticModelHelper(WDOnt):
         sm = self.norm_sm(sm)
         schemas = {}
         for u in sm.iter_nodes():
-            if not u.is_class_node or WDOnt.is_uri_statement(u.abs_uri):
+            if not isinstance(u, O.ClassNode) or WDOnt.is_uri_statement(u.abs_uri):
                 continue
 
             schema = {"props": {}, "subject": None, "sm_node_id": u.id}
-            for us_edge in sm.outgoing_edges(u.id):
+            for us_edge in sm.out_edges(u.id):
                 if us_edge.abs_uri in self.ID_PROPS:
                     v = sm.get_node(us_edge.target)
-                    assert v.is_data_node
+                    assert isinstance(v, O.DataNode)
                     assert schema["subject"] is None
                     schema["subject"] = v.col_index
                     continue
 
                 s = sm.get_node(us_edge.target)
-                assert s.is_class_node and WDOnt.is_uri_statement(s.abs_uri)
+                assert isinstance(s, O.ClassNode) and WDOnt.is_uri_statement(s.abs_uri)
                 assert WDOnt.is_uri_property(us_edge.abs_uri)
 
                 pnode = WDOnt.get_prop_id(us_edge.abs_uri)
@@ -608,23 +523,23 @@ class WikidataSemanticModelHelper(WDOnt):
                     "qualifiers": [],
                 }
                 schema["props"][pnode].append(stmt)
-                for sv_edge in sm.outgoing_edges(s.id):
+                for sv_edge in sm.out_edges(s.id):
                     v = sm.get_node(sv_edge.target)
 
                     assert WDOnt.is_uri_property(sv_edge.abs_uri)
                     if sv_edge.abs_uri == us_edge.abs_uri:
                         assert stmt["value"] is None, "only one property"
                         # this is property
-                        if v.is_class_node:
+                        if isinstance(v, O.ClassNode):
                             stmt["value"] = {"type": "classnode", "value": v.id}
-                        elif v.is_data_node:
+                        elif isinstance(v, O.DataNode):
                             stmt["value"] = {"type": "datanode", "value": v.col_index}
                         else:
-                            assert v.is_literal_node
+                            assert isinstance(v, O.LiteralNode)
                             stmt["value"] = {"type": "literalnode", "value": v.value}
                     else:
                         # this is qualifier
-                        if v.is_class_node:
+                        if isinstance(v, O.ClassNode):
                             stmt["qualifiers"].append(
                                 {
                                     "type": "classnode",
@@ -632,7 +547,7 @@ class WikidataSemanticModelHelper(WDOnt):
                                     "value": v.id,
                                 }
                             )
-                        elif v.is_data_node:
+                        elif isinstance(v, O.DataNode):
                             stmt["qualifiers"].append(
                                 {
                                     "type": "datanode",
@@ -641,7 +556,7 @@ class WikidataSemanticModelHelper(WDOnt):
                                 }
                             )
                         else:
-                            assert v.is_literal_node
+                            assert isinstance(v, O.LiteralNode)
                             stmt["qualifiers"].append(
                                 {
                                     "type": "literalnode",

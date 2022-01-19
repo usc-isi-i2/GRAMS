@@ -175,16 +175,16 @@ class Env:
             u: SGNode = udata['data']
             if u.is_statement:
                 sm.add_node(
-                    O.ClassNode(u.id, SemanticGraphConstructor.STATEMENT_URI,
-                                SemanticGraphConstructor.STATEMENT_REL_URI, False, "Statement"))
+                    O.ClassNode(SemanticGraphConstructor.STATEMENT_URI,
+                                SemanticGraphConstructor.STATEMENT_REL_URI, False, "Statement", id=u.id))
             elif u.is_value:
                 if u.is_entity_value:
-                    sm.add_node(O.LiteralNode(u.id, self.evaluator.wd_smhelper.get_qnode_uri(u.qnode_id), readable_label=u.label))
+                    sm.add_node(O.LiteralNode(self.evaluator.wd_smhelper.get_qnode_uri(u.qnode_id), readable_label=u.label, id=u.id))
                 elif u.is_literal_value:
-                    sm.add_node(O.LiteralNode(u.id, u.label, u.label))
+                    sm.add_node(O.LiteralNode(u.label, u.label, id=u.id))
             else:
                 assert u.is_column
-                sm.add_node(O.DataNode(u.id, u.column, self.gold_models[table_index][1].table.get_column_by_index(u.column)))
+                sm.add_node(O.DataNode(u.column, self.gold_models[table_index][1].table.get_column_by_index(u.column), id=u.id))
 
         for uid, vid, eid, edata in sg.edges(data=True, keys=True):
             e: SGEdge = edata['data']
