@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from operator import itemgetter
 from pathlib import Path
 from typing import Any, Dict, Mapping, MutableMapping, Optional, Set, Tuple, Union
+from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
 from kgdata.wikidata.models.qnode import QNodeLabel
 from loguru import logger
@@ -35,7 +36,7 @@ from grams.config import DEFAULT_CONFIG
 class Annotation:
     sm: O.SemanticModel
     # data graph
-    dg: nx.MultiDiGraph
+    dg: DGGraph
     # semantic graph
     sg: nx.MultiDiGraph
     # probabilities of each edge in sg (uid, vid, eid)

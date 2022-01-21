@@ -3,7 +3,7 @@ from collections import defaultdict
 from enum import Enum
 from operator import xor, attrgetter
 from grams.algorithm.data_graph import CellNode
-from grams.algorithm.data_graph.dg_graph import EntityValueNode
+from grams.algorithm.data_graph.dg_graph import DGGraph, EntityValueNode
 
 import networkx as nx
 from typing import Dict, Iterable, Tuple, Set, List, Optional, Callable
@@ -41,7 +41,7 @@ class LinkFeatureExtraction:
         self,
         table: LinkedTable,
         sg: nx.MultiDiGraph,
-        dg: nx.MultiDiGraph,
+        dg: DGGraph,
         qnodes: Dict[str, QNode],
         wdprops: Dict[str, WDProperty],
         wd_num_prop_stats: Dict[str, WDQuantityPropertyStats],
@@ -304,26 +304,26 @@ class LinkFeatureExtraction:
             uci = u.column
             vci = v.column
             for ri in range(self.table.size()):
-                ucell = self.dg.nodes[f"{ri}-{uci}"]["data"]
-                vcell = self.dg.nodes[f"{ri}-{vci}"]["data"]
+                ucell = self.dg.get_node(f"{ri}-{uci}")
+                vcell = self.dg.get_node(f"{ri}-{vci}")
                 yield ucell, vcell
         elif u.is_column:
             assert v.is_value
             uci = u.column
-            vcell = self.dg.nodes[v.id]["data"]
+            vcell = self.dg.get_node(v.id)
             for ri in range(self.table.size()):
-                ucell = self.dg.nodes[f"{ri}-{uci}"]["data"]
+                ucell = self.dg.get_node(f"{ri}-{uci}")
                 yield ucell, vcell
         elif v.is_column:
             assert u.is_value
             vci = v.column
-            ucell = self.dg.nodes[u.id]["data"]
+            ucell = self.dg.get_node(u.id)
             for ri in range(self.table.size()):
-                vcell = self.dg.nodes[f"{ri}-{vci}"]["data"]
+                vcell = self.dg.get_node(f"{ri}-{vci}")
                 yield ucell, vcell
         else:
             assert not u.is_column and not v.is_column
-            yield self.dg.nodes[u.id]["data"], self.dg.nodes[v.id]["data"]
+            yield self.dg.get_node(u.id), self.dg.get_node(v.id)
 
     def _get_maximum_possible_ent_links_between_two_nodes(
         self, uid: str, vid: str, is_data_predicate: bool
@@ -363,15 +363,15 @@ class LinkFeatureExtraction:
 
             ci = u.column if u.is_column else v.column
             for ri in range(n_rows):
-                if len(self.dg.nodes[f"{ri}-{ci}"]["data"].qnode_ids) == 0:
+                if len(self.dg.get_node(f"{ri}-{ci}").qnode_ids) == 0:
                     n_null_entities += 1
         else:
             uci = u.column
             vci = v.column
 
             for ri in range(n_rows):
-                ucell_unk = len(self.dg.nodes[f"{ri}-{uci}"]["data"].qnode_ids) == 0
-                vcell_unk = len(self.dg.nodes[f"{ri}-{vci}"]["data"].qnode_ids) == 0
+                ucell_unk = len(self.dg.get_node(f"{ri}-{uci}").qnode_ids) == 0
+                vcell_unk = len(self.dg.get_node(f"{ri}-{vci}").qnode_ids) == 0
 
                 if is_data_predicate:
                     if ucell_unk:

@@ -1,5 +1,6 @@
 from collections import defaultdict
 from typing import Dict, List
+from grams.algorithm.data_graph.dg_graph import DGGraph
 
 import networkx as nx
 import numpy as np
@@ -19,7 +20,7 @@ class TypeFeatureExtraction:
         self,
         table: LinkedTable,
         sg: nx.MultiDiGraph,
-        dg: nx.MultiDiGraph,
+        dg: DGGraph,
         qnodes: Dict[str, QNode],
         wdprops: Dict[str, WDProperty],
         wd_num_prop_stats: Dict[str, WDQuantityPropertyStats],
@@ -47,7 +48,7 @@ class TypeFeatureExtraction:
                 continue
 
             # cells in this column
-            cells: List[CellNode] = [self.dg.nodes[cid]["data"] for cid in u.nodes]
+            cells: List[CellNode] = [self.dg.get_node(cid) for cid in u.nodes]
             covered_fractions = [
                 sum(
                     span.length for spans in cell.qnodes_span.values() for span in spans

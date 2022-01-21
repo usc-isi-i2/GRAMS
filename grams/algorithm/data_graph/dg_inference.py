@@ -7,6 +7,7 @@ from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
 from grams.algorithm.data_graph.dg_graph import (
     CellNode,
     DGEdge,
+    DGGraph,
     DGNode,
     DGStatementID,
     EdgeFlowSource,
@@ -26,7 +27,7 @@ from grams.algorithm.data_graph.dg_graph import (
 class KGInference:
     def __init__(
         self,
-        dg: nx.MultiDiGraph,
+        dg: DGGraph,
         qnodes: Mapping[str, QNode],
         wdprops: Mapping[str, WDProperty],
     ):
@@ -39,12 +40,11 @@ class KGInference:
         self.wdprops = wdprops
         self.dg = dg
 
-        for sid, sdata in dg.nodes(data=True):  # type: ignore
-            s: StatementNode = sdata["data"]  # type: ignore
+        for s in dg.iter_nodes():
             if not isinstance(s, StatementNode):
                 continue
 
-            dgsid = DGStatementID.parse_id(sid)
+            dgsid = DGStatementID.parse_id(s.id)
             self._set_stmt_node(s.qnode_id, dgsid.predicate, dgsid.statement_index, s)
 
     def infer_subproperty(self):
@@ -52,18 +52,22 @@ class KGInference:
         properties = set()
         qualifiers = set()
 
-        for uid, udata in self.dg.nodes(data=True):  # type: ignore
-            u: StatementNode = udata["data"]  # type: ignore
+        for u in self.dg.iter_nodes():
             if isinstance(u, StatementNode):
                 continue
 
-            for sid, us_edges in self.dg[u.id].items():
-                # add all links to the list of properties
-                properties.update(us_edges.keys())
+            for s in self.dg.successors(u.id):
+                assert isinstance(s, StatementNode)
+                properties.add(s.predicate)
 
-                for vid, sv_edges in self.dg[sid].items():
+                for v in self.dg.successors(s.id):
+                    sv_edges = self.dg.get_edges_between_nodes(s.id, v.id)
                     qualifiers.update(
-                        (v_eid for v_eid in sv_edges.keys() if v_eid not in us_edges)
+                        (
+                            sv_edge.predicate
+                            for sv_edge in sv_edges
+                            if sv_edge != s.predicate
+                        )
                     )
 
         parent_props = self._build_parent_map(properties)
@@ -73,30 +77,25 @@ class KGInference:
         new_props = []
         new_qualifiers = []
 
-        for sid, sdata in self.dg.nodes(data=True):  # type: ignore
-            s: StatementNode = sdata["data"]  # type: ignore
+        for s in self.dg.iter_nodes():
             if not isinstance(s, StatementNode):
                 continue
 
             # parents of the statement
-            parents = set()
+            # parents = {u.id for u in self.dg.predecessors(s.id)}
             prop = s.predicate
-            for uid, _, eid, edata in self.dg.in_edges(sid, data=True, keys=True):
-                parents.add(uid)
-                assert prop == edata["data"].predicate
 
             # children that are properties of the statement
             prop_children = set()
             # children that are qualifiers of the statement
             qualifier2children = defaultdict(set)
-            for _, vid, eid, edata in self.dg.out_edges(sid, data=True, keys=True):
-                e: DGEdge = edata["data"]
+            for e in self.dg.out_edges(s.id):
                 if e.predicate == prop:
-                    prop_children.add(vid)
+                    prop_children.add(e.target)
                 else:
-                    qualifier2children[e.predicate].add(vid)
+                    qualifier2children[e.predicate].add(e.target)
 
-            stmt_index = DGStatementID.parse_id(sid).statement_index
+            stmt_index = DGStatementID.parse_id(s.id).statement_index
             if prop in parent_props:
                 for parent_prop in parent_props[prop]:
                     for vid in prop_children:
@@ -124,7 +123,7 @@ class KGInference:
                         ):
                             new_qualifiers.append(
                                 InferredNewQualifier(
-                                    statement_id=sid,
+                                    statement_id=s.id,
                                     new_qualifier=pq,
                                     source_id=source_flow.source_id,
                                     property=source_flow.edge_id,
@@ -141,45 +140,44 @@ class KGInference:
 
         # find the list of transitive properties in the graph
         transitive_props = set()
-        for uid, vid, eid, edata in self.dg.edges(data=True, keys=True):
-            prop = self.wdprops[eid]
+        for e in self.dg.edges():
+            prop = self.wdprops[e.predicate]
             # transitive class
             if "Q18647515" in prop.instanceof:
-                transitive_props.add(eid)
+                transitive_props.add(e.predicate)
 
         # now start from node u, we find if there is another v connect to u via a transitive property, and another p connect
         # to v with the same property, we don't need to keep the chain going as even if it's longer, we will eventually loop
         # through all item in the chain by looping through nodes in the graph
 
         chains = []
-        for uid, udata in self.dg.nodes(data=True):
-            u: DGNode = udata["data"]
+        for u in self.dg.iter_nodes():
             if isinstance(u, StatementNode):
                 continue
 
-            for sid, us_edges in self.dg[uid].items():
-                stmt: StatementNode = self.dg.nodes[sid]["data"]
+            for stmt, us_edges in self.dg.group_out_edges(u.id):
+                assert isinstance(stmt, StatementNode)
                 for trans_prop in transitive_props:
                     if trans_prop not in us_edges:
                         continue
-                    us_edge: DGEdge = us_edges[trans_prop]["data"]
-                    for vid, sv_edges in self.dg[sid].items():
+                    us_edge = us_edges[trans_prop]
+                    for v, sv_edges in self.dg.group_out_edges(stmt.id):
                         if trans_prop not in sv_edges:
                             continue
-                        sv_edge: DGEdge = sv_edges[trans_prop]["data"]
+                        sv_edge = sv_edges[trans_prop]
                         if not stmt.is_same_flow(us_edge, sv_edge):
                             # don't allow infer new link across rows
                             continue
 
-                        for s2id, vs2_edges in self.dg[vid].items():
+                        for stmt2, vs2_edges in self.dg.group_out_edges(v.id):
+                            assert isinstance(stmt2, StatementNode)
                             if trans_prop not in vs2_edges:
                                 continue
-                            vs2_edge: DGEdge = vs2_edges[trans_prop]["data"]
-                            stmt2: StatementNode = self.dg.nodes[s2id]["data"]
-                            for v2id, s2v2_edges in self.dg[s2id].items():
+                            vs2_edge: DGEdge = vs2_edges[trans_prop]
+                            for v2, s2v2_edges in self.dg.group_out_edges(stmt2.id):
                                 if trans_prop not in s2v2_edges:
                                     continue
-                                s2v2_edge: DGEdge = s2v2_edges[trans_prop]["data"]
+                                s2v2_edge = s2v2_edges[trans_prop]
                                 if not stmt2.is_same_flow(vs2_edge, s2v2_edge):
                                     # don't allow infer new link across rows
                                     continue
@@ -212,8 +210,9 @@ class KGInference:
         new_props = []
         for us_edge, sv_edge, vs2_edge, s2v2_edge in chains:
             trans_prop = us_edge.predicate
-            stmt: StatementNode = self.dg.nodes[us_edge.target]["data"]
-            stmt2: StatementNode = self.dg.nodes[vs2_edge.target]["data"]
+            stmt = self.dg.get_node(us_edge.target)
+            stmt2 = self.dg.get_node(vs2_edge.target)
+            assert isinstance(stmt, StatementNode) and isinstance(stmt2, StatementNode)
 
             prop_value = self._get_stmt_value(
                 stmt2.qnode_id,
@@ -266,16 +265,16 @@ class KGInference:
             new_prop
             for new_prop in new_props
             if DGEdge.can_link(
-                self.dg.nodes[new_prop.source_id]["data"],
-                self.dg.nodes[new_prop.target_id]["data"],
+                self.dg.get_node(new_prop.source_id),
+                self.dg.get_node(new_prop.target_id),
             )
         ]
         new_qualifiers = [
             new_qualifier
             for new_qualifier in new_qualifiers
             if DGEdge.can_link(
-                self.dg.nodes[new_qualifier.source_id]["data"],
-                self.dg.nodes[new_qualifier.target_id]["data"],
+                self.dg.get_node(new_qualifier.source_id),
+                self.dg.get_node(new_qualifier.target_id),
             )
         ]
 
@@ -322,7 +321,9 @@ class KGInference:
                     )
                 new_nodes.append(sprime)
 
-            if not self.dg.has_edge(new_prop.source_id, sprime.id, key=prop):
+            if not self.dg.has_edge_between_nodes(
+                new_prop.source_id, sprime.id, key=prop
+            ):
                 new_edges.append(
                     DGEdge(
                         source=new_prop.source_id,
@@ -332,7 +333,9 @@ class KGInference:
                         is_inferred=True,
                     )
                 )
-            if not self.dg.has_edge(sprime.id, new_prop.target_id, key=prop):
+            if not self.dg.has_edge_between_nodes(
+                sprime.id, new_prop.target_id, key=prop
+            ):
                 new_edges.append(
                     DGEdge(
                         source=sprime.id,
@@ -355,7 +358,8 @@ class KGInference:
             #     new_edges.append(DGEdge(source=stmt_id, target=qual_edge.target, predicate=qual_edge.predicate, is_qualifier=True, paths=[], is_inferred=True))
 
         for new_qual in new_qualifiers:
-            stmt: StatementNode = self.dg.nodes[new_qual.statement_id]["data"]
+            stmt = self.dg.get_node(new_qual.statement_id)
+            assert isinstance(stmt, StatementNode)
             new_edges.append(
                 DGEdge(
                     source=new_qual.statement_id,
@@ -372,9 +376,9 @@ class KGInference:
             )
 
         for node in new_nodes:
-            self.dg.add_node(node.id, data=node)
+            self.dg.add_node(node)
         for edge in new_edges:
-            self.dg.add_edge(edge.source, edge.target, key=edge.predicate, data=edge)
+            self.dg.add_edge(edge)
 
     def _track_property(self, qnode_id: str, prop: str):
         """Ensure that the subkg has values of the qnode's property"""

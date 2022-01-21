@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import copy
 import re
 from collections import defaultdict
@@ -6,18 +7,22 @@ from dataclasses import dataclass, field
 from enum import Enum, Flag, auto
 from functools import cmp_to_key
 from itertools import chain
-from typing import Dict, Optional, Union, List, Set, Tuple, NamedTuple, Any
+from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Union, cast
+from graph.retworkx import (
+    RetworkXStrCanonicalMultiDiGraph,
+    BaseRichEdge,
+    BaseRichNode,
+)
 
 import networkx as nx
-from loguru import logger
-from tqdm import tqdm
-from typing_extensions import TypedDict
-
+import sm.misc as M
 from grams.algorithm.kg_index import KGObjectIndex
 from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
-import sm.misc as M
+from kgdata.wikidata.models import DataValue, QNode, WDClass, WDProperty
+from loguru import logger
 from sm.misc.graph import viz_graph
+from tqdm import tqdm
+from typing_extensions import TypedDict
 
 
 @dataclass(frozen=True)
@@ -31,7 +36,7 @@ class Span:
 
 
 @dataclass
-class CellNode:
+class CellNode(BaseRichNode):
     id: str
     value: str
     column: int
@@ -51,7 +56,7 @@ class ContextSpan:
 
 
 @dataclass
-class LiteralValueNode:
+class LiteralValueNode(BaseRichNode):
     id: str
     value: DataValue
     # not none if it is appear in the context
@@ -63,7 +68,7 @@ class LiteralValueNode:
 
 
 @dataclass
-class EntityValueNode:
+class EntityValueNode(BaseRichNode):
     id: str
     qnode_id: str
     # not none if it is appear in the context
@@ -74,12 +79,13 @@ class EntityValueNode:
         return self.context_span is not None
 
 
+# edge id is actually key id
 EdgeFlowSource = NamedTuple("EdgeFlowSource", [("source_id", str), ("edge_id", str)])
 EdgeFlowTarget = NamedTuple("EdgeFlowTarget", [("target_id", str), ("edge_id", str)])
 
 
 @dataclass
-class StatementNode:
+class StatementNode(BaseRichNode):
     id: str
     # id of the qnode that contains the statement
     qnode_id: str
@@ -344,7 +350,7 @@ class DGPath:
 
 
 @dataclass
-class DGEdge:
+class DGEdge(BaseRichEdge[str]):
     source: str
     target: str
     predicate: str
@@ -352,6 +358,11 @@ class DGEdge:
     # deprecated, will be replaced by the information stored directly in the statement edge flow
     # paths: List[DGPath]
     is_inferred: Optional[bool] = None
+    id: int = -1  # set automatically by the graph
+
+    @property
+    def key(self):
+        return self.predicate
 
     @staticmethod
     def can_link(source: DGNode, target: DGNode):
@@ -361,3 +372,7 @@ class DGEdge:
         if not isinstance(source, CellNode) or not isinstance(target, CellNode):
             return True
         return source.row == target.row
+
+
+class DGGraph(RetworkXStrCanonicalMultiDiGraph[DGNode, DGEdge]):
+    pass

@@ -1,9 +1,10 @@
 from grams.algorithm.literal_matchers import TextParser, LiteralMatch
 from grams.inputs import LinkedTable
 import networkx as nx
-from typing import Dict, Mapping, Set, Union
+from typing import Dict, Mapping, Set, Union, cast
 from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
 from grams.algorithm.data_graph.dg_graph import (
+    DGGraph,
     CellNode,
     ContextSpan,
     DGEdge,
@@ -51,7 +52,7 @@ class DGFactory:
         verbose: bool = False,
     ):
         """Build data graph from a linked table"""
-        dg = nx.MultiDiGraph()
+        dg = DGGraph()
         context_node_id = None
 
         for ci, col in enumerate(table.table.columns):
@@ -102,7 +103,7 @@ class DGFactory:
                     qnode_ids=list(cell_qnodes),
                     qnodes_span=cell_qnode_spans,
                 )
-                dg.add_node(node.id, data=node)
+                dg.add_node(node)
 
         if DGConfigs.USE_CONTEXT and table.context.page_entity_id is not None:
             assert table.context.page_title is not None
@@ -115,7 +116,7 @@ class DGFactory:
                     span=Span(0, len(table.context.page_title)),
                 ),
             )
-            dg.add_node(node.id, data=node)
+            dg.add_node(node)
 
         # find all paths
         n_rows = len(table.table.columns[0].values)
@@ -126,17 +127,15 @@ class DGFactory:
                 if ignore_columns is not None and ci in ignore_columns:
                     continue
 
-                u = dg.nodes[f"{ri}-{ci}"]["data"]
+                u = dg.get_node(f"{ri}-{ci}")
                 for cj in range(ci + 1, len(table.table.columns)):
                     if ignore_columns is not None and cj in ignore_columns:
                         continue
 
-                    v = dg.nodes[f"{ri}-{cj}"]["data"]
+                    v = dg.get_node(f"{ri}-{cj}")
                     kg_path_discovering_tasks.append((u, v))
-                if context_node_id in dg:
-                    kg_path_discovering_tasks.append(
-                        (u, dg.nodes[context_node_id]["data"])
-                    )
+                if context_node_id is not None and dg.has_node(context_node_id):
+                    kg_path_discovering_tasks.append((u, dg.get_node(context_node_id)))
 
         for u, v in (
             tqdm(kg_path_discovering_tasks, desc="KG searching")
@@ -159,34 +158,33 @@ class DGFactory:
                     nodeid = value.id
                 else:
                     nodeid = value.get_id()
-                    if nodeid not in dg.nodes:
+                    if not dg.has_node(nodeid):
                         if isinstance(value, DGPathNodeStatement):
                             dg.add_node(
-                                nodeid,
-                                data=StatementNode(
-                                    nodeid,
+                                StatementNode(
+                                    id=nodeid,
                                     qnode_id=value.qnode_id,
                                     predicate=value.predicate,
                                     is_in_kg=True,
-                                ),
+                                )
                             )
                         elif isinstance(value, DGPathNodeQNode):
                             dg.add_node(
-                                nodeid,
-                                data=EntityValueNode(
-                                    nodeid, qnode_id=value.qnode_id, context_span=None
+                                EntityValueNode(
+                                    id=nodeid,
+                                    qnode_id=value.qnode_id,
+                                    context_span=None,
                                 ),
                             )
                         else:
                             dg.add_node(
-                                nodeid,
-                                data=LiteralValueNode(
-                                    nodeid, value=value.value, context_span=None
+                                LiteralValueNode(
+                                    id=nodeid, value=value.value, context_span=None
                                 ),
                             )
 
-                if dg.has_edge(curr_nodeid, nodeid, prop.value):
-                    edge: DGEdge = dg.edges[curr_nodeid, nodeid, prop.value]["data"]
+                if dg.has_edge_between_nodes(curr_nodeid, nodeid, prop.value):
+                    edge = dg.get_edge_between_nodes(curr_nodeid, nodeid, prop.value)
                 else:
                     edge = DGEdge(
                         source=curr_nodeid,
@@ -194,7 +192,7 @@ class DGFactory:
                         predicate=prop.value,
                         is_qualifier=prop.is_qualifier,
                     )
-                    dg.add_edge(curr_nodeid, nodeid, key=prop.value, data=edge)
+                    dg.add_edge(edge)
 
                 tmp_path.append(edge)
                 tmp_path.append(nodeid)
@@ -204,7 +202,8 @@ class DGFactory:
             for i in range(2, len(tmp_path), 4):
                 u_node_id = tmp_path[i - 2]
                 u_edge = tmp_path[i - 1]
-                snode: StatementNode = dg.nodes[tmp_path[i]]["data"]
+                snode = dg.get_node(tmp_path[i])
+                assert isinstance(snode, StatementNode)
                 v_edge = tmp_path[i + 1]
                 v_node_id = tmp_path[i + 2]
 
@@ -240,7 +239,7 @@ class DGFactory:
     def kg_path_discovering(
         self,
         kg_object_index: KGObjectIndex,
-        dg: nx.MultiDiGraph,
+        dg: DGGraph,
         u: Union[EntityValueNode, CellNode],
         v: Union[EntityValueNode, CellNode],
         max_n_hop: int = 2,

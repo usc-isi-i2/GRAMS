@@ -241,7 +241,7 @@ class WikidataSemanticModelHelper(WDOnt):
                 if vnode.column in classmap:
                     target = sm.get_node(classmap[vnode.column])
                 elif sm.has_data_node(vnode.column):
-                    target = sm.get_node(vnode.column)
+                    target = sm.get_data_node(vnode.column)
                 elif vnode.id not in cpa_idmap:
                     target = O.DataNode(
                         col_index=vnode.column,

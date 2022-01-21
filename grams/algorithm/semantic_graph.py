@@ -1,5 +1,9 @@
 import copy
-from grams.algorithm.data_graph.dg_graph import EntityValueNode, LiteralValueNode
+from grams.algorithm.data_graph.dg_graph import (
+    DGGraph,
+    EntityValueNode,
+    LiteralValueNode,
+)
 import numpy as np
 from collections import Counter
 from dataclasses import dataclass
@@ -313,7 +317,9 @@ class SGStatementNode:
         for source_flow, target_flows in self.forward_flow.items():
             # source_flow.predicate is always the same, just change to different data node
             # get list of statements that contains all edges
-            stmts: Dict[str, Dict[SGEdgeFlowTarget, List[FlowProvenance]]] = None
+            stmts: Optional[
+                Dict[str, Dict[SGEdgeFlowTarget, List[FlowProvenance]]]
+            ] = None
             for target_flow in target_flows:
                 if (
                     target_flow.sg_target_id,
@@ -373,9 +379,9 @@ NxSGEdge = Tuple[str, str, str, NxSGEdgeAttr]
 
 def get_label(
     porq: str,
-    qnodes: Dict[str, QNode],
-    wdclasses: Dict[str, WDClass],
-    wdprops: Dict[str, WDProperty],
+    qnodes: Mapping[str, QNode],
+    wdclasses: Mapping[str, WDClass],
+    wdprops: Mapping[str, WDProperty],
 ):
     if porq.startswith("Q"):
         if porq in wdclasses:
@@ -405,7 +411,7 @@ def merge_connected_components(graphs: List[nx.MultiDiGraph]):
 @dataclass
 class SemanticGraphConstructorArgs:
     table: LinkedTable
-    dg: nx.MultiDiGraph
+    dg: DGGraph
     sg: nx.MultiDiGraph
     # column type assignment, from column index (must stored as string) => QNode
     cta: Optional[Dict[str, str]] = None
@@ -432,7 +438,7 @@ class SemanticGraphConstructor:
         self.wdclasses = wdclasses
         self.wdprops = wdprops
 
-    def run(self, table: LinkedTable, dg: nx.MultiDiGraph):
+    def run(self, table: LinkedTable, dg: DGGraph):
         args = SemanticGraphConstructorArgs(table, dg, None)
         for i, step in enumerate(self.steps):
             step(self, args)
@@ -558,8 +564,9 @@ class SemanticGraphConstructor:
         dg = args.dg
 
         # first step: add node to the graph
-        for uid, udata in dg.nodes(data=True):
-            u: DGNode = udata["data"]
+        # for uid, udata in dg.iter_nodes():
+        #     u: DGNode = udata["data"]
+        for u in dg.iter_nodes():
             if isinstance(u, StatementNode):
                 # we can have more than one predicates per entity column, these are represented in the statement
                 continue
@@ -586,20 +593,22 @@ class SemanticGraphConstructor:
                 sg.add_node(sgi, data=sgu)
 
             if sg.nodes[sgi]["data"].is_column:
-                sg.nodes[sgi]["data"].nodes.add(uid)
+                sg.nodes[sgi]["data"].nodes.add(u.id)
 
         # second step: add link
-        for uid, udata in dg.nodes(data=True):
-            u: DGNode = udata["data"]
+        # for uid, udata in dg.nodes(data=True):
+        #     u: DGNode = udata["data"]
+        for u in dg.iter_nodes():
             if isinstance(u, StatementNode):
                 continue
 
             # add statement
             p2stmts: Dict[str, List[StatementNode]] = {}
-            for _, sid, us_eid, us_edata in dg.out_edges(uid, data=True, keys=True):
-                if us_eid not in p2stmts:
-                    p2stmts[us_eid] = []
-                p2stmts[us_eid].append(dg.nodes[sid]["data"])
+            # for _, sid, us_eid, us_edata in dg.out_edges(uid, data=True, keys=True):
+            for us_edge in dg.out_edges(u.id):
+                if us_edge.predicate not in p2stmts:
+                    p2stmts[us_edge.predicate] = []
+                p2stmts[us_edge.predicate].append(dg.get_node(us_edge.target))
 
             sgi = self.get_sg_node_id(u)
             for p, stmts in p2stmts.items():
@@ -608,21 +617,23 @@ class SemanticGraphConstructor:
                     children_values = {}
                     children_non_values = []
 
-                    for _, vid, sv_eid, sv_edata in dg.out_edges(
-                        stmt.id, data=True, keys=True
-                    ):
-                        v: DGNode = dg.nodes[vid]["data"]
-                        if (vid, sv_eid) not in stmt.forward_flow[uid, p]:
+                    # for _, vid, sv_eid, sv_edata in dg.out_edges(
+                    #     stmt.id, data=True, keys=True
+                    # ):
+                    #     v: DGNode = dg.nodes[vid]["data"]
+                    for sv_edge in dg.out_edges(stmt.id):
+                        v = dg.get_node(sv_edge.target)
+                        if (v.id, sv_edge.predicate) not in stmt.forward_flow[u.id, p]:
                             # because of re-use statement, we need to only consider the children of this u node only
                             continue
 
-                        if sv_eid == p:
+                        if sv_edge.predicate == p:
                             tgi = self.get_sg_node_id(v)
                             if tgi not in children_values:
                                 children_values[tgi] = []
                             children_values[tgi].append(v)
                         else:
-                            children_non_values.append((sv_eid, v))
+                            children_non_values.append((sv_edge.predicate, v))
 
                     for tgi, vals in children_values.items():
                         stmt_id = SGStatementNode.get_id(sgi, p, tgi)
@@ -641,17 +652,18 @@ class SemanticGraphConstructor:
                         sg_stmt: SGStatementNode = sg.nodes[stmt_id]["data"]
                         for v in vals:
                             sg_stmt.track_provenance(
-                                SGEdgeFlowSource(uid, sgi, p),
+                                SGEdgeFlowSource(u.id, sgi, p),
                                 stmt.id,
                                 SGEdgeFlowTarget(v.id, tgi, p),
                                 stmt.get_provenance(
-                                    EdgeFlowSource(uid, p), EdgeFlowTarget(v.id, p)
+                                    EdgeFlowSource(u.id, p), EdgeFlowTarget(v.id, p)
                                 ),
                             )
 
                         for qp, qv in children_non_values:
                             qtgi = self.get_sg_node_id(qv)
-                            if (stmt_id, qtgi, qp) not in dg.edges:
+                            # if (stmt_id, qtgi, qp) not in dg.edges:
+                            if not dg.has_edge_between_nodes(stmt_id, qtgi, qp):
                                 sg.add_edge(
                                     stmt_id,
                                     qtgi,
@@ -660,11 +672,11 @@ class SemanticGraphConstructor:
                                 )
 
                             sg_stmt.track_provenance(
-                                SGEdgeFlowSource(uid, sgi, p),
+                                SGEdgeFlowSource(u.id, sgi, p),
                                 stmt.id,
                                 SGEdgeFlowTarget(qv.id, qtgi, qp),
                                 stmt.get_provenance(
-                                    EdgeFlowSource(uid, p), EdgeFlowTarget(qv.id, qp)
+                                    EdgeFlowSource(u.id, p), EdgeFlowTarget(qv.id, qp)
                                 ),
                             )
         args.sg = sg
@@ -716,7 +728,7 @@ class SemanticGraphConstructor:
                 continue
 
             # cells in this column
-            cells: List[CellNode] = [dg.nodes[cid]["data"] for cid in u.nodes]
+            cells: List[CellNode] = [dg.get_node(cid) for cid in u.nodes]
             covered_fractions = [
                 sum(
                     span.length for spans in cell.qnodes_span.values() for span in spans

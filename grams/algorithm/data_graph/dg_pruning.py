@@ -1,12 +1,13 @@
 from collections import defaultdict
 from grams.algorithm.data_graph.dg_config import DGConfigs
 import networkx as nx
-from typing import Dict, List, Tuple, TypedDict, Union
+from typing import Dict, List, Optional, Tuple, TypedDict, Union, cast
 
 from functools import cmp_to_key
 from grams.algorithm.data_graph.dg_graph import (
     CellNode,
     DGEdge,
+    DGGraph,
     DGNode,
     EdgeFlowSource,
     EdgeFlowTarget,
@@ -16,13 +17,14 @@ from grams.algorithm.data_graph.dg_graph import (
     LiteralValueNode,
     StatementNode,
 )
+from graph.retworkx import digraph_all_simple_paths
 
 
 class DGPruning:
     NxDGEdgeAttr = TypedDict("NxDGEdgeAttr", data=DGEdge)
     NxDGEdge = Tuple[str, str, str, NxDGEdgeAttr]
 
-    def __init__(self, dg: nx.MultiDiGraph):
+    def __init__(self, dg: DGGraph):
         self.dg = dg
 
     def prune_hidden_entities(self):
@@ -57,39 +59,40 @@ class DGPruning:
         Finally, if a node is standalone, we should remove it.
         """
         # step 1: prune the second leg paths
-        legprime: Dict[Tuple[str, str], FlowProvenance] = {}
+        legprime: Dict[Tuple[str, str], Optional[FlowProvenance]] = {}
         rm_legs: List[Tuple[str, EdgeFlowSource, EdgeFlowTarget]] = []
-        for nid, ndata in self.dg.nodes(data=True):  # type: ignore
-            n: EntityValueNode = ndata["data"]
+        for n in self.dg.iter_nodes():
             if not isinstance(n, EntityValueNode):
                 continue
 
-            if self.dg.in_degree(nid) == 0:
+            if self.dg.in_degree(n.id) == 0:
                 # no other node connect to it
                 continue
 
             # get list of grandpa ui (only cells or values in the context), along with their paths to node n.
             grandpa = set()
-            for gpid in self.iter_grand_parents(nid):
-                gp = self.dg.nodes[gpid]["data"]
+            for gp in self.iter_grand_parents(n.id):
                 if isinstance(gp, CellNode) or (
                     isinstance(gp, (EntityValueNode, LiteralValueNode))
                     and gp.is_context
                 ):
-                    grandpa.add(gpid)
+                    grandpa.add(gp.id)
 
-            for _, sid, ns_eid in self.dg.out_edges(nid, keys=True):
-                stmt: StatementNode = self.dg.nodes[sid]["data"]
-                stmt_outedges = self.out_edges(sid)
+            # for _, sid, ns_eid in self.dg.out_edges(nid, keys=True):
+            #     stmt: StatementNode = self.dg.nodes[sid]["data"]
+            for ns_edge in self.dg.out_edges(n.id):
+                stmt = self.dg.get_node(ns_edge.target)
+                assert isinstance(stmt, StatementNode)
+                stmt_outedges = self.dg.out_edges(stmt.id)
                 if len(stmt_outedges) > 1:
                     # this stmt has other qualifiers, so it's not what we are looking for
                     continue
 
-                for sv_outedge in next(iter(stmt_outedges.values())):
-                    v = self.dg.nodes[sv_outedge.target]["data"]
+                for sv_outedge in stmt_outedges:
+                    v = self.dg.get_node(sv_outedge.target)
                     # got leg 2, now looks for all incoming
                     leg2 = (
-                        EdgeFlowSource(nid, ns_eid),
+                        EdgeFlowSource(n.id, ns_edge.predicate),
                         EdgeFlowTarget(v.id, sv_outedge.predicate),
                     )
                     if not stmt.has_flow(*leg2):
@@ -101,12 +104,17 @@ class DGPruning:
                         if (gpid, v.id) not in legprime:
                             paths = [
                                 (
-                                    self.dg.nodes[path[0][1]]["data"],
-                                    EdgeFlowSource(path[0][0], path[0][2]),
-                                    EdgeFlowTarget(path[1][1], path[1][2]),
+                                    cast(
+                                        StatementNode, self.dg.get_node(path[0].target)
+                                    ),
+                                    EdgeFlowSource(path[0].source, path[0].predicate),
+                                    EdgeFlowTarget(path[1].target, path[1].predicate),
                                 )
-                                for path in nx.all_simple_edge_paths(
-                                    self.dg, gpid, v.id, cutoff=2
+                                for path in digraph_all_simple_paths(
+                                    self.dg,
+                                    self.dg.idmap[gpid],
+                                    self.dg.idmap[v.id],
+                                    cutoff=2,
                                 )
                             ]
                             provs = [
@@ -140,7 +148,7 @@ class DGPruning:
                             break
 
                     if has_better_paths:
-                        rm_legs.append((sid, leg2[0], leg2[1]))
+                        rm_legs.append((stmt.id, leg2[0], leg2[1]))
 
         # logger.info("#legs: {}", len(rm_legs))
         self.remove_flow(rm_legs)
@@ -152,46 +160,45 @@ class DGPruning:
         # step 2: prune the first leg paths (temporary disable)
         if DGConfigs.PRUNE_SINGLE_LEAF_ENT:
             rm_legs: List[Tuple[str, EdgeFlowSource, EdgeFlowTarget]] = []
-            for nid, ndata in self.dg.nodes(data=True):
-                n: EntityValueNode = ndata["data"]
-                if not isinstance(n, EntityValueNode) or self.dg.out_degree(nid) > 0:
+            for n in self.dg.iter_nodes():
+                if not isinstance(n, EntityValueNode) or self.dg.out_degree(n.id) > 0:
                     continue
 
-                for sid, _, sn_eid, sn_edata in self.dg.in_edges(
-                    nid, data=True, keys=True
-                ):
-                    stmt_outedges = self.out_edges(sid)
-                    if len(stmt_outedges) == 1:
+                for sn_edge in self.dg.in_edges(n.id):
+                    if self.dg.out_degree(sn_edge.source) == 1:
                         # stmt does not have other property/qualifier
-                        target_flow = EdgeFlowTarget(nid, sn_eid)
-                        stmt: StatementNode = self.dg.nodes[sid]["data"]
+                        target_flow = EdgeFlowTarget(n.id, sn_edge.predicate)
+                        stmt = self.dg.get_node(sn_edge.source)
+                        assert isinstance(stmt, StatementNode)
                         for source_flow, _ in stmt.iter_source_flow(target_flow):
-                            rm_legs.append((sid, source_flow, target_flow))
+                            rm_legs.append((sn_edge.source, source_flow, target_flow))
             self.remove_flow(rm_legs)
 
         rm_legs: List[Tuple[str, EdgeFlowSource, EdgeFlowTarget]] = []
         # step 3
-        for nid, ndata in self.dg.nodes(data=True):
-            n: Union[EntityValueNode, LiteralValueNode] = ndata["data"]
+        for n in self.dg.iter_nodes():
             if (
                 not isinstance(n, (EntityValueNode, LiteralValueNode))
-                or self.dg.out_degree(nid) > 0
+                or self.dg.out_degree(n.id) > 0
                 or n.is_context
             ):
                 continue
-            for sid, _, sn_eid, sn_edata in self.dg.in_edges(nid, data=True, keys=True):
-                for uid, _, us_eid in self.dg.in_edges(sid, keys=True):
-                    if isinstance(self.dg.nodes[uid]["data"], EntityValueNode):
+            # for sid, _, sn_eid, sn_edata in self.dg.in_edges(nid, data=True, keys=True):
+            for sn_edge in self.dg.in_edges(n.id):
+                # for uid, _, us_eid in self.dg.in_edges(sn_edge.source):
+                for us_edge in self.dg.in_edges(sn_edge.source):
+                    if isinstance(self.dg.get_node(us_edge.source), EntityValueNode):
                         # two consecutive entity nodes, we can remove this link
-                        stmt: StatementNode = self.dg.nodes[sid]["data"]
-                        if us_eid == sn_eid:
+                        stmt = self.dg.get_node(sn_edge.source)
+                        assert isinstance(stmt, StatementNode)
+                        if us_edge.predicate == sn_edge.predicate:
                             # the link we are going to remove is the statement value, so we should remove the statement
                             for source_flow, target_flow in stmt.flow:
-                                rm_legs.append((sid, source_flow, target_flow))
+                                rm_legs.append((stmt.id, source_flow, target_flow))
                         else:
-                            target_flow = EdgeFlowTarget(nid, sn_eid)
+                            target_flow = EdgeFlowTarget(n.id, sn_edge.predicate)
                             for source_flow, _ in stmt.iter_source_flow(target_flow):
-                                rm_legs.append((sid, source_flow, target_flow))
+                                rm_legs.append((stmt.id, source_flow, target_flow))
 
         # logger.info("#legs: {}", len(rm_legs))
         self.remove_flow(rm_legs)
@@ -210,29 +217,32 @@ class DGPruning:
         -------
         """
         rm_nodes = set()
-        for uid, udata in self.dg.nodes(data=True):
-            u: DGNode = udata["data"]
+        for u in self.dg.iter_nodes():
             if isinstance(u, EntityValueNode):
-                if self.dg.in_degree(uid) == 0 and self.dg.out_degree(uid) == 0:
-                    rm_nodes.add(uid)
+                if self.dg.in_degree(u.id) == 0 and self.dg.out_degree(u.id) == 0:
+                    rm_nodes.add(u.id)
             elif isinstance(u, StatementNode):
-                if self.dg.in_degree(uid) == 0 or self.dg.out_degree(uid) == 0:
-                    rm_nodes.add(uid)
+                if self.dg.in_degree(u.id) == 0 or self.dg.out_degree(u.id) == 0:
+                    rm_nodes.add(u.id)
         for uid in rm_nodes:
             self.dg.remove_node(uid)
 
     def remove_flow(self, flows: List[Tuple[str, EdgeFlowSource, EdgeFlowTarget]]):
         for sid, source_flow, target_flow in flows:
-            stmt: StatementNode = self.dg.nodes[sid]["data"]
+            stmt = cast(StatementNode, self.dg.get_node(sid))
             stmt.untrack_flow(source_flow, target_flow)
             if not stmt.has_source_flow(source_flow):
-                self.dg.remove_edge(source_flow.source_id, sid, source_flow.edge_id)
+                self.dg.remove_edge_between_nodes(
+                    source_flow.source_id, sid, source_flow.edge_id
+                )
             if not stmt.has_target_flow(target_flow):
-                self.dg.remove_edge(sid, target_flow.target_id, target_flow.edge_id)
+                self.dg.remove_edge_between_nodes(
+                    sid, target_flow.target_id, target_flow.edge_id
+                )
 
     def specific_pruning_provenance_cmp(
         self, prov0: FlowProvenance, prov1: FlowProvenance
-    ):
+    ) -> int:
         # compare provenance, this function only accept
         if prov0.gen_method == LinkGenMethod.FromWikidataLink:
             # always favour from wikidata link
@@ -242,15 +252,15 @@ class DGPruning:
         # assert prov0.gen_method == prov1.gen_method and prov0.gen_method_arg == prov1.gen_method_arg
         # do not need to check if the two gen method and args are equal, as even if we select the incorrect one
         # we only truncate when the other leg worst than it
-        return prov0.prob - prov1.prob
+        return prov0.prob - prov1.prob  # type: ignore
 
     def iter_grand_parents(self, nid: str):
-        for pid, _ in self.dg.in_edges(nid):
-            for ppid, _ in self.dg.in_edges(pid):
-                yield ppid
+        for parent in self.dg.predecessors(nid):
+            for grand_parent in self.dg.predecessors(parent.id):
+                yield grand_parent
 
-    def out_edges(self, uid: str) -> Dict[str, List[DGEdge]]:
-        label2edges = defaultdict(list)
-        for _, vid, eid, edata in self.dg.out_edges(uid, data=True, keys=True):
-            label2edges[eid].append(edata["data"])
-        return label2edges
+    # def out_edges(self, uid: str) -> Dict[str, List[DGEdge]]:
+    #     label2edges = defaultdict(list)
+    #     for _, vid, eid, edata in self.dg.out_edges(uid, data=True, keys=True):
+    #         label2edges[eid].append(edata["data"])
+    #     return label2edges
