@@ -9,9 +9,9 @@ from functools import cmp_to_key
 from itertools import chain
 from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Union, cast
 from graph.retworkx import (
-    RetworkXStrCanonicalMultiDiGraph,
-    BaseRichEdge,
-    BaseRichNode,
+    RetworkXStrDiGraph,
+    BaseEdge,
+    BaseNode,
 )
 
 import networkx as nx
@@ -36,7 +36,7 @@ class Span:
 
 
 @dataclass
-class CellNode(BaseRichNode):
+class CellNode(BaseNode[str]):
     id: str
     value: str
     column: int
@@ -56,7 +56,7 @@ class ContextSpan:
 
 
 @dataclass
-class LiteralValueNode(BaseRichNode):
+class LiteralValueNode(BaseNode[str]):
     id: str
     value: DataValue
     # not none if it is appear in the context
@@ -68,7 +68,7 @@ class LiteralValueNode(BaseRichNode):
 
 
 @dataclass
-class EntityValueNode(BaseRichNode):
+class EntityValueNode(BaseNode[str]):
     id: str
     qnode_id: str
     # not none if it is appear in the context
@@ -85,7 +85,7 @@ EdgeFlowTarget = NamedTuple("EdgeFlowTarget", [("target_id", str), ("edge_id", s
 
 
 @dataclass
-class StatementNode(BaseRichNode):
+class StatementNode(BaseNode[str]):
     id: str
     # id of the qnode that contains the statement
     qnode_id: str
@@ -350,7 +350,7 @@ class DGPath:
 
 
 @dataclass
-class DGEdge(BaseRichEdge[str]):
+class DGEdge(BaseEdge[str, str]):
     source: str
     target: str
     predicate: str
@@ -374,5 +374,13 @@ class DGEdge(BaseRichEdge[str]):
         return source.row == target.row
 
 
-class DGGraph(RetworkXStrCanonicalMultiDiGraph[DGNode, DGEdge]):
-    pass
+class DGGraph(RetworkXStrDiGraph[str, DGNode, DGEdge]):
+    def get_statement_node(self, nid: str) -> StatementNode:
+        n = self.get_node(nid)
+        assert isinstance(n, StatementNode)
+        return n
+
+    def get_cell_node(self, nid: str) -> CellNode:
+        n = self.get_node(nid)
+        assert isinstance(n, CellNode)
+        return n

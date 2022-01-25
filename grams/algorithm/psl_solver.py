@@ -1,50 +1,61 @@
 import copy
 import math
 import os
-from pathlib import Path
-from networkx.exception import NetworkXUnfeasible
-import sm.misc as M
-from grams.algorithm.semtab2020 import SemTab2020PostProcessing
-from typing import Mapping, Optional, Dict, List, Set, Tuple
-import networkx as nx
-
-from grams.inputs.linked_table import LinkedTable
-from grams.algorithm.type_feature import TypeFeatureExtraction
 import time
-from functools import cmp_to_key
-
-from grams.algorithm.link_feature import LinkFeatureExtraction
-from grams.algorithm.bank_solver import (
-    SteinerTreeBankSolver,
-    Solution,
-    NoSingleRootException,
-)
 import uuid
+from functools import cmp_to_key
 from itertools import chain
 from multiprocessing import Pool
-from operator import itemgetter, attrgetter, xor
-
-from loguru import logger
-from pslpython.model import Model
-from pslpython.predicate import Predicate
-from pslpython.partition import Partition
-from pslpython.rule import Rule
-from typing import Set, Iterable, TypedDict, Union, Any, Callable
-
-from grams.algorithm.data_graph import DGNode
-from grams.algorithm.semantic_graph import (
-    SGEntityValueNode,
-    SGLiteralValueNode,
-    SGNode,
-    SGStatementNode,
-    SGColumnNode,
-    SemanticGraphConstructorArgs,
-    SGEdge,
-    SemanticGraphConstructor,
+from operator import attrgetter, itemgetter, xor
+from pathlib import Path
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    TypedDict,
+    Union,
+    cast,
 )
-from kgdata.wikidata.models import QNode, WDProperty, WDClass, WDQuantityPropertyStats
-from tqdm.auto import tqdm
+from grams.algorithm.postprocessing.simple_path import (
+    keep_one_simple_path_between_important_nodes,
+)
+from graph.retworkx.api import dag_longest_path
 
+import networkx as nx
+import sm.misc as M
+from steiner_tree.bank import (
+    NoSingleRootException,
+    Solution,
+    BankSolver,
+)
+from grams.algorithm.candidate_graph.cg_graph import (
+    CGColumnNode,
+    CGEdge,
+    CGEntityValueNode,
+    CGGraph,
+    CGLiteralValueNode,
+    CGStatementNode,
+)
+from grams.algorithm.data_graph.dg_graph import DGGraph, DGNode
+from grams.algorithm.link_feature import LinkFeatureExtraction
+from grams.algorithm.semtab2020 import SemTab2020PostProcessing
+from grams.algorithm.type_feature import TypeFeatureExtraction
+from grams.inputs.linked_table import LinkedTable
+from hugedict.parallel.parallel import Parallel
+from kgdata.wikidata.models import QNode, WDClass, WDProperty, WDQuantityPropertyStats
+from loguru import logger
+from networkx.exception import NetworkXUnfeasible
+from pslpython.model import Model
+from pslpython.partition import Partition
+from pslpython.predicate import Predicate
+from pslpython.rule import Rule
+from tqdm.auto import tqdm
 
 global_objects = {}
 
@@ -88,8 +99,11 @@ class PSLConfigs:
 PSLRunParallelArgs = TypedDict(
     "PSL.RunParallelArgs",
     table=LinkedTable,
-    datagraph=nx.MultiDiGraph,
-    semanticgraph=nx.MultiDiGraph,
+    datagraph=DGGraph,
+    semanticgraph=CGGraph,
+)
+_AddContextPathType = TypedDict(
+    "_Path", {"path": Tuple[CGEdge, CGEdge], "score": float}
 )
 
 
@@ -435,7 +449,7 @@ class PSLSteinerTreeSolver:
 
     def solve_parallel(
         self,
-        inputs: List[Tuple[LinkedTable, nx.MultiDiGraph, nx.MultiDiGraph]],
+        inputs: List[Tuple[LinkedTable, CGGraph, DGGraph]],
         batch_size: Optional[int] = None,
         show_progress: bool = False,
     ):
@@ -447,7 +461,7 @@ class PSLSteinerTreeSolver:
         global_objects["sim_fn"] = self.sim_fn
 
         # create a mapping from id to index so that we can re-assign the result later.
-        results = M.parallel_map(
+        results = Parallel().map(
             PSLSteinerTreeSolver._extract_features_wrapper,
             list(enumerate(inputs)),
             show_progress=show_progress,
@@ -467,10 +481,10 @@ class PSLSteinerTreeSolver:
                 )
 
         if self.cache_dir is not None:
-            (self.cache_dir / "inferences").mkdir(exist_ok=True, parents=True)
+            infdir = self.cache_dir / "inferences"
+            infdir.mkdir(exist_ok=True, parents=True)
             get_cache_file = lambda tbl, index: (
-                self.cache_dir
-                / f"inferences/a{index:03d}_{tbl.get_friendly_fs_id()}.pkl"
+                infdir / f"a{index:03d}_{tbl.get_friendly_fs_id()}.pkl"
             )
         else:
             get_cache_file = lambda tbl, index: None
@@ -522,20 +536,20 @@ class PSLSteinerTreeSolver:
                     batch_predictions.append(pred)
             else:
                 batch_predictions = [
-                    M.deserialize_pkl(cache_file) for cache_file in cache_files
+                    M.deserialize_pkl(cache_file) for cache_file in cache_files  # type: ignore -- type checker not smart enough
                 ]
 
             # set the prob. for debugging purpose
             for (table, sg, dg), pred in zip(input_batch, batch_predictions):
                 assert table.id == pred["id"]
                 for k, v in pred["links"].items():
-                    sg.edges[k]["data"].features["prob"] = v
+                    sg.get_edge_between_nodes(*k).features["prob"] = v
             predictions += batch_predictions
 
         return predictions
 
-    def solve(self, table, sg, dg):
-        if len(sg.edges) == 0:
+    def solve(self, table: LinkedTable, sg: CGGraph, dg: DGGraph):
+        if sg.num_edges() == 0:
             return {"links": {}, "types": {}}
 
         data, idmap = self.extract_predicate_data(
@@ -567,7 +581,7 @@ class PSLSteinerTreeSolver:
         )
         link_feat_extractor.add_debug_info(link_feat_extractor.extract_features())
         for k, prob in infer_resp["links"].items():
-            sg.edges[k]["data"].features["prob"] = prob
+            sg.get_edge_between_nodes(*k).features["prob"] = prob
 
         return infer_resp
 
@@ -594,19 +608,21 @@ class PSLSteinerTreeSolver:
             )
         assert False, self.postprocessing_method
 
-    def remove_dangling_statement(self, sg: nx.MultiDiGraph):
+    def remove_dangling_statement(self, cg: CGGraph):
         ids = set()
-        for sid, s in list(sg.nodes(data="data")):
-            if s.is_statement and (sg.in_degree(sid) == 0 or sg.out_degree(sid) == 0):
-                ids.add(sid)
+        for s in list(cg.iter_nodes()):
+            if isinstance(s, CGStatementNode) and (
+                cg.in_degree(s.id) == 0 or cg.out_degree(s.id) == 0
+            ):
+                ids.add(s.id)
         for id in ids:
-            sg.remove_node(id)
+            cg.remove_node(id)
 
     def postprocessing_select_simplepath(
         self,
-        table,
-        sg,
-        dg,
+        table: LinkedTable,
+        sg: CGGraph,
+        dg: DGGraph,
         pred_with_probs: Dict[Tuple[str, str, str], float],
         threshold,
     ):
@@ -622,37 +638,37 @@ class PSLSteinerTreeSolver:
             for path in paths:
                 path_prob = 0
                 for uid, vid, eid in path:
-                    edge: SGEdge = sg.edges[uid, vid, eid]["data"]
+                    edge = sg.get_edge_between_nodes(uid, vid, eid)
                     path_prob += pred_with_probs[uid, vid, eid]
                 path_probs.append(path_prob)
             path, path_prob = max(zip(paths, path_probs), key=itemgetter(1))
             return path
 
         pred_edges = [k for k, v in pred_with_probs.items() if v >= threshold]
-        steiner_tree = SemanticGraphConstructor.get_sg_subgraph(sg, pred_edges)
+        steiner_tree = sg.subgraph_from_edge_triples(pred_edges)
         self.remove_dangling_statement(steiner_tree)
 
-        if len(steiner_tree.edges) == 0:
+        if steiner_tree.num_edges() == 0:
             # empty graph
             return steiner_tree
 
-        return SemanticGraphConstructor.keep_one_simple_path_between_important_nodes(
+        return keep_one_simple_path_between_important_nodes(
             steiner_tree, select_shorter_path, both_direction=True
         )
 
     def postprocessing_steiner_tree(
         self,
         table,
-        sg,
-        dg,
+        sg: CGGraph,
+        dg: DGGraph,
         pred_with_probs: Dict[Tuple[str, str, str], float],
         threshold,
     ):
         pred_edges = [k for k, v in pred_with_probs.items() if v >= threshold]
-        steiner_tree = SemanticGraphConstructor.get_sg_subgraph(sg, pred_edges)
+        steiner_tree = sg.subgraph_from_edge_triples(pred_edges)
         self.remove_dangling_statement(steiner_tree)
 
-        if len(steiner_tree.edges) == 0:
+        if steiner_tree.num_edges() == 0:
             # empty graph
             return steiner_tree
 
@@ -684,9 +700,9 @@ class PSLSteinerTreeSolver:
         # print(norm_pred_probs)
 
         def get_solution_weight(sol: Solution):
-            if sol.get_n_edges() == 0:
+            if sol.num_edges == 0:
                 return 0.0
-            return sol.weight / sol.get_n_edges()
+            return sol.weight / sol.num_edges
 
         def cmp_bank_solution(sol_a: Solution, sol_b: Solution):
             # since PSL inference is not exact but optimization, there is always a delta different in their final
@@ -705,12 +721,15 @@ class PSLSteinerTreeSolver:
                 return 1
 
             if not hasattr(sol_a, "depth"):
-                sol_a.depth = len(nx.algorithms.dag.dag_longest_path(sol_a.graph))
+                sol_a.depth = len(dag_longest_path(sol_a.graph))
             if not hasattr(sol_b, "depth"):
-                sol_b.depth = len(nx.algorithms.dag.dag_longest_path(sol_b.graph))
+                sol_b.depth = len(dag_longest_path(sol_b.graph))
             return sol_a.depth - sol_b.depth
 
-        terminal_nodes = SemanticGraphConstructor.st_terminal_nodes(steiner_tree)
+        terminal_nodes = {
+            u.id for u in steiner_tree.iter_nodes() if isinstance(u, CGColumnNode)
+        }
+        # terminal_nodes = SemanticGraphConstructor.st_terminal_nodes(steiner_tree)
         # terminal_nodes = set()
         # for uid, udata in steiner_tree.nodes(data=True):
         #     u: SGNode = udata["data"]
@@ -723,7 +742,7 @@ class PSLSteinerTreeSolver:
             # TODO: fix me
             return steiner_tree
 
-        bank_solver = SteinerTreeBankSolver(
+        bank_solver = BankSolver(
             steiner_tree,
             terminal_nodes,
             top_k_st=50,
@@ -731,11 +750,9 @@ class PSLSteinerTreeSolver:
             weight_fn=lambda e: 1.0
             / max(
                 1e-7,
-                norm_pred_probs[
-                    e["data"].source_id, e["data"].target_id, e["data"].predicate
-                ],
+                norm_pred_probs[e.source, e.target, e.predicate],
             ),
-            solution_cmp_fn=cmp_to_key(cmp_bank_solution),
+            solution_cmp_fn=cmp_bank_solution,
         )
         try:
             candidate_sts, solutions = bank_solver.run()
@@ -757,79 +774,75 @@ class PSLSteinerTreeSolver:
                 table, sg, dg, pred_with_probs, threshold
             )
 
-        pred_tree: nx.MultiDiGraph = candidate_sts[0]
+        pred_tree = candidate_sts[0]
         # remove statements that do not connected from any nodes
-        remove_nodes = set()
-        for sid, s in pred_tree.nodes(data="data"):
-            if not s.is_statement:
-                continue
-            if pred_tree.in_degree(s.id) == 0:
-                remove_nodes.add(s.id)
-        for sid in remove_nodes:
-            pred_tree.remove_node(sid)
-        for sid, s in list(pred_tree.nodes(data="data")):
-            if not s.is_statement:
+        for s in pred_tree.nodes():
+            if isinstance(s, CGStatementNode) and pred_tree.in_degree(s.id) == 0:
+                pred_tree.remove_node(s.id)
+        for s in pred_tree.nodes():
+            if not isinstance(s, CGStatementNode):
                 continue
             assert pred_tree.in_degree(s.id) == 1
-            (in_edge,) = pred_tree.in_edges(s.id, keys=True)
-            inedge_predicate = in_edge[-1]
-            for _sid, _vid, e in steiner_tree.out_edges(s.id, data="data"):
-                if e.predicate == inedge_predicate:
+            (in_edge,) = pred_tree.in_edges(s.id)
+            for e in steiner_tree.out_edges(s.id):
+                if e.predicate == in_edge.predicate:
                     # statement prop
-                    if not pred_tree.has_node(e.target_id):
-                        ent = steiner_tree.nodes[e.target_id]["data"]
-                        # assert ent.is_value and ent.is_entity_value, f"The only reason why we don't have statement value is it is entity: {ent}"
-                        assert (
-                            ent.is_value
+                    if not pred_tree.has_node(e.target):
+                        ent = steiner_tree.get_node(e.target)
+                        assert isinstance(
+                            ent, (CGEntityValueNode, CGLiteralValueNode)
                         ), f"The only reason why we don't have statement value is it is an literal"
-                        pred_tree.add_node(ent.id, data=copy.deepcopy(ent))
-                        pred_tree.add_edge(
-                            s.id, ent.id, key=e.predicate, data=copy.deepcopy(e)
-                        )
+                        pred_tree.add_node(ent.clone())
+                        pred_tree.add_edge(e.clone())
                 else:
-                    v = steiner_tree.nodes[e.target_id]["data"]
-                    if v.is_value and v.is_in_context:
+                    v = steiner_tree.get_node(e.target)
+                    if (
+                        isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
+                        and v.is_in_context
+                    ):
                         # we should have this as PSL think it's correct
                         # TODO: the entity can be in the tree before if it's needed to connect
                         # two nodes, but we need to check it
                         if pred_tree.has_node(v.id):
-                            assert pred_tree.has_edge(s.id, v.id, key=e.predicate)
+                            assert pred_tree.has_edge_between_nodes(
+                                s.id, v.id, e.predicate
+                            )
                         else:
                             # assert not pred_tree.has_node(v.id)
-                            pred_tree.add_node(v.id, data=copy.deepcopy(v))
-                            pred_tree.add_edge(
-                                s.id, v.id, key=e.predicate, data=copy.deepcopy(e)
-                            )
+                            pred_tree.add_node(v.clone())
+                            pred_tree.add_edge(e.clone())
 
         if PSLConfigs.POSTPROCESSING_STEINER_TREE_FORCE_ADDING_CONTEXT:
             # add back the context node or entity that are appeared in the psl results but not in the predicted tree
-            for vid, v in steiner_tree.nodes(data="data"):
+            for v in steiner_tree.iter_nodes():
                 if (
-                    not isinstance(v, (SGEntityValueNode, SGLiteralValueNode))
+                    not isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
                     or not v.is_in_context
                 ):
                     continue
-                if pred_tree.has_node(vid):
+                if pred_tree.has_node(v.id):
                     continue
 
                 # find the paths that connect the vid to the tree and select the one with highest score and do not create cycle
-                paths = []
-                for sid, _, sveid, sve in steiner_tree.in_edges(
-                    vid, keys=True, data="data"
-                ):
-                    if sveid == "P31":
+                paths: List[_AddContextPathType] = []
+                for sv_edge in steiner_tree.in_edges(v.id):
+                    if sv_edge.predicate == "P31":
                         continue
-                    for uid, _, useid, use in steiner_tree.in_edges(
-                        sid, keys=True, data="data"
-                    ):
-                        if not pred_tree.has_node(uid):
+                    for us_edge in steiner_tree.in_edges(sv_edge.source):
+                        if not pred_tree.has_node(us_edge.source):
                             continue
-
                         paths.append(
                             {
-                                "path": (uid, use, sid, sve),
-                                "score": pred_with_probs[(uid, sid, useid)]
-                                + pred_with_probs[(sid, vid, sveid)],
+                                "path": (
+                                    us_edge,
+                                    sv_edge,
+                                ),
+                                "score": pred_with_probs[
+                                    (us_edge.source, us_edge.target, us_edge.predicate)
+                                ]
+                                + pred_with_probs[
+                                    (sv_edge.source, sv_edge.target, sv_edge.predicate)
+                                ],
                             }
                         )
 
@@ -839,19 +852,20 @@ class PSLSteinerTreeSolver:
                 if len(paths) == 0:
                     continue
 
-                uid, use, sid, sve = paths[0]["path"]
-                pred_tree.add_node(vid, data=copy.deepcopy(v))
-                if not pred_tree.has_node(sid):
-                    pred_tree.add_node(
-                        sid, data=copy.deepcopy(steiner_tree.nodes[sid]["data"])
-                    )
-                assert not pred_tree.has_edge(sid, vid, sve.predicate)
-                pred_tree.add_edge(sid, vid, key=sve.predicate, data=copy.deepcopy(sve))
+                us_edge, sv_edge = paths[0]["path"]
+                pred_tree.add_node(v.clone())
+                if not pred_tree.has_node(sv_edge.source):
+                    s = steiner_tree.get_node(sv_edge.source)
+                    pred_tree.add_node(s.clone())
+                assert not pred_tree.has_edge_between_nodes(
+                    sv_edge.source, sv_edge.target, sv_edge.predicate
+                )
+                pred_tree.add_edge(sv_edge.clone())
 
-                if not pred_tree.has_edge(uid, sid, use.predicate):
-                    pred_tree.add_edge(
-                        uid, sid, key=use.predicate, data=copy.deepcopy(use)
-                    )
+                if not pred_tree.has_edge_between_nodes(
+                    us_edge.source, us_edge.target, us_edge.predicate
+                ):
+                    pred_tree.add_edge(us_edge.clone())
 
         # TODO: uncomment for debugging
         # print(candidate_sts)
@@ -872,12 +886,10 @@ class PSLSteinerTreeSolver:
         # bank_solver._get_graph_weight(candidate_sts[0][0])
         return pred_tree
 
-    def train_setup(
-        self, inputs: List[Tuple[LinkedTable, nx.MultiDiGraph, nx.MultiDiGraph, dict]]
-    ):
-        features = [x[3] for x in inputs]
-        inputs = [(x[0], x[1], x[2]) for x in inputs]
-        data, idmap = self.extract_predicate_data(inputs, features=features)
+    def train_setup(self, inputs: List[Tuple[LinkedTable, CGGraph, DGGraph, dict]]):
+        data, idmap = self.extract_predicate_data(
+            inputs=[(x[0], x[1], x[2]) for x in inputs], features=[x[3] for x in inputs]
+        )
 
         assert (
             len(self.model.get_predicates()) == len(data) + 2
@@ -960,7 +972,7 @@ class PSLSteinerTreeSolver:
 
     def extract_predicate_data(
         self,
-        inputs: List[Tuple[LinkedTable, nx.MultiDiGraph, nx.MultiDiGraph]],
+        inputs: List[Tuple[LinkedTable, CGGraph, DGGraph]],
         features: Optional[List[dict]] = None,
         idmap=None,
         is_parallel: Union[str, bool] = "auto",
@@ -986,13 +998,15 @@ class PSLSteinerTreeSolver:
                 global_objects["cache_dir"] = self.cache_dir
             else:
                 global_objects["cache_dir"] = None
-            features = M.parallel_map(
+            pp = Parallel()
+            features = pp.map(
                 PSLSteinerTreeSolver._extract_features_wrapper,
                 list(enumerate(inputs)),
                 show_progress=show_progress,
                 progress_desc="psl: extract features",
                 is_parallel=is_parallel,
             )
+        assert features is not None
         data = {
             "CanRel": [],
             "CanType": [],
@@ -1007,27 +1021,31 @@ class PSLSteinerTreeSolver:
             data[f"TypeFeature_{feat}"] = []
         for (table, sg, dg), result in zip(inputs, features):
             table_id = table.id
-            idmap.add_keys([(table_id, uid) for uid in sg.nodes.keys()])
+            idmap.add_keys([(table_id, u.id) for u in sg.iter_nodes()])
             data["CanRel"] += [
-                (idmap.m((table_id, uid)), idmap.m((table_id, vid)), eid)
-                for uid, vid, eid, in sg.edges(keys=True)
+                (
+                    idmap.m((table_id, edge.source)),
+                    idmap.m((table_id, edge.target)),
+                    edge.predicate,
+                )
+                for edge in sg.iter_edges()
             ]
             data[f"CanType"] += [
                 (idmap.m((table_id, uid)), classid)
                 for uid, classid in result["type_feats"][TypeFeatureExtraction.Freq]
             ]
             data["NotStatement"] += [
-                (idmap.m((table_id, uid)),)
-                for uid, u in sg.nodes(data="data")
-                if not u.is_statement
+                (idmap.m((table_id, u.id)),)
+                for u in sg.iter_nodes()
+                if not isinstance(u, CGStatementNode)
             ]
             data["Statement"] += [
-                (idmap.m((table_id, uid)),)
-                for uid, u in sg.nodes(data="data")
-                if u.is_statement
+                (idmap.m((table_id, u.id)),)
+                for u in sg.iter_nodes()
+                if isinstance(u, CGStatementNode)
             ]
 
-            props = {eid for uid, vid, eid, in sg.edges(keys=True)}
+            props = {edge.predicate for edge in sg.iter_edges()}
             for p in props:
                 for pp in props:
                     if p != pp and pp in self.wdprops[p].parents_closure:
@@ -1035,7 +1053,7 @@ class PSLSteinerTreeSolver:
 
             for uid, class_ids in result["type_feats"]["_column_to_types"].items():
                 # find list of incoming edges
-                incoming_props = {eid for _, _, eid in sg.in_edges(uid, keys=True)}
+                incoming_props = {edge.predicate for edge in sg.in_edges(uid)}
                 incoming_props = [self.wdprops[eid] for eid in incoming_props]
                 for class_id in class_ids:
                     if class_id not in self.wdclasses:
@@ -1075,12 +1093,14 @@ class PSLSteinerTreeSolver:
             global_objects[k] = v
 
     @staticmethod
-    def _extract_features_wrapper(args):
+    def _extract_features_wrapper(
+        args: Tuple[int, Tuple[LinkedTable, CGGraph, DGGraph]]
+    ):
         """Wrap the function that need to pass some big objects through a global objects"""
         global global_objects
-        wdprops = global_objects["wdprops"]
+        wdprops: Mapping[str, WDProperty] = global_objects["wdprops"]
         wd_numprop_stats = global_objects["wd_numprop_stats"]
-        qnodes = global_objects["qnodes"]
+        qnodes: Mapping[str, QNode] = global_objects["qnodes"]
         cache_dir = global_objects["cache_dir"]
         sim_fn = global_objects["sim_fn"]
 
@@ -1107,7 +1127,7 @@ class PSLSteinerTreeSolver:
         type_feats = type_feat_extractor.extract_features()
 
         exectime = time.time() - start
-        props = {eid for uid, vid, eid, in sg.edges(keys=True)}
+        props = {edge.predicate for edge in sg.iter_edges()}
         sub_props = set()
         for p in props:
             for pp in props:
@@ -1124,86 +1144,3 @@ class PSLSteinerTreeSolver:
         if filepath is not None:
             M.serialize_pkl(cache_content, filepath)
         return cache_content
-
-
-if __name__ == "__main__":
-    import hydra, itertools
-    from omegaconf import DictConfig, OmegaConf
-    from grams.config import ROOT_DIR
-
-    cfg = OmegaConf.load(ROOT_DIR / "grasd.yaml")
-
-    table_index = 24
-    logger.info("Creating environment...")
-    # dataset = "semtab2020_subset"
-    # dataset = "semtab2020"
-    dataset = "250tables"
-    env = Env(
-        cfg=cfg,
-        dataset_dir=HOME_DIR / f"wikitable2wikidata/{dataset}",
-        n_tables=None,
-        load_qnode_test=True,
-    )
-    globals()["env"] = env
-    globals()["table_index"] = table_index
-    # env.clear_cache()
-    env.clear_viz_dir()
-
-    logger.info("Creating initial semantic graph & get correct semantic models")
-    args = env.get_init_sg(table_index)
-    sms = env.get_semantic_models(table_index)
-
-    logger.info("Creating PSL solver and solve it")
-    print(args.table.id, len(args.sg), len(args.dg))
-    psl_solver = PSLSteinerTreeSolver(
-        env.qnodes,
-        env.wdclasses,
-        env.wdprops,
-        env.wd_numprop_stats,
-        disable_rules=set(cfg.psl.disable_rules),
-        sim_fn=sim_fn,
-    )
-    # pred_sg, = psl_solver.run_with_parallel([(args.table, args.sg, args.dg)], 0.5)
-
-    # @env.cache_psfn
-    def solve(idx):
-        return psl_solver.solve(args.table, args.sg, args.dg)
-
-    sg = args.sg
-    # trim it so we can debug easier
-    # include_nodes = ['column-0', 'column-1', 'column-2', 'column-3']
-    # sg = sg.subgraph({
-    #     s for uid, vid in itertools.combinations(include_nodes, 2)
-    #     for ((x, s, p), (s2, y, p2)) in itertools.chain(nx.all_simple_edge_paths(sg, uid, vid, cutoff=2), nx.all_simple_edge_paths(sg, vid, uid, cutoff=2))
-    #     if p == p2}.union(include_nodes))
-    pred_with_probs = psl_solver.solve(args.table, sg, args.dg)
-
-    logger.info("Run PSL post process")
-    for k, v in sorted(
-        pred_with_probs["links"].items(), key=lambda x: x[0][0] + x[0][1][-5:]
-    ):
-        # if k[0].startswith("column-0") or k[0].startswith("stmt:column-0"):
-        print(k, ":", v)
-    pred_sg = psl_solver.solve_post_process(
-        args.table, args.sg, args.dg, pred_with_probs["links"], 0.51
-    )
-
-    (precision, recall, f1), oracle_sg = env.eval_steiner_tree(table_index, pred_sg)
-    # print result and plot the graph
-    logger.info(
-        f"Steiner Tree - precision={precision:.2f} recall={recall:.2f} f1={f1:.2f}"
-    )
-
-    (precision, recall, f1), cpa_sm = env.eval_cpa(table_index, pred_sg)
-    logger.info(f"CPA - precision={precision:.2f} recall={recall:.2f} f1={f1:.2f}")
-
-    env.viz_dg(args.dg, "dg")
-    env.viz_sg(args.sg, "full_sg")
-    env.viz_sm(env.get_best_semantic_model(table_index), "gold_sm")
-    # copy features from pred_sg to oracle for debugging purpose
-    for k in oracle_sg.edges(keys=True):
-        assert args.sg.has_edge(*k)
-        oracle_sg.edges[k]["data"].features = args.sg.edges[k]["data"].features
-
-    env.viz_sg(oracle_sg, "oracle_sg")
-    env.viz_sg(pred_sg, "pred_sg")

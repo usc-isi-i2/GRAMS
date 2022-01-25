@@ -4,8 +4,20 @@ from operator import attrgetter, itemgetter
 
 import networkx as nx
 import matplotlib.pyplot as plt
+from graph.interface import IMultiGraph
 import sm.misc as M
-from typing import Set, List, Dict, Tuple, Callable, FrozenSet, Optional, Any
+from typing import (
+    Generic,
+    Set,
+    List,
+    Dict,
+    Tuple,
+    Callable,
+    FrozenSet,
+    Optional,
+    Any,
+    TypeVar,
+)
 from collections import defaultdict
 
 """
@@ -24,15 +36,18 @@ class Edge:
     n_edges: int
 
 
+G = TypeVar("G", bound=IMultiGraph)
+
+
 @dataclass
-class Solution:
+class Solution(Generic[G]):
     id: FrozenSet[str]
-    graph: nx.MultiDiGraph
+    graph: G
     weight: float
 
     def get_n_edges(self):
         if not hasattr(self, "n_edges"):
-            self.n_edges = sum(e.n_edges for _, _, e in self.graph.edges(data="data"))
+            self.n_edges = sum(e.n_edges for _, _, e in self.graph.iter_edges())
         return self.n_edges
 
 

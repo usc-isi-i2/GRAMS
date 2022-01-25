@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Mapping
 from grams.algorithm.data_graph.dg_graph import DGGraph
 
 import networkx as nx
@@ -7,7 +7,7 @@ import numpy as np
 
 from grams.algorithm.data_graph import CellNode
 from grams.algorithm.literal_matchers import TextParser
-from grams.algorithm.semantic_graph import SGColumnNode
+from grams.algorithm.candidate_graph.cg_graph import CGColumnNode, CGGraph
 from grams.inputs.linked_table import LinkedTable
 from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
 
@@ -19,14 +19,14 @@ class TypeFeatureExtraction:
     def __init__(
         self,
         table: LinkedTable,
-        sg: nx.MultiDiGraph,
+        cg: CGGraph,
         dg: DGGraph,
-        qnodes: Dict[str, QNode],
-        wdprops: Dict[str, WDProperty],
-        wd_num_prop_stats: Dict[str, WDQuantityPropertyStats],
+        qnodes: Mapping[str, QNode],
+        wdprops: Mapping[str, WDProperty],
+        wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
     ):
         self.table = table
-        self.sg = sg
+        self.cg = cg
         self.dg = dg
         self.qnodes = qnodes
         self.wdprops = wdprops
@@ -42,13 +42,14 @@ class TypeFeatureExtraction:
         cell2qnodes = {}
         column2types = {}
 
-        for uid, udata in self.sg.nodes(data=True):
-            u: SGColumnNode = udata["data"]
-            if not u.is_column:
+        # for uid, udata in self.cg.nodes(data=True):
+        for u in self.cg.iter_nodes():
+            # u: SGColumnNode = udata["data"]
+            if not isinstance(u, CGColumnNode):
                 continue
 
             # cells in this column
-            cells: List[CellNode] = [self.dg.get_node(cid) for cid in u.nodes]
+            cells: List[CellNode] = [self.dg.get_cell_node(cid) for cid in u.nodes]
             covered_fractions = [
                 sum(
                     span.length for spans in cell.qnodes_span.values() for span in spans
@@ -78,9 +79,9 @@ class TypeFeatureExtraction:
                     type2freq[c] += prob
 
             for c, freq in type2freq.items():
-                freq_type[uid, c] = freq
-                freq_over_row[uid, c] = freq / self.table.size()
-            column2types[uid] = list(type2freq.keys())
+                freq_type[u.id, c] = freq
+                freq_over_row[u.id, c] = freq / self.table.size()
+            column2types[u.id] = list(type2freq.keys())
 
         return {
             self.Freq: freq_type,

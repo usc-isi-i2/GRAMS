@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from operator import itemgetter
 from pathlib import Path
 from typing import Any, Dict, Mapping, MutableMapping, Optional, Set, Tuple, Union
+from grams.algorithm.candidate_graph.cg_factory import CGFactory
+from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
 from kgdata.wikidata.models.qnode import QNodeLabel
@@ -27,7 +29,8 @@ import grams.inputs as I
 from grams.algorithm.data_graph import DGConfigs, DGFactory
 from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
 from grams.algorithm.psl_solver import PSLSteinerTreeSolver
-from grams.algorithm.semantic_graph import SemanticGraphConstructor
+
+# from grams.algorithm.semantic_graph import SemanticGraphConstructor
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 from grams.config import DEFAULT_CONFIG
 
@@ -38,7 +41,7 @@ class Annotation:
     # data graph
     dg: DGGraph
     # semantic graph
-    sg: nx.MultiDiGraph
+    sg: CGGraph
     # probabilities of each edge in sg (uid, vid, eid)
     sg_edge_probs: Dict[Tuple[str, str, str], float]
     # probabilities of types of each column: column index -> type -> probability
@@ -163,16 +166,18 @@ class GRAMS:
             dg = dg_factory.create_dg(
                 table, kg_object_index, max_n_hop=self.cfg.data_graph.max_n_hop
             )
-            constructor = SemanticGraphConstructor(
-                [
-                    SemanticGraphConstructor.init_sg,
-                ],
-                qnodes,
-                qnode_labels,
-                wdclasses,
-                wdprops,
-            )
-            sg = constructor.run(table, dg).sg
+            # constructor = SemanticGraphConstructor(
+            #     [
+            #         SemanticGraphConstructor.init_sg,
+            #     ],
+            #     qnodes,
+            #     qnode_labels,
+            #     wdclasses,
+            #     wdprops,
+            # )
+            # sg = constructor.run(table, dg).sg
+            cg_factory = CGFactory(qnodes, qnode_labels, wdclasses, wdprops)
+            cg = cg_factory.create_cg(table, dg)
 
         with self.timer.watch("run inference"):
             psl_solver = PSLSteinerTreeSolver(
@@ -186,7 +191,7 @@ class GRAMS:
                 enable_logging=self.cfg.psl.enable_logging,
             )
             edge_probs, pred_sg, cta_probs = psl_solver.run(
-                {"table": table, "semanticgraph": sg, "datagraph": dg},
+                {"table": table, "semanticgraph": cg, "datagraph": dg},
                 threshold=self.cfg.psl.threshold,
             )
             cta_probs = {
@@ -206,7 +211,7 @@ class GRAMS:
         return Annotation(
             sm=sm,
             dg=dg,
-            sg=sg,
+            sg=cg,
             sg_edge_probs=edge_probs,
             cta_probs=cta_probs,
             pred_sg=pred_sg,

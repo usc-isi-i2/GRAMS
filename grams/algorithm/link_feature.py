@@ -6,12 +6,20 @@ from grams.algorithm.data_graph import CellNode
 from grams.algorithm.data_graph.dg_graph import DGGraph, EntityValueNode
 
 import networkx as nx
-from typing import Dict, Iterable, Tuple, Set, List, Optional, Callable
+from typing import Dict, Iterable, Mapping, Tuple, Set, List, Optional, Callable, cast
 
 from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
 from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.data_graph import DGNode
-from grams.algorithm.semantic_graph import SGNode, SGStatementNode, SGEdge
+from grams.algorithm.candidate_graph.cg_graph import (
+    CGColumnNode,
+    CGEntityValueNode,
+    CGGraph,
+    CGLiteralValueNode,
+    CGNode,
+    CGStatementNode,
+    CGEdge,
+)
 from grams.algorithm.literal_matchers import TextParser
 
 
@@ -40,15 +48,15 @@ class LinkFeatureExtraction:
     def __init__(
         self,
         table: LinkedTable,
-        sg: nx.MultiDiGraph,
+        cg: CGGraph,
         dg: DGGraph,
-        qnodes: Dict[str, QNode],
-        wdprops: Dict[str, WDProperty],
-        wd_num_prop_stats: Dict[str, WDQuantityPropertyStats],
+        qnodes: Mapping[str, QNode],
+        wdprops: Mapping[str, WDProperty],
+        wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
         sim_fn: Optional[Callable[[str, str], float]] = None,
     ):
         self.table = table
-        self.sg = sg
+        self.cg = cg
         self.dg = dg
         self.qnodes = qnodes
         self.wdprops = wdprops
@@ -74,25 +82,29 @@ class LinkFeatureExtraction:
         gte_link_bins = {k: {} for k in gte_link_thresholds}
         pair2max_possible_link = defaultdict(int)
 
-        for sid, sdata in self.sg.nodes(data=True):
-            stmt: SGStatementNode = self.sg.nodes[sid]["data"]
-            if not stmt.is_statement:
+        # for sid, sdata in self.sg.nodes(data=True):
+        for stmt in self.cg.iter_nodes():
+            if not isinstance(stmt, CGStatementNode):
                 continue
 
-            in_edge: SGEdge
-            out_edge: SGEdge
+            # in_edge: SGEdge
+            # out_edge: SGEdge
 
-            ((uid, _, in_edge),) = list(self.sg.in_edges(stmt.id, data="data"))
-            unode: SGNode = self.sg.nodes[uid]["data"]
-            for _, vid, out_edge in self.sg.out_edges(stmt.id, data="data"):
-                vnode: SGNode = self.sg.nodes[vid]["data"]
+            (in_edge,) = self.cg.in_edges(stmt.id)
+            unode = self.cg.get_node(in_edge.source)
+            # ((uid, _, in_edge),) = list(self.cg.in_edges(stmt.id, data="data"))
+            # unode: SGNode = self.cg.nodes[uid]["data"]
+            # for _, vid, out_edge in self.cg.out_edges(stmt.id, data="data"):
+            for out_edge in self.cg.out_edges(stmt.id):
+                # vnode: SGNode = self.cg.nodes[vid]["data"]
+                vnode = self.cg.get_node(out_edge.target)
                 dg_flows = stmt.get_edges_provenance([out_edge])
                 dg_links: Set[Tuple[str, str]] = set()
 
                 sum_prob = 0.0
                 for source_flow, target_flows in dg_flows.items():
-                    assert source_flow.sg_source_id == uid
-                    if unode.is_column:
+                    assert source_flow.sg_source_id == unode.id
+                    if isinstance(unode, CGColumnNode):
                         # we should only have one target flow as we consider row by row only
                         target_flow, provenances = self._unpack_size1_dict(target_flows)
                         dg_links.add(
@@ -101,7 +113,7 @@ class LinkFeatureExtraction:
                         sum_prob += max(provenances, key=attrgetter("prob")).prob
                     else:
                         # this is entity and we may have more than one target flow (to different row)
-                        assert unode.is_entity_value
+                        assert isinstance(unode, CGEntityValueNode)
                         for target_flow, provenances in target_flows.items():
                             dg_links.add(
                                 (source_flow.dg_source_id, target_flow.dg_target_id)
@@ -111,7 +123,9 @@ class LinkFeatureExtraction:
                 # what is the maximum possible links we can have? this ignore the the link so this is used to calculate FreqOverEntRow
                 max_possible_ent_rows = (
                     self._get_maximum_possible_ent_links_between_two_nodes(
-                        uid, vid, self.wdprops[out_edge.predicate].is_data_property()
+                        unode.id,
+                        vnode.id,
+                        self.wdprops[out_edge.predicate].is_data_property(),
                     )
                 )
 
@@ -119,16 +133,16 @@ class LinkFeatureExtraction:
                 # we should consider on what kind of missing. e.g., object missing is more obvious than value mis-match
                 # in value mis-match: datetime mis-match is more profound than area/population mis-match
                 n_unmatch_links = self._get_n_unmatch_discovered_links(
-                    uid,
-                    vid,
+                    unode.id,
+                    vnode.id,
                     in_edge.predicate,
                     out_edge.predicate,
                     dg_links,
                     self.wdprops[out_edge.predicate].is_data_property(),
                 )
                 n_possible_links = n_unmatch_links + len(dg_links)
-                pair2max_possible_link[uid, vid] = max(
-                    n_possible_links, pair2max_possible_link[uid, vid]
+                pair2max_possible_link[unode.id, vnode.id] = max(
+                    n_possible_links, pair2max_possible_link[unode.id, vnode.id]
                 )
 
                 # compute the features
@@ -139,18 +153,21 @@ class LinkFeatureExtraction:
                     else 0
                 )
                 # re-calculate it later
-                pair_freq_over_pos_link = (sum_prob, (uid, vid))
+                pair_freq_over_pos_link = (sum_prob, (unode.id, vnode.id))
                 pair_freq_unmatch_over_ent_row = (
                     (n_unmatch_links / max_possible_ent_rows)
                     if max_possible_ent_rows > 0
                     else 0
                 )
                 # re-calculate it later
-                pair_freq_unmatch_over_pos_link = (n_unmatch_links, (uid, vid))
+                pair_freq_unmatch_over_pos_link = (
+                    n_unmatch_links,
+                    (unode.id, vnode.id),
+                )
                 dtype_mismatch = None
                 header_sim = None
 
-                if vnode.is_column:
+                if isinstance(vnode, CGColumnNode):
                     assert out_edge.predicate[0] == "P", "Sanity Check"
                     if in_edge.predicate in self.wd_num_prop_stats and (
                         in_edge.predicate == out_edge.predicate
@@ -179,7 +196,7 @@ class LinkFeatureExtraction:
 
                 if in_edge.predicate == out_edge.predicate:
                     # copy to the parent property as well
-                    key = (uid, sid, in_edge.predicate)
+                    key = (unode.id, stmt.id, in_edge.predicate)
                     assert key not in freq_over_row
                     freq_over_row[key] = pair_freq_over_row
                     freq_over_ent_row[key] = pair_freq_over_ent_row
@@ -187,7 +204,9 @@ class LinkFeatureExtraction:
                     freq_unmatch_over_ent_row[key] = pair_freq_unmatch_over_ent_row
                     freq_unmatch_over_pos_link[key] = pair_freq_unmatch_over_pos_link
 
-                    if unode.is_column and vnode.is_column:
+                    if isinstance(unode, CGColumnNode) and isinstance(
+                        vnode, CGColumnNode
+                    ):
                         not_fd_links[key] = int(
                             not self._functional_dependency_test(
                                 unode.column, vnode.column
@@ -206,7 +225,7 @@ class LinkFeatureExtraction:
                     if header_sim is not None:
                         header_sim_links[key] = header_sim
 
-                key = (sid, vid, out_edge.predicate)
+                key = (stmt.id, vnode.id, out_edge.predicate)
                 assert key not in freq_over_row
                 freq_over_row[key] = pair_freq_over_row
                 freq_over_ent_row[key] = pair_freq_over_ent_row
@@ -220,7 +239,7 @@ class LinkFeatureExtraction:
                 ):
                     gte_link_bins[threshold][key] = indicator
 
-                if unode.is_column and vnode.is_column:
+                if isinstance(unode, CGColumnNode) and isinstance(vnode, CGColumnNode):
                     not_fd_links[key] = int(
                         not self._functional_dependency_test(unode.column, vnode.column)
                     )
@@ -263,15 +282,15 @@ class LinkFeatureExtraction:
 
     def add_debug_info(self, features: dict, sg=None):
         if sg is None:
-            sg = self.sg
+            sg = self.cg
         """Add features to edges in the graph for debugging. Features are from the extract_features function"""
         # add the features to edges for debugging purpose
         for feat, feat_data in features.items():
             if feat_data is None:
                 continue
             for (uid, vid, eid), val in feat_data.items():
-                if sg.has_edge(uid, vid, eid):
-                    edge: SGEdge = sg.edges[uid, vid, eid]["data"]
+                if sg.has_edge_between_nodes(uid, vid, eid):
+                    edge: CGEdge = sg.get_edge_between_nodes(uid, vid, eid)
                     assert feat not in edge.features
                     edge.features[feat] = val
 
@@ -297,32 +316,32 @@ class LinkFeatureExtraction:
         If one or all of them are columns, the number of pairs will be the size of the table.
         Otherwise, not support iterating between nodes & statements
         """
-        u: SGNode = self.sg.nodes[uid]["data"]
-        v: SGNode = self.sg.nodes[vid]["data"]
+        u = self.cg.get_node(uid)
+        v = self.cg.get_node(vid)
 
-        if u.is_column and v.is_column:
+        if isinstance(u, CGColumnNode) and isinstance(v, CGColumnNode):
             uci = u.column
             vci = v.column
             for ri in range(self.table.size()):
                 ucell = self.dg.get_node(f"{ri}-{uci}")
                 vcell = self.dg.get_node(f"{ri}-{vci}")
                 yield ucell, vcell
-        elif u.is_column:
-            assert v.is_value
+        elif isinstance(u, CGColumnNode):
+            assert isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
             uci = u.column
             vcell = self.dg.get_node(v.id)
             for ri in range(self.table.size()):
                 ucell = self.dg.get_node(f"{ri}-{uci}")
                 yield ucell, vcell
-        elif v.is_column:
-            assert u.is_value
+        elif isinstance(v, CGColumnNode):
+            assert isinstance(u, (CGEntityValueNode, CGLiteralValueNode))
             vci = v.column
             ucell = self.dg.get_node(u.id)
             for ri in range(self.table.size()):
                 vcell = self.dg.get_node(f"{ri}-{vci}")
                 yield ucell, vcell
         else:
-            assert not u.is_column and not v.is_column
+            assert not isinstance(u, CGColumnNode) and not isinstance(v, CGColumnNode)
             yield self.dg.get_node(u.id), self.dg.get_node(v.id)
 
     def _get_maximum_possible_ent_links_between_two_nodes(
@@ -343,35 +362,46 @@ class LinkFeatureExtraction:
                     - else then the source node must be is a column and target is a literal value: a cell in the column links to no entity
                 * object predicate: a cell in the column links to no entity.
         """
-        u: SGNode = self.sg.nodes[uid]["data"]
-        v: SGNode = self.sg.nodes[vid]["data"]
+        u = self.cg.get_node(uid)
+        v = self.cg.get_node(vid)
 
-        if not u.is_column and not v.is_column:
+        if not isinstance(u, CGColumnNode) and not isinstance(v, CGColumnNode):
             return 1
 
         # instead of going through each node attach to the node in the semantic graph, we cheat by directly generating
         # the data node ID
         n_rows = self.table.size()
         n_null_entities = 0
-        if xor(u.is_column, v.is_column):
+        if not (isinstance(u, CGColumnNode) and isinstance(v, CGColumnNode)):
             if is_data_predicate:
-                if u.is_value:
-                    assert u.is_entity_value and v.is_column
+                if isinstance(u, (CGEntityValueNode, CGLiteralValueNode)):
+                    assert isinstance(u, CGEntityValueNode) and isinstance(
+                        v, CGColumnNode
+                    )
                     return n_rows
 
-                assert u.is_column and v.is_value
+                assert isinstance(u, CGColumnNode) and isinstance(
+                    v, (CGEntityValueNode, CGLiteralValueNode)
+                )
 
-            ci = u.column if u.is_column else v.column
+            if isinstance(u, CGColumnNode):
+                ci = u.column
+            else:
+                assert isinstance(
+                    v, CGColumnNode
+                ), "Always true -- type system is not smart enough"
+                ci = v.column
+
             for ri in range(n_rows):
-                if len(self.dg.get_node(f"{ri}-{ci}").qnode_ids) == 0:
+                if len(self.dg.get_cell_node(f"{ri}-{ci}").qnode_ids) == 0:
                     n_null_entities += 1
         else:
             uci = u.column
             vci = v.column
 
             for ri in range(n_rows):
-                ucell_unk = len(self.dg.get_node(f"{ri}-{uci}").qnode_ids) == 0
-                vcell_unk = len(self.dg.get_node(f"{ri}-{vci}").qnode_ids) == 0
+                ucell_unk = len(self.dg.get_cell_node(f"{ri}-{uci}").qnode_ids) == 0
+                vcell_unk = len(self.dg.get_cell_node(f"{ri}-{vci}").qnode_ids) == 0
 
                 if is_data_predicate:
                     if ucell_unk:
@@ -421,8 +451,8 @@ class LinkFeatureExtraction:
         * the link between two DG nodes is impossible
         * the property/qualifier do not exist in the QNode
         """
-        u: SGNode = self.sg.nodes[uid]["data"]
-        v: SGNode = self.sg.nodes[vid]["data"]
+        u = self.cg.get_node(uid)
+        v = self.cg.get_node(vid)
         is_outpred_qualifier = inpred != outpred
 
         n_unmatch_links = 0

@@ -112,8 +112,8 @@ class DGPruning:
                                 )
                                 for path in digraph_all_simple_paths(
                                     self.dg,
-                                    self.dg.idmap[gpid],
-                                    self.dg.idmap[v.id],
+                                    gpid,
+                                    v.id,
                                     cutoff=2,
                                 )
                             ]

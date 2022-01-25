@@ -1,20 +1,28 @@
 import itertools
 from enum import IntEnum
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set, Tuple
 from uuid import uuid4
+from grams.algorithm.candidate_graph.cg_graph import (
+    CGColumnNode,
+    CGEntityValueNode,
+    CGGraph,
+    CGLiteralValueNode,
+    CGStatementNode,
+)
 
 import networkx as nx
 import numpy as np
 import sm.misc as M
 import sm.outputs as O
-from grams.algorithm.semantic_graph import (
-    SGColumnNode,
-    SGEdge,
-    SGEntityValueNode,
-    SGLiteralValueNode,
-    SGNode,
-    SGStatementNode,
-)
+
+# from grams.algorithm.semantic_graph import (
+#     SGColumnNode,
+#     SGEdge,
+#     SGEntityValueNode,
+#     SGLiteralValueNode,
+#     SGNode,
+#     SGStatementNode,
+# )
 from grams.algorithm.wdont import WDOnt
 from grams.inputs.linked_table import LinkedTable
 from kgdata.wikidata.models import QNode, WDClass, WDProperty
@@ -22,6 +30,7 @@ from rdflib import RDFS
 from sm.evaluation import sm_metrics
 from sm.misc import identity_func
 from sm.misc.graph import viz_graph
+from sm.outputs.semantic_model import ClassNode
 
 
 class SMNodeType(IntEnum):
@@ -132,7 +141,7 @@ class WikidataSemanticModelHelper(WDOnt):
                         )
         return new_sm
 
-    def create_sm(self, table: LinkedTable, cpa: nx.MultiDiGraph, cta: Dict[int, str]):
+    def create_sm(self, table: LinkedTable, cpa: CGGraph, cta: Dict[int, str]):
         """Create a semantic model from outputs of CPA and CTA tasks"""
         sm = O.SemanticModel()
         classmap = {}  # mapping from column to its class node
@@ -169,11 +178,10 @@ class WikidataSemanticModelHelper(WDOnt):
             )
 
         # do a final sweep to add subject columns that are not in CTA
-        for uid, unode in cpa.nodes(data="data"):  # type: ignore
-            unode: SGNode
-            if not isinstance(unode, SGColumnNode):
+        for unode in cpa.iter_nodes():
+            if not isinstance(unode, CGColumnNode):
                 continue
-            outdegree: int = cpa.out_degree(uid)  # type: ignore
+            outdegree: int = cpa.out_degree(unode.id)
             if outdegree > 0 and not sm.has_data_node(unode.column):
                 # add data node to the graph and use the entity class (all instances belong to this class) to describe this data node
                 dnode = O.DataNode(
@@ -203,16 +211,15 @@ class WikidataSemanticModelHelper(WDOnt):
 
         # now add remaining edges and remember to use class node instead of data node
         cpa_idmap = {}
-        for uid, vid, edge in cpa.edges(data="data"):  # type: ignore
-            edge: SGEdge
-            unode: SGNode = cpa.nodes[uid]["data"]
-            vnode: SGNode = cpa.nodes[vid]["data"]
+        for edge in cpa.edges():
+            unode = cpa.get_node(edge.source)
+            vnode = cpa.get_node(edge.target)
 
-            if isinstance(unode, SGColumnNode):
+            if isinstance(unode, CGColumnNode):
                 # outgoing edge is from a class node instead of a data node
                 suid = classmap[unode.column]
                 source = sm.get_node(suid)
-            elif isinstance(unode, SGEntityValueNode):
+            elif isinstance(unode, CGEntityValueNode):
                 if unode.id not in cpa_idmap:
                     source = O.LiteralNode(
                         value=self.get_qnode_uri(unode.qnode_id),
@@ -225,7 +232,7 @@ class WikidataSemanticModelHelper(WDOnt):
                     source = sm.get_node(cpa_idmap[unode.id])
             else:
                 assert isinstance(
-                    unode, SGStatementNode
+                    unode, CGStatementNode
                 ), "Outgoing edge can't not be from literal"
                 if unode.id not in cpa_idmap:
                     # create a statement node
@@ -237,7 +244,7 @@ class WikidataSemanticModelHelper(WDOnt):
                 else:
                     source = sm.get_node(cpa_idmap[unode.id])
 
-            if isinstance(vnode, SGColumnNode):
+            if isinstance(vnode, CGColumnNode):
                 if vnode.column in classmap:
                     target = sm.get_node(classmap[vnode.column])
                 elif sm.has_data_node(vnode.column):
@@ -250,7 +257,7 @@ class WikidataSemanticModelHelper(WDOnt):
                     cpa_idmap[vnode.id] = sm.add_node(target)
                 else:
                     target = sm.get_node(cpa_idmap[vnode.id])
-            elif isinstance(vnode, SGEntityValueNode):
+            elif isinstance(vnode, CGEntityValueNode):
                 if vnode.id not in cpa_idmap:
                     target = O.LiteralNode(
                         value=self.get_qnode_uri(vnode.qnode_id),
@@ -261,7 +268,7 @@ class WikidataSemanticModelHelper(WDOnt):
                     cpa_idmap[vnode.id] = sm.add_node(target)
                 else:
                     target = sm.get_node(cpa_idmap[vnode.id])
-            elif isinstance(vnode, SGLiteralValueNode):
+            elif isinstance(vnode, CGLiteralValueNode):
                 if vnode.id not in cpa_idmap:
                     target = O.LiteralNode(
                         value=vnode.value.to_string_repr(),
@@ -325,7 +332,7 @@ class WikidataSemanticModelHelper(WDOnt):
         sm = self.norm_sm(sm)
         if incorrect_invertible_props is None:
             incorrect_invertible_props = set()
-        invertible_stmts = []
+        invertible_stmts: List[O.ClassNode] = []
         is_class_fn = lambda n1: isinstance(n1, O.ClassNode) or (
             isinstance(n1, O.LiteralNode) and self.is_uri_qnode(n1.value)
         )
@@ -374,7 +381,9 @@ class WikidataSemanticModelHelper(WDOnt):
         for stmt in invertible_stmts:
             # assume that each statement only has one incoming link! fix the for loop if this assumption doesn't hold
             (inedge,) = sm.in_edges(stmt.id)
-            choice = [(stmt, None, None)]
+            choice: List[Tuple[O.ClassNode, Optional[str], Optional[str]]] = [
+                (stmt, None, None)
+            ]
             for invprop in self.wdprops[
                 self.get_prop_id(inedge.abs_uri)
             ].inverse_properties:
