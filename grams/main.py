@@ -8,6 +8,9 @@ from grams.algorithm.candidate_graph.cg_factory import CGFactory
 from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
+from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
+from grams.algorithm.postprocessing.steiner_tree import PostProcessingSteinerTree
+from hugedict.parallel.parallel import Parallel
 from kgdata.wikidata.models.qnode import QNodeLabel
 from loguru import logger
 from tqdm import tqdm
@@ -28,7 +31,7 @@ from rdflib import RDFS
 import grams.inputs as I
 from grams.algorithm.data_graph import DGConfigs, DGFactory
 from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
-from grams.algorithm.psl_solver import PSLSteinerTreeSolver
+from grams.algorithm.psl_solver import PSLInference
 
 # from grams.algorithm.semantic_graph import SemanticGraphConstructor
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
@@ -40,14 +43,14 @@ class Annotation:
     sm: O.SemanticModel
     # data graph
     dg: DGGraph
-    # semantic graph
-    sg: CGGraph
+    # candidate graph
+    cg: CGGraph
     # probabilities of each edge in sg (uid, vid, eid)
-    sg_edge_probs: Dict[Tuple[str, str, str], float]
+    cg_edge_probs: Dict[Tuple[str, str, str], float]
     # probabilities of types of each column: column index -> type -> probability
     cta_probs: Dict[int, Dict[str, float]]
-    # predicted semantic graph where incorrect relations are removed by threshold & post-processing algorithm
-    pred_sg: nx.MultiDiGraph
+    # predicted candidate graph where incorrect relations are removed by threshold & post-processing algorithm
+    pred_cpa: CGGraph
     # predicted column types
     pred_cta: Dict[int, str]
 
@@ -166,38 +169,32 @@ class GRAMS:
             dg = dg_factory.create_dg(
                 table, kg_object_index, max_n_hop=self.cfg.data_graph.max_n_hop
             )
-            # constructor = SemanticGraphConstructor(
-            #     [
-            #         SemanticGraphConstructor.init_sg,
-            #     ],
-            #     qnodes,
-            #     qnode_labels,
-            #     wdclasses,
-            #     wdprops,
-            # )
-            # sg = constructor.run(table, dg).sg
             cg_factory = CGFactory(qnodes, qnode_labels, wdclasses, wdprops)
             cg = cg_factory.create_cg(table, dg)
 
         with self.timer.watch("run inference"):
-            psl_solver = PSLSteinerTreeSolver(
+            psl_solver = PSLInference(
                 qnodes,
                 wdclasses,
                 wdprops,
                 self.wd_numprop_stats,
                 disable_rules=set(self.cfg.psl.disable_rules),
                 sim_fn=None,
-                postprocessing_method=self.cfg.psl.postprocessing,
                 enable_logging=self.cfg.psl.enable_logging,
             )
-            edge_probs, pred_sg, cta_probs = psl_solver.run(
-                {"table": table, "semanticgraph": cg, "datagraph": dg},
-                threshold=self.cfg.psl.threshold,
-            )
-            cta_probs = {
-                int(ci.replace("column-", "")): classes
-                for ci, classes in cta_probs.items()
-            }
+            edge_probs, cta_probs = psl_solver.run(table, dg, cg)
+            if self.cfg.psl.postprocessing == "select_simplepath":
+                pp = PostProcessingSimplePath(
+                    table, cg, dg, edge_probs, self.cfg.psl.threshold
+                )
+            elif self.cfg.psl.postprocessing == "steiner_tree":
+                pp = PostProcessingSteinerTree(
+                    table, cg, dg, edge_probs, self.cfg.psl.threshold
+                )
+            else:
+                raise NotImplementedError(self.cfg.psl.postprocessing)
+
+            pred_cpa = pp.get_result()
             pred_cta = {
                 ci: max(classes.items(), key=itemgetter(1))[0]
                 for ci, classes in cta_probs.items()
@@ -206,15 +203,15 @@ class GRAMS:
         sm_helper = WikidataSemanticModelHelper(
             qnodes, qnode_labels, wdclasses, wdprops
         )
-        sm = sm_helper.create_sm(table, pred_sg, pred_cta)
+        sm = sm_helper.create_sm(table, pred_cpa, pred_cta)
         sm = sm_helper.minify_sm(sm)
         return Annotation(
             sm=sm,
             dg=dg,
-            sg=cg,
-            sg_edge_probs=edge_probs,
+            cg=cg,
+            cg_edge_probs=edge_probs,
             cta_probs=cta_probs,
-            pred_sg=pred_sg,
+            pred_cpa=pred_cpa,
             pred_cta=pred_cta,
         )
 
@@ -224,6 +221,7 @@ class GRAMS:
         assert n_hop <= 2
         batch_size = 30
         qnodes: Dict[str, QNode] = {}
+        pp = Parallel()
         for qnode_id in qnode_ids:
             qnode = self.qnodes.get(qnode_id, None)
             if qnode is not None:
@@ -237,7 +235,7 @@ class GRAMS:
                 and not self.qnodes.does_not_exist_locally(qnode_id)
             ]
             if len(missing_qnode_ids) > 0:
-                resp = M.parallel_map(
+                resp = pp.map(
                     query_wikidata_entities,
                     [
                         missing_qnode_ids[i : i + batch_size]
@@ -254,9 +252,10 @@ class GRAMS:
 
         if n_hop > 1:
             next_qnode_ids = set()
-            for qnode in tqdm(
-                qnodes.values(), desc="gather entities in 2nd hop", disable=not verbose
-            ):
+            # for qnode in tqdm(
+            #     qnodes.values(), desc="gather entities in 2nd hop", disable=not verbose
+            # ):
+            for qnode in qnodes.values():
                 for p, stmts in qnode.props.items():
                     for stmt in stmts:
                         if stmt.value.is_qnode():
@@ -283,7 +282,7 @@ class GRAMS:
                     and not self.qnodes.does_not_exist_locally(qnode_id)
                 ]
                 if len(next_qnode_ids) > 0:
-                    resp = M.parallel_map(
+                    resp = pp.map(
                         query_wikidata_entities,
                         [
                             next_qnode_ids[i : i + batch_size]

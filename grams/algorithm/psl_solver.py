@@ -22,18 +22,9 @@ from typing import (
     Union,
     cast,
 )
-from grams.algorithm.postprocessing.simple_path import (
-    keep_one_simple_path_between_important_nodes,
-)
-from graph.retworkx.api import dag_longest_path
 
 import networkx as nx
 import sm.misc as M
-from steiner_tree.bank import (
-    NoSingleRootException,
-    Solution,
-    BankSolver,
-)
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEdge,
@@ -44,9 +35,15 @@ from grams.algorithm.candidate_graph.cg_graph import (
 )
 from grams.algorithm.data_graph.dg_graph import DGGraph, DGNode
 from grams.algorithm.link_feature import LinkFeatureExtraction
-from grams.algorithm.semtab2020 import SemTab2020PostProcessing
+
+# from grams.algorithm.postprocessing.semtab2020 import SemTab2020PostProcessing
 from grams.algorithm.type_feature import TypeFeatureExtraction
 from grams.inputs.linked_table import LinkedTable
+
+# from grams.algorithm.postprocessing.simple_path import (
+#     keep_one_simple_path_between_important_nodes,
+# )
+from graph.retworkx.api import dag_longest_path
 from hugedict.parallel.parallel import Parallel
 from kgdata.wikidata.models import QNode, WDClass, WDProperty, WDQuantityPropertyStats
 from loguru import logger
@@ -55,6 +52,7 @@ from pslpython.model import Model
 from pslpython.partition import Partition
 from pslpython.predicate import Predicate
 from pslpython.rule import Rule
+from steiner_tree.bank import BankSolver, NoSingleRootException, Solution
 from tqdm.auto import tqdm
 
 global_objects = {}
@@ -96,18 +94,7 @@ class PSLConfigs:
     POSTPROCESSING_STEINER_TREE_FORCE_ADDING_CONTEXT: bool = True
 
 
-PSLRunParallelArgs = TypedDict(
-    "PSL.RunParallelArgs",
-    table=LinkedTable,
-    datagraph=DGGraph,
-    semanticgraph=CGGraph,
-)
-_AddContextPathType = TypedDict(
-    "_Path", {"path": Tuple[CGEdge, CGEdge], "score": float}
-)
-
-
-class PSLSteinerTreeSolver:
+class PSLInference:
     LinkNegPrior = "NegPrior"
     LinkNegParentPropPrior = "NegParentPropPrior"
     CascadingError = "CascadingError"
@@ -134,7 +121,6 @@ class PSLSteinerTreeSolver:
         disable_rules: Set[str] = None,
         sim_fn: Optional[Callable[[str, str], float]] = None,
         cache_dir: Optional[str] = None,
-        postprocessing_method: str = None,
         enable_logging: bool = False,
     ):
         self.wdclasses = wdclasses
@@ -145,14 +131,6 @@ class PSLSteinerTreeSolver:
         self.sim_fn = sim_fn
         # use this cache dir to catch the extraction result
         self.cache_dir = Path(cache_dir) if cache_dir is not None else cache_dir
-        self.postprocessing_method = postprocessing_method
-        assert self.postprocessing_method in {
-            "select_simplepath",
-            "steiner_tree",
-            "external:semtab2020",
-        }, self.postprocessing_method
-        # if self.postprocessing_method == 'external:semtab2020':
-        #     self.postprocessing_fn = SemTab2020PostProcessing()
 
         # blacklist some rules if they do not apply to particular domain (synthetic dataset)
         all_rules = {
@@ -403,150 +381,12 @@ class PSLSteinerTreeSolver:
             },
         }
 
-    def run(self, r: PSLRunParallelArgs, threshold: float = 0.5):
-        table, sg, dg = r["table"], r["semanticgraph"], r["datagraph"]
-        pred_with_probs = self.solve(table, sg, dg)
-        link_probs = pred_with_probs["links"]
-        cta = pred_with_probs["types"]
-        sg = self.solve_post_process(table, sg, dg, link_probs, threshold)
-        return link_probs, sg, cta
-
-    def run_with_parallel(
-        self,
-        inputs: List[PSLRunParallelArgs],
-        threshold: float = 0.5,
-        batch_size: Optional[int] = None,
-        show_progress: bool = False,
-    ):
-        global global_objects
-        predictions = self.solve_parallel(
-            [(r["table"], r["semanticgraph"], r["datagraph"]) for r in inputs],
-            batch_size=batch_size,
-            show_progress=show_progress,
-        )
-
-        global_objects["PSLSteinerTreeSolver"] = self
-        # DO this cause we don't know why semtab postprocessing create that issue...
-        is_parallel = self.postprocessing_method != "external:semtab2020"
-        sgs = M.parallel_map(
-            PSLSteinerTreeSolver._solve_post_process_wrapper,
-            [
-                (
-                    r["table"],
-                    r["semanticgraph"],
-                    r["datagraph"],
-                    predwprobs["links"],
-                    threshold,
-                )
-                for r, predwprobs in zip(inputs, predictions)
-            ],
-            show_progress=show_progress,
-            progress_desc="psl: post-process",
-            is_parallel=is_parallel,
-        )
-        cta = [predwprobs["types"] for r, predwprobs in zip(inputs, predictions)]
-        return sgs, cta
-
-    def solve_parallel(
-        self,
-        inputs: List[Tuple[LinkedTable, CGGraph, DGGraph]],
-        batch_size: Optional[int] = None,
-        show_progress: bool = False,
-    ):
-        global global_objects
-        global_objects["cache_dir"] = self.cache_dir
-        global_objects["wdprops"] = self.wdprops
-        global_objects["qnodes"] = self.qnodes
-        global_objects["wd_numprop_stats"] = self.wd_numprop_stats
-        global_objects["sim_fn"] = self.sim_fn
-
-        # create a mapping from id to index so that we can re-assign the result later.
-        results = Parallel().map(
-            PSLSteinerTreeSolver._extract_features_wrapper,
-            list(enumerate(inputs)),
-            show_progress=show_progress,
-            progress_desc="psl: extract features",
-        )
-
-        if batch_size is None:
-            batch_size = len(inputs)
-            iter = range(1)
-        else:
-            iter = range(0, len(inputs), batch_size)
-            if show_progress:
-                iter = tqdm(
-                    iter,
-                    total=math.ceil(len(inputs) / batch_size),
-                    desc="psl: inference",
-                )
-
-        if self.cache_dir is not None:
-            infdir = self.cache_dir / "inferences"
-            infdir.mkdir(exist_ok=True, parents=True)
-            get_cache_file = lambda tbl, index: (
-                infdir / f"a{index:03d}_{tbl.get_friendly_fs_id()}.pkl"
-            )
-        else:
-            get_cache_file = lambda tbl, index: None
-
-        predictions = []
-        for i in iter:
-            input_batch = inputs[i : i + batch_size]
-            feature_batch = results[i : i + batch_size]
-            cache_files = [
-                get_cache_file(table, j)
-                for j, (table, sg, dg) in enumerate(inputs[i : i + batch_size], start=i)
-            ]
-            if not all(x is not None and x.exists() for x in cache_files):
-                data, idmap = self.extract_predicate_data(
-                    input_batch, feature_batch, is_parallel=True
-                )
-                try:
-                    infer_resp = self.infer(data)
-                except:
-                    logger.exception("Error while processing batch: {}", i)
-                    raise
-                table_infer_link_resp = {}
-                table_infer_type_resp = {}
-                for (uid, vid, eid), prob in infer_resp["links"].items():
-                    table_id, uid = idmap.im(uid)
-                    assert table_id == idmap.im(vid)[0]
-                    vid = idmap.im(vid)[1]
-
-                    if table_id not in table_infer_link_resp:
-                        table_infer_link_resp[table_id] = {}
-                    table_infer_link_resp[table_id][uid, vid, eid] = prob
-                for (uid, classid), prob in infer_resp["types"].items():
-                    table_id, uid = idmap.im(uid)
-                    if table_id not in table_infer_type_resp:
-                        table_infer_type_resp[table_id] = {}
-                    if uid not in table_infer_type_resp[table_id]:
-                        table_infer_type_resp[table_id][uid] = {}
-                    table_infer_type_resp[table_id][uid][classid] = prob
-
-                batch_predictions = []
-                for (table, sg, dg), cache_file in zip(input_batch, cache_files):
-                    pred = {
-                        "id": table.id,
-                        "links": table_infer_link_resp.get(table.id, {}),
-                        "types": table_infer_type_resp.get(table.id, {}),
-                    }
-                    if cache_file is not None:
-                        M.serialize_pkl(pred, cache_file)
-                    batch_predictions.append(pred)
-            else:
-                batch_predictions = [
-                    M.deserialize_pkl(cache_file) for cache_file in cache_files  # type: ignore -- type checker not smart enough
-                ]
-
-            # set the prob. for debugging purpose
-            for (table, sg, dg), pred in zip(input_batch, batch_predictions):
-                assert table.id == pred["id"]
-                for k, v in pred["links"].items():
-                    sg.get_edge_between_nodes(*k).features["prob"] = v
-            predictions += batch_predictions
-
-        return predictions
+    def run(self, table: LinkedTable, dg: DGGraph, cg: CGGraph):
+        inferred_result = self.solve(table, cg, dg)
+        cpa = inferred_result["links"]
+        cta = inferred_result["types"]
+        cta = {int(ci.replace("column-", "")): classes for ci, classes in cta.items()}
+        return cpa, cta
 
     def solve(self, table: LinkedTable, sg: CGGraph, dg: DGGraph):
         if sg.num_edges() == 0:
@@ -584,307 +424,6 @@ class PSLSteinerTreeSolver:
             sg.get_edge_between_nodes(*k).features["prob"] = prob
 
         return infer_resp
-
-    def solve_post_process(
-        self,
-        table,
-        sg,
-        dg,
-        pred_with_probs: Dict[Tuple[str, str, str], float],
-        threshold,
-    ):
-        if self.postprocessing_method == "select_simplepath":
-            return self.postprocessing_select_simplepath(
-                table, sg, dg, pred_with_probs, threshold
-            )
-        if self.postprocessing_method == "steiner_tree":
-            return self.postprocessing_steiner_tree(
-                table, sg, dg, pred_with_probs, threshold
-            )
-        if self.postprocessing_method == "external:semtab2020":
-            # return self.postprocessing_fn.solve_post_process(table, sg, dg, pred_with_probs, threshold)
-            return SemTab2020PostProcessing.get_instance().solve_post_process(
-                table, sg, dg, pred_with_probs, threshold
-            )
-        assert False, self.postprocessing_method
-
-    def remove_dangling_statement(self, cg: CGGraph):
-        ids = set()
-        for s in list(cg.iter_nodes()):
-            if isinstance(s, CGStatementNode) and (
-                cg.in_degree(s.id) == 0 or cg.out_degree(s.id) == 0
-            ):
-                ids.add(s.id)
-        for id in ids:
-            cg.remove_node(id)
-
-    def postprocessing_select_simplepath(
-        self,
-        table: LinkedTable,
-        sg: CGGraph,
-        dg: DGGraph,
-        pred_with_probs: Dict[Tuple[str, str, str], float],
-        threshold,
-    ):
-        def select_shorter_path(paths: List[List[Tuple[str, str, str]]]):
-            """Prefer shorter path. When there are multiple shorter path, select the one with higher prob"""
-            paths = sorted(paths, key=len)
-            paths = [path for path in paths if len(path) == len(paths[0])]
-            if len(paths) == 1:
-                return paths[0]
-
-            # multiple shorter paths
-            path_probs = []
-            for path in paths:
-                path_prob = 0
-                for uid, vid, eid in path:
-                    edge = sg.get_edge_between_nodes(uid, vid, eid)
-                    path_prob += pred_with_probs[uid, vid, eid]
-                path_probs.append(path_prob)
-            path, path_prob = max(zip(paths, path_probs), key=itemgetter(1))
-            return path
-
-        pred_edges = [k for k, v in pred_with_probs.items() if v >= threshold]
-        steiner_tree = sg.subgraph_from_edge_triples(pred_edges)
-        self.remove_dangling_statement(steiner_tree)
-
-        if steiner_tree.num_edges() == 0:
-            # empty graph
-            return steiner_tree
-
-        return keep_one_simple_path_between_important_nodes(
-            steiner_tree, select_shorter_path, both_direction=True
-        )
-
-    def postprocessing_steiner_tree(
-        self,
-        table,
-        sg: CGGraph,
-        dg: DGGraph,
-        pred_with_probs: Dict[Tuple[str, str, str], float],
-        threshold,
-    ):
-        pred_edges = [k for k, v in pred_with_probs.items() if v >= threshold]
-        steiner_tree = sg.subgraph_from_edge_triples(pred_edges)
-        self.remove_dangling_statement(steiner_tree)
-
-        if steiner_tree.num_edges() == 0:
-            # empty graph
-            return steiner_tree
-
-        # normalizing the prob score so that we can compare the weight between graph accurately
-        norm_pred_probs = {}
-        lst = sorted(
-            (x for x in pred_with_probs.items() if x[1] >= threshold), key=itemgetter(1)
-        )
-        eps = 0.001
-        clusters = []
-        pivot = 1
-        clusters = [[lst[0]]]
-        while pivot < len(lst):
-            x = lst[pivot - 1][1]
-            y = lst[pivot][1]
-            if (y - x) <= eps:
-                # same clusters
-                clusters[-1].append(lst[pivot])
-            else:
-                # different clusters
-                clusters.append([lst[pivot]])
-            pivot += 1
-        for cluster in clusters:
-            avg_prob = sum([x[1] for x in cluster]) / len(cluster)
-            for k, prob in cluster:
-                norm_pred_probs[k] = avg_prob
-
-        # print(lst)
-        # print(norm_pred_probs)
-
-        def get_solution_weight(sol: Solution):
-            if sol.num_edges == 0:
-                return 0.0
-            return sol.weight / sol.num_edges
-
-        def cmp_bank_solution(sol_a: Solution, sol_b: Solution):
-            # since PSL inference is not exact but optimization, there is always a delta different in their final
-            # calculation, which we need to compensate for.
-            # Empirically, the number is very small ~0.001 in a range of [0 - 1] for each edge
-            # we need to count the number of edge, but have to do it this way since bank solver
-            # do some optimization to reduce the number of nodes & edges
-            # diff = abs((sol_a.weight / sol_a.get_n_edges()) - (sol_b.weight / sol_b.get_n_edges()))
-            # if diff > 0.002:
-            sol_a_weight = get_solution_weight(sol_a)
-            sol_b_weight = get_solution_weight(sol_b)
-
-            if sol_a_weight < sol_b_weight:
-                return -1
-            if sol_a_weight > sol_b_weight:
-                return 1
-
-            if not hasattr(sol_a, "depth"):
-                sol_a.depth = len(dag_longest_path(sol_a.graph))
-            if not hasattr(sol_b, "depth"):
-                sol_b.depth = len(dag_longest_path(sol_b.graph))
-            return sol_a.depth - sol_b.depth
-
-        terminal_nodes = {
-            u.id for u in steiner_tree.iter_nodes() if isinstance(u, CGColumnNode)
-        }
-        # terminal_nodes = SemanticGraphConstructor.st_terminal_nodes(steiner_tree)
-        # terminal_nodes = set()
-        # for uid, udata in steiner_tree.nodes(data=True):
-        #     u: SGNode = udata["data"]
-        #     if u.is_column:
-        #         terminal_nodes.add(uid)
-        #     elif u.is_value and u.is_in_context:
-        #         terminal_nodes.add(uid)
-        # TODO: this is a temporary fix for case where steiner tree does not contain any column
-        if len(terminal_nodes) == 0:
-            # TODO: fix me
-            return steiner_tree
-
-        bank_solver = BankSolver(
-            steiner_tree,
-            terminal_nodes,
-            top_k_st=50,
-            top_k_path=50,
-            weight_fn=lambda e: 1.0
-            / max(
-                1e-7,
-                norm_pred_probs[e.source, e.target, e.predicate],
-            ),
-            solution_cmp_fn=cmp_bank_solution,
-        )
-        try:
-            candidate_sts, solutions = bank_solver.run()
-        except NoSingleRootException:
-            # fallback
-            return self.postprocessing_select_simplepath(
-                table, sg, dg, pred_with_probs, threshold
-            )
-        except NetworkXUnfeasible:
-            # TODO: fix me
-            assert table.id == "Diamond_League"
-            # fallback
-            return self.postprocessing_select_simplepath(
-                table, sg, dg, pred_with_probs, threshold
-            )
-        # TODO fix me when the bank algorithm return empty result
-        if len(candidate_sts) == 0:
-            return self.postprocessing_select_simplepath(
-                table, sg, dg, pred_with_probs, threshold
-            )
-
-        pred_tree = candidate_sts[0]
-        # remove statements that do not connected from any nodes
-        for s in pred_tree.nodes():
-            if isinstance(s, CGStatementNode) and pred_tree.in_degree(s.id) == 0:
-                pred_tree.remove_node(s.id)
-        for s in pred_tree.nodes():
-            if not isinstance(s, CGStatementNode):
-                continue
-            assert pred_tree.in_degree(s.id) == 1
-            (in_edge,) = pred_tree.in_edges(s.id)
-            for e in steiner_tree.out_edges(s.id):
-                if e.predicate == in_edge.predicate:
-                    # statement prop
-                    if not pred_tree.has_node(e.target):
-                        ent = steiner_tree.get_node(e.target)
-                        assert isinstance(
-                            ent, (CGEntityValueNode, CGLiteralValueNode)
-                        ), f"The only reason why we don't have statement value is it is an literal"
-                        pred_tree.add_node(ent.clone())
-                        pred_tree.add_edge(e.clone())
-                else:
-                    v = steiner_tree.get_node(e.target)
-                    if (
-                        isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
-                        and v.is_in_context
-                    ):
-                        # we should have this as PSL think it's correct
-                        # TODO: the entity can be in the tree before if it's needed to connect
-                        # two nodes, but we need to check it
-                        if pred_tree.has_node(v.id):
-                            assert pred_tree.has_edge_between_nodes(
-                                s.id, v.id, e.predicate
-                            )
-                        else:
-                            # assert not pred_tree.has_node(v.id)
-                            pred_tree.add_node(v.clone())
-                            pred_tree.add_edge(e.clone())
-
-        if PSLConfigs.POSTPROCESSING_STEINER_TREE_FORCE_ADDING_CONTEXT:
-            # add back the context node or entity that are appeared in the psl results but not in the predicted tree
-            for v in steiner_tree.iter_nodes():
-                if (
-                    not isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
-                    or not v.is_in_context
-                ):
-                    continue
-                if pred_tree.has_node(v.id):
-                    continue
-
-                # find the paths that connect the vid to the tree and select the one with highest score and do not create cycle
-                paths: List[_AddContextPathType] = []
-                for sv_edge in steiner_tree.in_edges(v.id):
-                    if sv_edge.predicate == "P31":
-                        continue
-                    for us_edge in steiner_tree.in_edges(sv_edge.source):
-                        if not pred_tree.has_node(us_edge.source):
-                            continue
-                        paths.append(
-                            {
-                                "path": (
-                                    us_edge,
-                                    sv_edge,
-                                ),
-                                "score": pred_with_probs[
-                                    (us_edge.source, us_edge.target, us_edge.predicate)
-                                ]
-                                + pred_with_probs[
-                                    (sv_edge.source, sv_edge.target, sv_edge.predicate)
-                                ],
-                            }
-                        )
-
-                paths = sorted(paths, key=itemgetter("score"), reverse=True)
-                # TODO: filter out the path that will create cycle
-
-                if len(paths) == 0:
-                    continue
-
-                us_edge, sv_edge = paths[0]["path"]
-                pred_tree.add_node(v.clone())
-                if not pred_tree.has_node(sv_edge.source):
-                    s = steiner_tree.get_node(sv_edge.source)
-                    pred_tree.add_node(s.clone())
-                assert not pred_tree.has_edge_between_nodes(
-                    sv_edge.source, sv_edge.target, sv_edge.predicate
-                )
-                pred_tree.add_edge(sv_edge.clone())
-
-                if not pred_tree.has_edge_between_nodes(
-                    us_edge.source, us_edge.target, us_edge.predicate
-                ):
-                    pred_tree.add_edge(us_edge.clone())
-
-        # TODO: uncomment for debugging
-        # print(candidate_sts)
-        # if there are more than one candidate steiner tree of same weight, select the one with shorter height
-        # candidate_sts = [item for item in candidate_sts if item[1] == candidate_sts[0][1]]
-        # candidate_st = sorted(candidate_sts, key=lambda g: len(nx.algorithms.dag.dag_longest_path(g[0])))[0][0]
-
-        # env.viz_sg(steiner_tree, "after_PSL")
-        # for i, (g, sol) in enumerate(zip(candidate_sts, solutions)):
-        #     # g = SemanticGraphConstructor.get_sg_subgraph(sg, list(g.edges(keys=True)))
-        #     (precision, recall, f1), oracle_sg = env.eval_steiner_tree(table_index, g)
-        #     print(f"\t i={i:02d} precision={precision:.4f} recall={recall:.4f} f1={f1:.4f} score={get_solution_weight(sol)} depth={len(nx.algorithms.dag.dag_longest_path(g))}")
-        #     env.viz_sg(g, f"st_{i:02d}")
-        # # viz = lambda x, y: env.viz_sg(SemanticGraphConstructor.get_sg_subgraph(sg, list(x.edges(keys=True))), y)
-        # for i in range(len(candidate_sts)):
-        #     env.viz_sg(candidate_sts[i][0], f"st_{i:02d}")
-
-        # bank_solver._get_graph_weight(candidate_sts[0][0])
-        return pred_tree
 
     def train_setup(self, inputs: List[Tuple[LinkedTable, CGGraph, DGGraph, dict]]):
         data, idmap = self.extract_predicate_data(
@@ -1000,7 +539,7 @@ class PSLSteinerTreeSolver:
                 global_objects["cache_dir"] = None
             pp = Parallel()
             features = pp.map(
-                PSLSteinerTreeSolver._extract_features_wrapper,
+                PSLInference._extract_features_wrapper,
                 list(enumerate(inputs)),
                 show_progress=show_progress,
                 progress_desc="psl: extract features",
@@ -1077,14 +616,6 @@ class PSLSteinerTreeSolver:
                     for (uid, classid), prob in result["type_feats"][feat].items()
                 ]
         return data, idmap
-
-    @staticmethod
-    def _solve_post_process_wrapper(args):
-        global global_objects
-        table, sg, dg, pred_with_probs, threshold = args
-        return global_objects["PSLSteinerTreeSolver"].solve_post_process(
-            table, sg, dg, pred_with_probs, threshold
-        )
 
     @staticmethod
     def _update_global_objects(**kwargs):

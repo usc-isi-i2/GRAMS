@@ -394,17 +394,19 @@ class WikidataSemanticModelHelper(WDOnt):
         if n_choices > 256:
             raise sm_metrics.PermutationExplosion("Too many possible semantic models")
 
-        all_choices = list(itertools.product(*all_choices))
+        all_choices_perm: List[
+            Tuple[Tuple[O.ClassNode, Optional[str], Optional[str]]]
+        ] = list(itertools.product(*all_choices))
         assert all(
-            invprop is None for _, invprop, _ in all_choices[0]
+            invprop is None for _, invprop, _ in all_choices_perm[0]
         ), "First choice is always the current semantic model"
         new_sms = [sm]
-        for choice in all_choices[1:]:
+        for choice_perm in all_choices_perm[1:]:
             new_sm = sm.copy()
             # we now change the statement from original prop to use the inverse prop (change direction)
             # if the invprop is not None
-            for stmt, invprop_abs_uri, invprop_rel_uri in choice:
-                if invprop_abs_uri is None:
+            for stmt, invprop_abs_uri, invprop_rel_uri in choice_perm:
+                if invprop_abs_uri is None or invprop_rel_uri is None:
                     continue
                 readable_label = self.get_pnode_label(invprop_abs_uri)
                 # assume that each statement only has one incoming link! fix the for loop if this assumption doesn't hold
@@ -477,7 +479,9 @@ class WikidataSemanticModelHelper(WDOnt):
                 if edge_abs_uri in self.ID_PROPS:
                     assert len(inedges) == 1, inedges
                     source = sm.get_node(inedges[0].source)
-                    assert not self.is_uri_statement(source.abs_uri)
+                    assert isinstance(
+                        source, O.ClassNode
+                    ) and not self.is_uri_statement(source.abs_uri)
                     ent_columns.append(dnode.col_index)
         return ent_columns
 

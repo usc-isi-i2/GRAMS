@@ -7,7 +7,7 @@ import sm.misc as M
 import networkx as nx
 
 
-class SemTab2020PostProcessing:
+class PostProcessingSemTab2020:
     instance = None
 
     def __init__(self):

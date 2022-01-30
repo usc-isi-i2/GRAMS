@@ -309,9 +309,7 @@ class CGEdge(BaseEdge[str, str]):
 
 
 CGNode = Union[CGColumnNode, CGEntityValueNode, CGLiteralValueNode, CGStatementNode]
-NxCGNodeAttr = TypedDict("NxCGNodeAttr", data=CGNode)
-NxCGEdgeAttr = TypedDict("NxCGEdgeAttr", data=CGEdge)
-NxCGEdge = Tuple[str, str, str, NxCGEdgeAttr]
+CGEdgeTriple = Tuple[str, str, str]
 
 
 class CGGraph(RetworkXStrDiGraph[str, CGNode, CGEdge]):
@@ -319,3 +317,17 @@ class CGGraph(RetworkXStrDiGraph[str, CGNode, CGEdge]):
         u = self.get_node(uid)
         assert isinstance(u, CGStatementNode)
         return u
+
+    def remove_dangling_statement(self):
+        """Remove statement nodes that have no incoming nodes or no outgoing edges"""
+        for s in self.nodes():
+            if isinstance(s, CGStatementNode) and (
+                self.in_degree(s.id) == 0 or self.out_degree(s.id) == 0
+            ):
+                self.remove_node(s.id)
+
+    def remove_standalone_nodes(self):
+        """Remove nodes that do not any incoming / outgoing edges"""
+        for u in self.nodes():
+            if self.degree(u.id) == 0:
+                self.remove_node(u.id)

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sm-grams"
-version = "1.5.0"
+version = "1.5.1"
 description = ""
 authors = ["Binh Vu <binh@toan2.com>"]
 license = "MIT"
