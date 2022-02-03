@@ -1,6 +1,7 @@
 from collections import defaultdict
-from typing import Dict, List, Mapping
+from typing import Callable, Dict, List, Mapping, Optional, Tuple
 from grams.algorithm.data_graph.dg_graph import DGGraph
+from kgdata.wikidata.models.wdclass import WDClass
 
 import networkx as nx
 import numpy as np
@@ -13,8 +14,10 @@ from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
 
 
 class TypeFeatureExtraction:
-    Freq = "FrequencyOfType"
-    FreqOverRow = "FreqOfTypeOverRow"
+    Freq = "TypeFreq"
+    FreqOverRow = "TypeFreqOverRow"
+    FreqInheritOverRow = "TypeFreqInheritOverRow"
+    HeaderSimilarity = "TypeHeaderSimilarity"
 
     def __init__(
         self,
@@ -22,16 +25,20 @@ class TypeFeatureExtraction:
         cg: CGGraph,
         dg: DGGraph,
         qnodes: Mapping[str, QNode],
+        wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
         wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
+        sim_fn: Optional[Callable[[str, str], float]] = None,
     ):
         self.table = table
         self.cg = cg
         self.dg = dg
         self.qnodes = qnodes
+        self.wdclasses = wdclasses
         self.wdprops = wdprops
         self.wd_num_prop_stats = wd_num_prop_stats
         self.text_parser = TextParser()
+        self.sim_fn = sim_fn
 
         # self.transitive_props = [p.id for p in self.wdprops.values() if p.is_transitive()]
         self.hierarchy_props = {"P131", "P276"}
@@ -39,8 +46,10 @@ class TypeFeatureExtraction:
     def extract_features(self):
         freq_type = {}
         freq_over_row = {}
-        cell2qnodes = {}
+        freq_inherit_over_row = {}
+        cell2qnodes: Dict[str, List[Tuple[QNode, float]]] = {}
         column2types = {}
+        header_sim_types = {}
 
         # for uid, udata in self.cg.nodes(data=True):
         for u in self.cg.iter_nodes():
@@ -67,7 +76,10 @@ class TypeFeatureExtraction:
             for cell in cells:
                 self.add_merge_qnodes(cell, cell2qnodes)
 
-            type2freq = defaultdict(int)
+            # calculate type to frequency
+            type2freq = defaultdict(float)
+            inherit_type2freq = defaultdict(float)
+
             for cell in cells:
                 classes = {}
                 for qnode, prob in cell2qnodes[cell.id]:
@@ -75,21 +87,49 @@ class TypeFeatureExtraction:
                         classes[stmt.value.as_entity_id()] = max(
                             prob, classes.get(stmt.value.as_entity_id(), 0)
                         )
+                all_classes = self.retrieve_parents(classes, 1)
                 for c, prob in classes.items():
                     type2freq[c] += prob
+                for c, prob in all_classes.items():
+                    inherit_type2freq[c] += prob
 
             for c, freq in type2freq.items():
                 freq_type[u.id, c] = freq
                 freq_over_row[u.id, c] = freq / self.table.size()
-            column2types[u.id] = list(type2freq.keys())
-
+            for c, freq in inherit_type2freq.items():
+                freq_inherit_over_row[u.id, c] = freq / self.table.size()
+            column2types[u.id] = list(inherit_type2freq.keys())
+            if len(u.label) > 0 and self.sim_fn is not None:
+                for c, freq in inherit_type2freq.items():
+                    header_sim_types[u.id, c] = self.sim_fn(
+                        u.label, self.wdclasses[c].label
+                    )
         return {
             self.Freq: freq_type,
             self.FreqOverRow: freq_over_row,
+            self.FreqInheritOverRow: freq_inherit_over_row,
+            self.HeaderSimilarity: header_sim_types,
             "_column_to_types": column2types,
         }
 
-    def add_merge_qnodes(self, cell: CellNode, cell2qnodes: Dict[str, List[QNode]]):
+    def retrieve_parents(self, classes: Dict[str, float], distance: int):
+        """Get parents of classes within distance from the node.
+        Distance 1 is the parent, Distance 2 is the grandparent.
+        Return the classes and their parents
+        """
+        if distance <= 0:
+            return classes
+        output = classes.copy()
+        for klass, prob in classes.items():
+            for parent_klass in self.wdclasses[klass].parents:
+                output[parent_klass] = max(output.get(parent_klass, 0), prob)
+        if distance > 1:
+            return self.retrieve_parents(output, distance - 1)
+        return output
+
+    def add_merge_qnodes(
+        self, cell: CellNode, cell2qnodes: Dict[str, List[Tuple[QNode, float]]]
+    ):
         # merge qnodes that are sub of each other
         # attempt to merge qnodes (spatial) if they are contained in each other
         # we should go even higher order

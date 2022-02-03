@@ -13,6 +13,7 @@ from grams.algorithm.postprocessing.steiner_tree import PostProcessingSteinerTre
 from hugedict.parallel.parallel import Parallel
 from kgdata.wikidata.models.qnode import QNodeLabel
 from loguru import logger
+import rltk
 from tqdm import tqdm
 import networkx as nx
 import sm.misc as M
@@ -173,13 +174,20 @@ class GRAMS:
             cg = cg_factory.create_cg(table, dg)
 
         with self.timer.watch("run inference"):
+
+            # def sim_fn(x, y):
+            #     return 1 - rltk.levenshtein_distance(x.lower(), y.lower()) / max(
+            #         len(x), len(y)
+            #     )
+            sim_fn = None
+
             psl_solver = PSLInference(
                 qnodes,
                 wdclasses,
                 wdprops,
                 self.wd_numprop_stats,
                 disable_rules=set(self.cfg.psl.disable_rules),
-                sim_fn=None,
+                sim_fn=sim_fn,
                 enable_logging=self.cfg.psl.enable_logging,
             )
             edge_probs, cta_probs = psl_solver.run(table, dg, cg)

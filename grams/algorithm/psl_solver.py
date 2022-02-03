@@ -45,7 +45,12 @@ from grams.inputs.linked_table import LinkedTable
 # )
 from graph.retworkx.api import dag_longest_path
 from hugedict.parallel.parallel import Parallel
-from kgdata.wikidata.models import QNode, WDClass, WDProperty, WDQuantityPropertyStats
+from kgdata.wikidata.models import (
+    QNode,
+    WDClass,
+    WDProperty,
+    WDQuantityPropertyStats,
+)
 from loguru import logger
 from networkx.exception import NetworkXUnfeasible
 from pslpython.model import Model
@@ -108,7 +113,10 @@ class PSLInference:
     LinkNotFuncDep = LinkFeatureExtraction.NotFuncDep
 
     TypeNegPrior = "TypeNegPrior"
+    TypeNegParentPrior = "TypeNegParentPrior"
+    TypeHeaderSimilarity = TypeFeatureExtraction.HeaderSimilarity
     FreqTypeOverRow = TypeFeatureExtraction.FreqOverRow
+    FreqTypeInheritOverRow = TypeFeatureExtraction.FreqInheritOverRow
     TypeMustInPropRange = "TypeMustInPropRange"
     TypeOnlyOneConstraint = "TypeOnlyOneConstraint"
 
@@ -187,7 +195,9 @@ class PSLInference:
             self.link_pos_feats + self.link_neg_feats + self.link_structure_feats
         )
         self.type_pos_feats = [
-            r for r in [self.FreqTypeOverRow] if r not in self.disable_rules
+            r
+            for r in [self.FreqTypeInheritOverRow, self.TypeHeaderSimilarity]
+            if r not in self.disable_rules
         ]
         self.type_all_feats = self.type_pos_feats
 
@@ -196,6 +206,8 @@ class PSLInference:
         model.add_predicate(Predicate("Rel", closed=False, size=3))
         model.add_predicate(Predicate("Type", closed=False, size=2))
         model.add_predicate(Predicate("SubProp", closed=True, size=2))
+        model.add_predicate(Predicate("SubType", closed=True, size=2))
+        model.add_predicate(Predicate("HasSubType", closed=True, size=2))
         model.add_predicate(Predicate("NotRange", closed=True, size=2))
         model.add_predicate(Predicate("NotStatement", closed=True, size=1))
         model.add_predicate(Predicate("Statement", closed=True, size=1))
@@ -211,6 +223,8 @@ class PSLInference:
             self.LinkNegPrior: 1,
             self.TypeNegPrior: 1,
             self.LinkNegParentPropPrior: 0.1,
+            self.TypeNegParentPrior: 0.1,
+            self.TypeHeaderSimilarity: 0.1,
             self.CascadingError: 2,
             self.TypeMustInPropRange: 2,
             self.FreqLinkOverRow: 2,
@@ -221,6 +235,7 @@ class PSLInference:
             self.LinkHeaderSimilarity: 2,
             self.LinkDataTypeMismatch: 2,
             self.FreqTypeOverRow: 2,
+            self.FreqTypeInheritOverRow: 2,
             self.LinkNotFuncDep: 100,
         }
         self.rules = {}
@@ -265,6 +280,17 @@ class PSLInference:
             ),
         ]
 
+        # give a small negative weight to the parent type
+        self.rules[self.TypeNegParentPrior] = [
+            Rule(
+                # f"CanType(N, T1) & CanType(N, T2) & SubType(T1, T2) -> ~Type(N, T2)",
+                "CanType(N, T) & HasSubType(N, T) -> ~Type(N, T)",
+                weighted=True,
+                weight=feat_weights[self.TypeNegParentPrior],
+                squared=True,
+            )
+        ]
+
         # default negative prior
         self.rules[self.LinkNegPrior] = Rule(
             "~Rel(N1, N2, P)",
@@ -302,12 +328,13 @@ class PSLInference:
         # self.rules[self.TypeMustInPropRange] = Rule(
         #     "CanRel(S, N1, P) & Statement(S) & CanType(N1, T) & NotRange(P, T) & Rel(S, N1, P) -> ~Type(N1, T)",
         #     weighted=True, weight=feat_weights[self.TypeMustInPropRange], squared=True)
-        self.rules[self.FreqTypeOverRow] = Rule(
-            f"CanType(N, T) & TypeFeature_{self.FreqTypeOverRow}(N, T) -> Type(N, T)",
-            weighted=True,
-            weight=feat_weights[self.FreqTypeOverRow],
-            squared=True,
-        )
+        for feat in self.type_pos_feats:
+            self.rules[feat] = Rule(
+                f"CanType(N, T) & TypeFeature_{feat}(N, T) -> Type(N, T)",
+                weighted=True,
+                weight=feat_weights[feat],
+                squared=True,
+            )
 
         for rule_id, rules in self.rules.items():
             if rule_id in self.disable_rules:
@@ -325,13 +352,13 @@ class PSLInference:
         """Run inference and get back the result.
         Note: Check the model to see the list of predicate we need to pass the data to.
         """
-        if len(self.model.get_predicates()) != len(data) + 2:
-            preds = {x.upper() for x in data.keys()}
-            miss_preds = [
-                p
-                for p in self.model.get_predicates()
-                if p not in preds and p not in {"REL", "TYPE"}
-            ]
+        preds = {x.upper() for x in data.keys()}
+        miss_preds = [
+            p
+            for p in self.model.get_predicates()
+            if p not in preds and p not in {"REL", "TYPE"}
+        ]
+        if len(miss_preds) > 0:
             raise Exception(
                 f"Data in all predicates must be set. Missing {','.join(miss_preds)} predicates"
             )
@@ -342,6 +369,8 @@ class PSLInference:
             "NotRange",
             "CanType",
             f"TypeFeature_{self.FreqTypeOverRow}",
+            f"TypeFeature_{self.FreqTypeInheritOverRow}",
+            f"TypeFeature_{self.TypeHeaderSimilarity}",
             f"RelFeature_{self.LinkNotFuncDep}",
         }
         RelPredicate = (
@@ -529,6 +558,7 @@ class PSLInference:
         if features is None:
             is_parallel = len(inputs) > 1 if is_parallel == "auto" else is_parallel
             global_objects["wdprops"] = self.wdprops
+            global_objects["wdclasses"] = self.wdclasses
             global_objects["qnodes"] = self.qnodes
             global_objects["wd_numprop_stats"] = self.wd_numprop_stats
             global_objects["sim_fn"] = self.sim_fn
@@ -552,6 +582,8 @@ class PSLInference:
             "NotStatement": [],
             "Statement": [],
             "SubProp": set(),
+            "SubType": set(),
+            "HasSubType": set(),
             "NotRange": set(),
         }
         for feat in self.link_all_feats:
@@ -589,6 +621,16 @@ class PSLInference:
                 for pp in props:
                     if p != pp and pp in self.wdprops[p].parents_closure:
                         data["SubProp"].add((p, pp))
+
+            for uid, class_ids in result["type_feats"]["_column_to_types"].items():
+                class_ids = set(class_ids)
+                for class_id in class_ids:
+                    for parent_class_id in self.wdclasses[class_id].parents:
+                        if parent_class_id in class_ids:
+                            data["SubType"].add((class_id, parent_class_id))
+                            data["HasSubType"].add(
+                                (idmap.m((table_id, uid)), parent_class_id)
+                            )
 
             for uid, class_ids in result["type_feats"]["_column_to_types"].items():
                 # find list of incoming edges
@@ -630,6 +672,7 @@ class PSLInference:
         """Wrap the function that need to pass some big objects through a global objects"""
         global global_objects
         wdprops: Mapping[str, WDProperty] = global_objects["wdprops"]
+        wdclasses: Mapping[str, WDClass] = global_objects["wdclasses"]
         wd_numprop_stats = global_objects["wd_numprop_stats"]
         qnodes: Mapping[str, QNode] = global_objects["qnodes"]
         cache_dir = global_objects["cache_dir"]
@@ -651,7 +694,7 @@ class PSLInference:
             table, sg, dg, qnodes, wdprops, wd_numprop_stats, sim_fn
         )
         type_feat_extractor = TypeFeatureExtraction(
-            table, sg, dg, qnodes, wdprops, wd_numprop_stats
+            table, sg, dg, qnodes, wdclasses, wdprops, wd_numprop_stats, sim_fn
         )
 
         link_feats = link_feat_extractor.extract_features()
