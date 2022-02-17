@@ -16,14 +16,14 @@ class Attribute(TypedDict, total=False):
 class Text:
     id: str
     value: str = ""
-    tags: Set[str] = field(default_factory=set)
+    tags: List[str] = field(default_factory=list)
     id2attrs: Dict[str, Attribute] = field(default_factory=dict)
 
     def to_dict(self):
         return {
             "id": self.id,
             "value": self.value,
-            "tags": list(self.tags),
+            "tags": self.tags,
             "id2attrs": {k: v for k, v in self.id2attrs.items()},
         }
 
@@ -32,13 +32,13 @@ class Text:
         return Text(
             id=obj["id"],
             value=obj["value"],
-            tags=set(obj["tags"]),
+            tags=obj["tags"],
             id2attrs=obj["id2attrs"],
         )
 
     @staticmethod
     def from_tuple(obj: tuple):
-        return Text(obj[0], obj[1], set(obj[2]), obj[3])
+        return Text(obj[0], obj[1], obj[2], obj[3])
 
     def __str__(self):
         return self.value

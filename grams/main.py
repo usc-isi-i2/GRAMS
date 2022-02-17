@@ -7,6 +7,7 @@ from typing import Any, Dict, Mapping, MutableMapping, Optional, Set, Tuple, Uni
 from grams.algorithm.candidate_graph.cg_factory import CGFactory
 from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.data_graph.dg_graph import DGGraph
+from grams.algorithm.inferences.psl_gram_model import PSLGramModel
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
 from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
 from grams.algorithm.postprocessing.steiner_tree import PostProcessingSteinerTree
@@ -181,6 +182,14 @@ class GRAMS:
             #     )
             sim_fn = None
 
+            # edge_probs, cta_probs = PSLGramModel(
+            #     qnodes=qnodes,
+            #     qnode_labels=self.qnode_labels,
+            #     wdclasses=wdclasses,
+            #     wdprops=wdprops,
+            #     wd_numprop_stats=self.wd_numprop_stats,
+            #     sim_fn=sim_fn,
+            # ).predict(table, cg, dg, verbose=verbose)
             psl_solver = PSLInference(
                 qnodes,
                 wdclasses,
@@ -191,6 +200,7 @@ class GRAMS:
                 enable_logging=self.cfg.psl.enable_logging,
             )
             edge_probs, cta_probs = psl_solver.run(table, dg, cg)
+
             if self.cfg.psl.postprocessing == "select_simplepath":
                 pp = PostProcessingSimplePath(
                     table, cg, dg, edge_probs, self.cfg.psl.threshold

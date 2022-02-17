@@ -105,6 +105,9 @@ class HTMLTable:
 
     def span(self) -> HTMLTable:
         """Span the table by copying values to merged field"""
+        if len(self.rows) == 0:
+            return self
+
         pi = 0
         data = []
         pending_ops = {}

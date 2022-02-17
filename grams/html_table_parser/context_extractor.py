@@ -120,9 +120,9 @@ class ContextExtractor:
         "bdi", "bdo", "big", "button", "cite", "canvas",
         "code", "data", "datalist", "del", "dfn", "em",
         "embed", "i", "iframe", "img", "input", "ins",
-        "kbd", "label", "map", "mark", "meter", "noscript",
+        "kbd", "label", "map", "mark", "meter",
         "object", "output", "picture", "progress", "q",
-        "ruby", "s", "samp", "script", "select", "slot",
+        "ruby", "s", "samp", "select", "slot",
         "small", "span", "strong", "sub", "sup", "svg", "template", 
         "textarea", "time", "u", "tt", "var", "video", "wbr"
     }
@@ -134,6 +134,7 @@ class ContextExtractor:
         "h6", "header", "hgroup", "hr", "li", "main", 
         "nav", "ol", "p", "pre", "section", "table", "ul"
     }
+    IGNORE_ELEMENTS = {"script", "style", "noscript"}
     SKIP_CONTENT_BLOCK_ELEMENTS = {"table"}
     SAME_CONTENT_LEVEL_ELEMENTS = {"table", "h1", "h2", "h3", "h4", "h5", "h6"}
     HEADER_ELEMENTS = {"h1", "h2", "h3", "h4", "h5", "h6"}
@@ -167,19 +168,31 @@ class ContextExtractor:
             context_after = self.optimize_flatten_tree(context_after)
 
         context = [ContentHierarchy(level=0, heading="")]
-        for c in context_before:
+        i = 0
+        while i < len(context_before):
+            c = context_before[i]
             if isinstance(c, Linebreak):
                 context[-1].content_before.append(c)
+                i += 1
                 continue
-
-            headers = c.tags.intersection(self.HEADER_ELEMENTS)
+            headers = self.HEADER_ELEMENTS.intersection(c.tags)
             if len(headers) == 0:
                 context[-1].content_before.append(c)
+                i += 1
                 continue
 
             assert len(headers) == 1
             header = list(headers)[0]
             context.append(ContentHierarchy(level=int(header[1:]), heading=c.value))
+            i += 1
+            while i < len(context_before):
+                # now if the next one is not line break and is the same header, we can merge them
+                nc = context_before[i]
+                if isinstance(nc, Linebreak):
+                    break
+                assert self.HEADER_ELEMENTS.intersection(nc.tags) == headers
+                context[-1].heading += nc.value
+                i += 1
 
         # we do another filter to make sure the content is related to the element
         # that the header leading to this element must be increasing
@@ -267,6 +280,7 @@ class ContextExtractor:
             children = [
                 self.get_tree(c, id_container)
                 for c in cast(List[PageElement], el.contents)
+                if isinstance(c, NavigableString) or c.name not in self.IGNORE_ELEMENTS
             ]
             if len(children) == 1 and children[0].tag is None:
                 # one child and it's a string, so we undo it to reduce the tree depth
@@ -300,7 +314,7 @@ class ContextExtractor:
                     Text(
                         id=str(tree.id),
                         value=tree.value,
-                        tags={tree.tag},
+                        tags=[tree.tag],
                         id2attrs={},
                     )
                 )
@@ -308,7 +322,7 @@ class ContextExtractor:
             for c in tree.children:
                 for sc in self.flatten_tree(c):
                     if isinstance(sc, Text):
-                        sc.tags.add(tree.tag)
+                        sc.tags.append(tree.tag)
                     output.append(sc)
                 if c.block:
                     output.append(Linebreak())
@@ -320,11 +334,11 @@ class ContextExtractor:
 
         # inline element
         if len(tree.children) == 0:
-            tags = set()
+            tags = []
             id2attrs = {}
 
             if tree.tag is not None:
-                tags.add(tree.tag)
+                tags.append(tree.tag)
                 if len(tree.attrs) > 0:
                     id2attrs[str(tree.id)] = tree.attrs
             return [
@@ -336,7 +350,7 @@ class ContextExtractor:
             for subc in self.flatten_tree(c):
                 assert isinstance(subc, Text)
                 subc = copy.deepcopy(subc)
-                subc.tags.add(tree.tag)
+                subc.tags.append(tree.tag)
                 if len(tree.attrs) > 0:
                     subc.id2attrs[str(tree.id)] = tree.attrs
                 output.append(subc)

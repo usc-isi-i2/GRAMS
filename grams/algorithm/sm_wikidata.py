@@ -15,14 +15,6 @@ import numpy as np
 import sm.misc as M
 import sm.outputs as O
 
-# from grams.algorithm.semantic_graph import (
-#     SGColumnNode,
-#     SGEdge,
-#     SGEntityValueNode,
-#     SGLiteralValueNode,
-#     SGNode,
-#     SGStatementNode,
-# )
 from grams.algorithm.wdont import WDOnt
 from grams.inputs.linked_table import LinkedTable
 from kgdata.wikidata.models import QNode, WDClass, WDProperty
