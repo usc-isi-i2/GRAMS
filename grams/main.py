@@ -89,6 +89,13 @@ class GRAMS:
                 read_only=read_only,
                 proxy=proxy,
             )
+            if os.path.exists(os.path.join(data_dir, "wdclasses.fixed.jl")):
+                self.wdclasses = self.wdclasses.cache_dict()
+                for record in M.deserialize_jl(
+                    os.path.join(data_dir, "wdclasses.fixed.jl")
+                ):
+                    cls = WDClass.from_dict(record)
+                    self.wdclasses.cache[cls.id] = cls
             self.wdprops = get_wdprop_db(
                 os.path.join(data_dir, "wdprops.db"),
                 read_only=read_only,
@@ -182,24 +189,24 @@ class GRAMS:
             #     )
             sim_fn = None
 
-            # edge_probs, cta_probs = PSLGramModel(
-            #     qnodes=qnodes,
-            #     qnode_labels=self.qnode_labels,
-            #     wdclasses=wdclasses,
-            #     wdprops=wdprops,
-            #     wd_numprop_stats=self.wd_numprop_stats,
-            #     sim_fn=sim_fn,
-            # ).predict(table, cg, dg, verbose=verbose)
-            psl_solver = PSLInference(
-                qnodes,
-                wdclasses,
-                wdprops,
-                self.wd_numprop_stats,
-                disable_rules=set(self.cfg.psl.disable_rules),
+            edge_probs, cta_probs = PSLGramModel(
+                qnodes=qnodes,
+                qnode_labels=self.qnode_labels,
+                wdclasses=wdclasses,
+                wdprops=wdprops,
+                wd_numprop_stats=self.wd_numprop_stats,
                 sim_fn=sim_fn,
-                enable_logging=self.cfg.psl.enable_logging,
-            )
-            edge_probs, cta_probs = psl_solver.run(table, dg, cg)
+            ).predict(table, cg, dg, verbose=verbose, debug=True)
+            # psl_solver = PSLInference(
+            #     qnodes,
+            #     wdclasses,
+            #     wdprops,
+            #     self.wd_numprop_stats,
+            #     disable_rules=set(self.cfg.psl.disable_rules),
+            #     sim_fn=sim_fn,
+            #     enable_logging=self.cfg.psl.enable_logging,
+            # )
+            # edge_probs, cta_probs = psl_solver.run(table, dg, cg)
 
             if self.cfg.psl.postprocessing == "select_simplepath":
                 pp = PostProcessingSimplePath(

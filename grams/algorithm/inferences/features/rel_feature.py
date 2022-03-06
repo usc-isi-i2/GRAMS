@@ -90,7 +90,7 @@ class RelFeatures:
                     (
                         self.idmap.m(inedge.source),
                         self.idmap.m(s.id),
-                        inedge.predicate,
+                        self.idmap.m(inedge.predicate),
                         ratio,
                     )
                 )
@@ -98,7 +98,7 @@ class RelFeatures:
                 (
                     self.idmap.m(s.id),
                     self.idmap.m(outedge.target),
-                    outedge.predicate,
+                    self.idmap.m(outedge.predicate),
                     ratio,
                 )
             )
@@ -118,7 +118,7 @@ class RelFeatures:
                     (
                         self.idmap.m(inedge.source),
                         self.idmap.m(s.id),
-                        inedge.predicate,
+                        self.idmap.m(inedge.predicate),
                         ratio,
                     )
                 )
@@ -126,7 +126,7 @@ class RelFeatures:
                 (
                     self.idmap.m(s.id),
                     self.idmap.m(outedge.target),
-                    outedge.predicate,
+                    self.idmap.m(outedge.predicate),
                     ratio,
                 )
             )
@@ -149,11 +149,19 @@ class RelFeatures:
             )
 
             tmp[
-                (self.idmap.m(s.id), self.idmap.m(outedge.target), outedge.predicate)
+                (
+                    self.idmap.m(s.id),
+                    self.idmap.m(outedge.target),
+                    self.idmap.m(outedge.predicate),
+                )
             ] = (freq, (inedge.source, outedge.target))
             if inedge.predicate == outedge.predicate:
                 tmp[
-                    (self.idmap.m(inedge.source), self.idmap.m(s.id), inedge.predicate)
+                    (
+                        self.idmap.m(inedge.source),
+                        self.idmap.m(s.id),
+                        self.idmap.m(inedge.predicate),
+                    )
                 ] = (freq, (inedge.source, outedge.target))
 
         for key, (freq, pair) in tmp.items():
@@ -181,7 +189,7 @@ class RelFeatures:
                     (
                         self.idmap.m(inedge.source),
                         self.idmap.m(s.id),
-                        inedge.predicate,
+                        self.idmap.m(inedge.predicate),
                         ratio,
                     )
                 )
@@ -189,7 +197,7 @@ class RelFeatures:
                 (
                     self.idmap.m(s.id),
                     self.idmap.m(outedge.target),
-                    outedge.predicate,
+                    self.idmap.m(outedge.predicate),
                     ratio,
                 )
             )
@@ -212,11 +220,19 @@ class RelFeatures:
             )
 
             tmp[
-                (self.idmap.m(s.id), self.idmap.m(outedge.target), outedge.predicate)
+                (
+                    self.idmap.m(s.id),
+                    self.idmap.m(outedge.target),
+                    self.idmap.m(outedge.predicate),
+                )
             ] = (n_unmatch_links, (inedge.source, outedge.target))
             if inedge.predicate == outedge.predicate:
                 tmp[
-                    (self.idmap.m(inedge.source), self.idmap.m(s.id), inedge.predicate)
+                    (
+                        self.idmap.m(inedge.source),
+                        self.idmap.m(s.id),
+                        self.idmap.m(inedge.predicate),
+                    )
                 ] = (n_unmatch_links, (inedge.source, outedge.target))
 
         for key, (freq, pair) in tmp.items():
@@ -245,7 +261,7 @@ class RelFeatures:
                     (
                         self.idmap.m(inedge.source),
                         self.idmap.m(s.id),
-                        inedge.predicate,
+                        self.idmap.m(inedge.predicate),
                         not_func_dep,
                     )
                 )
@@ -253,7 +269,7 @@ class RelFeatures:
                 (
                     self.idmap.m(s.id),
                     self.idmap.m(outedge.target),
-                    outedge.predicate,
+                    self.idmap.m(outedge.predicate),
                     not_func_dep,
                 )
             )

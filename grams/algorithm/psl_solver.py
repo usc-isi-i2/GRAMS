@@ -345,6 +345,18 @@ class PSLInference:
             else:
                 model.add_rule(rules)
 
+        # print rules (for debugging)
+        # print("=" * 10, "Rules")
+        # for rule_id, rules in self.rules.items():
+        #     if rule_id in self.disable_rules:
+        #         continue
+        #     if isinstance(rules, list):
+        #         for rule in rules:
+        #             print(f"{rule_id}: {rule._rule_body}")
+        #     else:
+        #         print(f"{rule_id}: {rules._rule_body}")
+        # print("=" * 10)
+
         # set the model and done
         self.model = model
 
@@ -398,7 +410,8 @@ class PSLInference:
             logger=None if self.enable_logging else False,
             additional_cli_optons=["--h2path", os.path.join(self.temp_dir, "h2")],
             temp_dir=str(self.temp_dir),
-        )  # , cleanup_temp=False)
+            cleanup_temp=False,
+        )
         return {
             "links": {
                 (r[0], r[1], r[2]): r["truth"]

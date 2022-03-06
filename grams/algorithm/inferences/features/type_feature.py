@@ -6,22 +6,25 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Set,
     Tuple,
     TYPE_CHECKING,
     TypeVar,
 )
 from grams.algorithm.data_graph.dg_graph import DGGraph
+from grams.algorithm.inferences.features.tree_utils import TreeStruct
 from grams.algorithm.inferences.psl_lib import IDMap
 from kgdata.wikidata.models.wdclass import WDClass
 from sm.misc import CacheMethod
 import networkx as nx
 import numpy as np
-
+from copy import copy
 from grams.algorithm.data_graph import CellNode
 from grams.algorithm.literal_matchers import TextParser
 from grams.algorithm.candidate_graph.cg_graph import CGColumnNode, CGGraph
 from grams.inputs.linked_table import LinkedTable
 from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
+from operator import itemgetter
 
 
 class TypeFeaturesConfigs:
@@ -86,6 +89,14 @@ class TypeFeatures:
             feat_data[feat] = [v for u in tagged_columns for v in fn(u)]
         return feat_data
 
+    def TYPE_FREQ_OVER_ROW(self, u: CGColumnNode) -> List[Tuple[str, str, float]]:
+        type_freq = self.get_type_freq(u)
+        output = []
+        n_rows = self.table.size()
+        for c, freq in type_freq.items():
+            output.append((self.idmap.m(u.id), self.idmap.m(c), freq / n_rows))
+        return output
+
     def EXTENDED_TYPE_FREQ_OVER_ROW(
         self, u: CGColumnNode
     ) -> List[Tuple[str, str, float]]:
@@ -98,11 +109,73 @@ class TypeFeatures:
 
     def HAS_SUB_TYPE(self, u: CGColumnNode):
         output = set()
-        classes = set(self.get_extended_type_freq(u).keys())
+        classes = self.get_extended_type_freq(u)
         for c in classes:
             for pc in self.wdclasses[c].parents:
                 if pc in classes:
                     output.add((self.idmap.m(u.id), self.idmap.m(pc)))
+        return list(output)
+
+    def ABS_TYPE_DISTANCE(self, u: CGColumnNode):
+        """Get types and distance from the class to its most specific type."""
+        output = set()
+        classes = self.get_extended_type_freq(u)
+        tree = self.get_candidate_types_as_maps(u)
+
+        # start with leaf nodes
+        start_nodes: List[Tuple[str, int]] = [
+            (c, 0) for c in classes if len(tree.p2cs[c]) == 0
+        ]
+        best_distance = {}
+        while len(start_nodes) > 0:
+            node, distance = start_nodes.pop()
+            best_distance[node] = min(distance, best_distance.get(node, float("inf")))
+            for child in tree.c2ps[node]:
+                start_nodes.append((child, distance + 1))
+
+        # longest distance, can't use distance to root because root node
+        # can even have shorter distance than one of its children due to varied tree length
+        longest_distance = max(best_distance.values())
+        for c, distance in best_distance.items():
+            output.add(
+                (self.idmap.m(u.id), self.idmap.m(c), distance / longest_distance)
+            )
+        return list(output)
+
+    def TYPE_DISTANCE(self, u: CGColumnNode):
+        output = set()
+        extended_classes = self.get_extended_type_freq(u)
+        if len(extended_classes) == 0:
+            return []
+
+        classes = self.get_type_freq(u)
+        tree = self.get_candidate_types_as_maps(u)
+
+        top_classes = sorted(classes.items(), key=itemgetter(1), reverse=True)[:2]
+        # now calculate the distance from the top classes into its children
+        base = set(c for c, f in top_classes)
+        best_distance: Dict[str, float] = {c: 0 for c in base}
+        for c in base:
+            stack: List[Tuple[str, float]] = [
+                (p, 1) for p in tree.c2ps[c] if p not in base
+            ]
+            while len(stack) > 0:
+                node, distance = stack.pop()
+                best_distance[node] = min(
+                    distance, best_distance.get(node, float("inf"))
+                )
+                for p in tree.c2ps[node]:
+                    if p not in base:
+                        stack.append((p, distance + 1))
+        for c in extended_classes:
+            if c not in best_distance:
+                best_distance[c] = 0
+
+        longest_distance = max(best_distance.values())
+        for c, distance in best_distance.items():
+            output.add(
+                (self.idmap.m(u.id), self.idmap.m(c), distance / longest_distance)
+            )
         return list(output)
 
     @CacheMethod.cache(CacheMethod.single_object_arg)
@@ -173,6 +246,16 @@ class TypeFeatures:
         return output
 
     @CacheMethod.cache(CacheMethod.single_object_arg)
+    def get_candidate_types_as_maps(self, u: CGColumnNode) -> TreeStruct:
+        """Get candidate types of a column in a form of two maps: one from parent to children, and another one from child to parents
+        If there are cycles, we break them
+        """
+        candidate_types = self.get_extended_type_freq(u)
+        return TreeStruct.construct(
+            candidate_types, lambda x: self.wdclasses[x].parents
+        ).ensure_tree()
+
+    @CacheMethod.cache(CacheMethod.single_object_arg)
     def get_cells(self, u: CGColumnNode) -> List[CellNode]:
         """Get cells of a column node"""
         return [self.dg.get_cell_node(cid) for cid in u.nodes]
@@ -231,3 +314,37 @@ class TypeFeatures:
                 )
 
         cell2qnodes[cell.id] = [(qnode, qnode2prob[qnode.id]) for qnode in qnode_lst]
+
+    def _print_class_hierarchy(self, classes: List[str]):
+        """Print a tree"""
+        p2c = {c: [] for c in classes}
+        c2p = {c: [] for c in classes}
+        for c in classes:
+            for p in self.wdclasses[c].parents:
+                if p in classes:
+                    p2c[p].append(c)
+                    c2p[c].append(p)
+        roots = [c for c, ps in c2p.items() if len(ps) == 0]
+        label = lambda r: f"{self.wdclasses[r].label} ({r})"
+        visited = {}
+        counter = 0
+
+        for root in roots:
+            stack: List[Tuple[str, int]] = [(root, 0)]
+            while len(stack) > 0:
+                counter += 1
+                node, depth = stack.pop()
+                postfix = f" (visited at {visited[node]})" if node in visited else ""
+                if depth == 0:
+                    print(f"{counter}.\t{label(node)}{postfix}")
+                else:
+                    indent = "│   " * (depth - 1)
+                    print(f"{counter}.\t{indent}├── {label(node)}{postfix}")
+
+                if node in visited:
+                    continue
+                else:
+                    visited[node] = counter
+
+                for child in p2c[node]:
+                    stack.append((child, depth + 1))

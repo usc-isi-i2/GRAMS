@@ -1,25 +1,24 @@
 from __future__ import annotations
 import os, uuid, logging
 from typing import (
-    Any,
     Dict,
     Generic,
-    Iterable,
-    Iterator,
     List,
-    Mapping,
     MutableMapping,
     Optional,
-    Tuple,
-    Literal,
     TypeVar,
 )
+from datetime import datetime
+from numpy import ndarray
 from pslpython.partition import Partition
 from pslpython.predicate import Predicate
 from pslpython.rule import Rule
 from pslpython.model import Model, ModelError
 from dataclasses import dataclass
 from loguru import logger
+from pathlib import Path
+from copy import copy
+from functools import partial
 
 
 class PSLModel:
@@ -34,7 +33,8 @@ class PSLModel:
         self.rules = rules
         self.name2predicate: Dict[str, Predicate] = {}
         self.temp_dir = (
-            temp_dir or f"/tmp/psl-python-{str(uuid.uuid4()).replace('-', '')}"
+            temp_dir
+            or f"/tmp/psl-python-{datetime.now().strftime('%y%m%d-%H%M%S')}-{str(uuid.uuid4()).replace('-', '')}"
         )
 
         if ignore_predicates_not_in_rules:
@@ -114,7 +114,8 @@ class PSLModel:
             resp = self.model.infer(
                 logger=self.logger,
                 additional_cli_optons=["--h2path", os.path.join(self.temp_dir, "h2")],
-                temp_dir=str(self.temp_dir),
+                temp_dir=self.temp_dir,
+                # cleanup_temp=False,
             )
         except ModelError as e:
             self.log_errors(e)
@@ -128,6 +129,29 @@ class PSLModel:
                 for _, r in df.iterrows()
             }
         return output
+
+    def debug(self, idmap: Optional[IDMap] = None):
+        """Write data of predicates into a file for debugging"""
+        outdir = Path(self.temp_dir) / "debug"
+        outdir.mkdir(exist_ok=True, parents=True)
+
+        def remap(row: ndarray, size: int, idmap: IDMap):
+            row = copy(row)
+            for i in range(size):
+                row[i] = idmap.im(row[i])
+            return row
+
+        for pname, p in self.name2predicate.items():
+            psize = len(p._types)
+            for partition, df in p.data().items():
+                if df.size == 0:
+                    continue
+
+                if idmap is not None:
+                    df = df.apply(
+                        partial(remap, size=psize, idmap=idmap), axis=1, raw=True
+                    )
+                df.to_csv(outdir / f"{pname}.{partition}.csv", index=False)
 
     def log_errors(self, error: Exception):
         logger.error(str(error))
@@ -197,3 +221,10 @@ class RuleContainer(MutableMapping[str, Rule]):
 
     def __delitem__(self, __v: str) -> None:
         raise Exception("Not support operation")
+
+    def print(self):
+        """Print list of rules"""
+        print("=" * 10, "Rules")
+        for name, rule in self.rules.items():
+            print(f"{name}: {rule._rule_body}")
+        print("=" * 10)

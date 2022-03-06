@@ -41,6 +41,7 @@ class P:
     SubProp = Predicate("SUB_PROP", closed=True, size=2)
     SubType = Predicate("SUB_TYPE", closed=True, size=2)
     HasSubType = Predicate("HAS_SUB_TYPE", closed=True, size=2)
+    TypeDistance = Predicate("TYPE_DISTANCE", closed=True, size=2)
     NotRange = Predicate("NOT_RANGE", closed=True, size=2)
 
     # features
@@ -57,6 +58,7 @@ class P:
     RelIncorrectDataType = Predicate("REL_INCORRECT_DATA_TYPE", closed=True, size=3)
     RelHeaderSimilarity = Predicate("REL_HEADER_SIMILARITY", closed=True, size=3)
 
+    TypeFreqOverRow = Predicate("TYPE_FREQ_OVER_ROW", closed=True, size=2)
     ExtendedTypeFreqOverRow = Predicate(
         "EXTENDED_TYPE_FREQ_OVER_ROW", closed=True, size=2
     )
@@ -95,6 +97,7 @@ class PSLGramModel:
                 P.RelFreqOverPosRel.name(): 2,
                 P.RelFreqUnmatchOverEntRow.name(): 2,
                 P.RelFreqUnmatchOverPosRel.name(): 2,
+                P.RelHeaderSimilarity.name(): 2,
                 P.RelIncorrectDataType.name(): 2,
                 P.RelNotFuncDependency.name(): 100,
                 "TYPE_PRIOR_NEG": 1,
@@ -102,7 +105,6 @@ class PSLGramModel:
                 "TYPE_PROP_RANGE": 2,
                 P.ExtendedTypeFreqOverRow.name(): 2,
                 P.TypeHeaderSimilarity.name(): 0.1,
-                P.RelHeaderSimilarity.name(): 2,
             }
         )
 
@@ -146,10 +148,12 @@ class PSLGramModel:
         )
 
         # prefer details prop/type
+        # TODO: check REL_PRIOR_NEG_PARENT_PROP_1 whether we need them to connect
+        # to the same V node
         rules["REL_PRIOR_NEG_PARENT_PROP_1"] = Rule(
             f"""
-            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) &
-            {P.Rel.name()}(U, S2, PP) & {P.Statement.name()}(S2) & 
+            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, P) &
+            {P.Rel.name()}(U, S2, PP) & {P.Statement.name()}(S2) & {P.Rel.name()}(S2, V, PP) & 
             {P.SubProp.name()}(P, PP) -> ~{P.CorrectRel.name()}(U, S2, PP)
             """,
             weighted=True,
@@ -166,18 +170,18 @@ class PSLGramModel:
             squared=True,
             weight=0.0,
         )
-        rules["REL_PRIOR_NEG_PARENT_QUALIFIER"] = Rule(
-            f"""
-            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, Q) & (P != Q) &
-            {P.Rel.name()}(U, S2, PP) & {P.Statement.name()}(S2) & {P.Rel.name()}(S2, V, PQ) & (PQ != PP) &
-            {P.SubProp.name()}(Q, PQ) -> ~{P.CorrectRel.name()}(S2, V, PQ)
-            """,
-            weighted=True,
-            squared=True,
-            weight=0.0,
-        )
+        # rules["REL_PRIOR_NEG_PARENT_QUALIFIER"] = Rule(
+        #     f"""
+        #     {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, Q) & (P != Q) &
+        #     {P.Rel.name()}(U, S2, PP) & {P.Statement.name()}(S2) & {P.Rel.name()}(S2, V, PQ) & (PQ != PP) &
+        #     {P.SubProp.name()}(Q, PQ) -> ~{P.CorrectRel.name()}(S2, V, PQ)
+        #     """,
+        #     weighted=True,
+        #     squared=True,
+        #     weight=0.0,
+        # )
         rules["TYPE_PRIOR_NEG_PARENT"] = Rule(
-            f"{P.Type.name()}(N, T) & {P.HasSubType.name()}(N, T) -> ~{P.CorrectType.name()}(N, T)",
+            f"{P.Type.name()}(N, T) & {P.TypeDistance.name()}(N, T) -> ~{P.CorrectType.name()}(N, T)",
             weighted=True,
             weight=0.0,
             squared=True,
@@ -196,8 +200,8 @@ class PSLGramModel:
 
         rules["CASCADING_ERROR_1"] = Rule(
             f"""
-            {P.Rel.name()}(N0, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, N1, P) & 
-            {P.Rel.name()}(S, N2, Q) & (N1 != N2) & ~{P.CorrectRel.name()}(S, N1, P) -> ~{P.CorrectRel.name()}(S, N2, Q)
+            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V1, P) & 
+            {P.Rel.name()}(S, V2, Q) & (V1 != V2) & ~{P.CorrectRel.name()}(S, V1, P) -> ~{P.CorrectRel.name()}(S, V2, Q)
             """,
             weighted=True,
             weight=0.0,
@@ -205,16 +209,16 @@ class PSLGramModel:
         )
         rules["CASCADING_ERROR_2"] = Rule(
             f"""
-            {P.Rel.name()}(N0, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, N1, P) & 
-            ~{P.CorrectRel.name()}(S, N1, P) -> ~{P.CorrectRel.name()}(N0, S, P)""",
+            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, P) & 
+            ~{P.CorrectRel.name()}(S, V, P) -> ~{P.CorrectRel.name()}(U, S, P)""",
             weighted=True,
             weight=0.0,
             squared=True,
         )
         rules["CASCADING_ERROR_3"] = Rule(
             f"""
-            {P.Rel.name()}(N0, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, N1, P) & 
-            ~{P.CorrectRel.name()}(N0, S, P) -> ~{P.CorrectRel.name()}(S, N1, P)
+            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, P) & 
+            ~{P.CorrectRel.name()}(U, S, P) -> ~{P.CorrectRel.name()}(S, V, P)
             """,
             weighted=True,
             weight=0.0,
@@ -238,7 +242,12 @@ class PSLGramModel:
         )
 
     def predict(
-        self, table: LinkedTable, cg: CGGraph, dg: DGGraph, verbose: bool = False
+        self,
+        table: LinkedTable,
+        cg: CGGraph,
+        dg: DGGraph,
+        verbose: bool = False,
+        debug: bool = False,
     ) -> Tuple[Dict[CGEdgeTriple, float], Dict[int, Dict[str, float]]]:
         """Predict prob. of edges and prob. of columns' type"""
         idmap, observations, targets = self.extract_data(table, cg, dg)
@@ -261,12 +270,16 @@ class PSLGramModel:
             assert isinstance(u, CGColumnNode)
             type_probs.setdefault(u.column, {})[class_id] = prob
 
+        if debug:
+            self.model.debug(idmap)
+
         return rel_probs, type_probs
 
     def extract_data(self, table: LinkedTable, cg: CGGraph, dg: DGGraph):
         """Extract data for our PSL model"""
         cg_nodes = cg.nodes()
         cg_edges = cg.edges()
+        props = {e.predicate for e in cg_edges}
 
         idmap = IDMap()
 
@@ -301,7 +314,14 @@ class PSLGramModel:
             self.wdprops,
             self.wd_numprop_stats,
             self.sim_fn,
-        ).extract_features([P.ExtendedTypeFreqOverRow.name(), P.HasSubType.name()])
+        ).extract_features(
+            [
+                P.TypeFreqOverRow.name(),
+                P.ExtendedTypeFreqOverRow.name(),
+                P.TypeDistance.name(),
+                P.HasSubType.name(),
+            ]
+        )
 
         observations: Dict[str, list] = {}
         targets: Dict[str, list] = {}
@@ -317,14 +337,26 @@ class PSLGramModel:
             (idmap.m(e.source), idmap.m(e.target), idmap.m(e.predicate))
             for e in cg_edges
         ]
-        observations[P.Type.name()] = observations[
-            P.ExtendedTypeFreqOverRow.name()
-        ].copy()
+        observations[P.Type.name()] = [
+            (c, t) for c, t, p in observations[P.TypeFreqOverRow.name()]
+        ]
         observations[P.Statement.name()] = [
             (idmap.m(u.id),) for u in cg_nodes if isinstance(u, CGStatementNode)
         ]
-        observations[P.SubType.name()] = []
-        observations[P.SubProp.name()] = []
+        observations[P.SubProp.name()] = [
+            (idmap.m(p), idmap.m(pp))
+            for p in props
+            for pp in props
+            if p != pp and pp in self.wdprops[p].parents_closure
+        ]
+
+        class_ids = {idmap.im(x[1]) for x in observations[P.Type.name()]}
+        observations[P.SubType.name()] = [
+            (idmap.m(class_id), idmap.m(parent_class_id))
+            for class_id in class_ids
+            for parent_class_id in class_ids
+            if parent_class_id in self.wdclasses[class_id].parents_closure
+        ]
         observations[P.RelHeaderSimilarity.name()] = []
         observations[P.TypeHeaderSimilarity.name()] = []
 
