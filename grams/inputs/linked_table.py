@@ -266,7 +266,7 @@ class CandidateEntity:
 class Link:
     start: int
     end: int  # exclusive
-    url: str
+    url: Optional[str]  # none when there is no link, and the entity is not mapped yet
     entity_id: Optional[str]
     candidates: List[CandidateEntity]
 

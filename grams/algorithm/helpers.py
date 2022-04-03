@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from operator import attrgetter
-from typing import Dict, Set, List, Optional, Callable
+from typing import Dict, Iterator, Mapping, Set, List, Optional, Callable, Type, TypeVar
 
 
 @dataclass
@@ -13,7 +13,7 @@ class Tree:
 
     id: str
     depth: int
-    children: List['Tree']
+    children: List["Tree"]
     score: Optional[float] = None
 
     def get_flatten_hierarchy(self, dedup: bool = False) -> List[HierarchyRecord]:
@@ -34,7 +34,7 @@ class Tree:
         return output
 
     def sort(self, key=None, reverse: bool = False):
-        self.children.sort(key=key or attrgetter('score'), reverse=reverse)
+        self.children.sort(key=key or attrgetter("score"), reverse=reverse)
         for c in self.children:
             c.sort(key, reverse)
 
@@ -44,14 +44,16 @@ class Tree:
             c.adjust_depth(depth + 1)
         return self
 
-    def update_score(self, score_fn: Callable[['Tree'], float]):
+    def update_score(self, score_fn: Callable[["Tree"], float]):
         """Use to adjust score of a node in the tree based on its children. The score is going to be used for sorting"""
         for c in self.children:
             c.update_score(score_fn)
         self.score = score_fn(self)
         return self
 
-    def preorder(self, fn: Callable[['Tree', List['Tree']], None], path: List['Tree'] = None):
+    def preorder(
+        self, fn: Callable[["Tree", List["Tree"]], None], path: List["Tree"] = None
+    ):
         if path is None:
             path = []
         fn(self, path)
@@ -74,30 +76,40 @@ class Forest:
     def sort(self, key=None, reverse: bool = False):
         for tree in self.trees:
             tree.sort(key, reverse)
-        self.trees.sort(key=key or attrgetter('score'), reverse=reverse)
+        self.trees.sort(key=key or attrgetter("score"), reverse=reverse)
         return self
 
-    def update_score(self, score_fn: Callable[['Tree'], float]):
+    def update_score(self, score_fn: Callable[["Tree"], float]):
         for tree in self.trees:
             tree.update_score(score_fn)
         return self
 
-    def preorder(self, fn: Callable[['Tree'], None]):
+    def preorder(self, fn: Callable[["Tree"], None]):
         for tree in self.trees:
             tree.preorder(fn)
 
 
-class IndirectDictAccess:
+K = TypeVar("K")
+IV = TypeVar("IV")
+V = TypeVar("V")
 
-    def __init__(self, odict, access):
+
+class IndirectDictAccess(Mapping[K, V]):
+    def __init__(self, odict: Mapping[K, IV], access: Callable[[IV], V]):
         self.odict = odict
         self.access = access
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: K) -> V:
         return self.access(self.odict[item])
 
-    def __contains__(self, item):
+    def __contains__(self, item: K) -> bool:
         return item in self.odict
+
+    def __iter__(self) -> Iterator[K]:
+        return self.odict.__iter__()
+
+    def __len__(self) -> int:
+        return self.odict.__len__()
 
 
 def reorder2tree(lst: List[str], super_relationships: Dict[str, Set[str]]) -> Forest:

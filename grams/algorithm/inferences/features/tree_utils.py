@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Union
+from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Set, Union
 from dataclasses import dataclass
 from copy import copy
 from typing_extensions import Self
@@ -30,7 +30,9 @@ class TreeStruct:
 
         return TreeStruct(p2cs, c2ps)
 
-    def ensure_tree(self) -> Self:
+    def ensure_tree(
+        self, fix_method: Optional[Literal["auto", "manually"]] = None
+    ) -> Self:
         """Make sure this is actually a poly-tree, not containing any cycle
         If we found a cycle, we remove one link to make it acyclic.
         """
@@ -49,7 +51,9 @@ class TreeStruct:
             # all nodes have been visited, and no cycles found
             return self
 
-        if TypeFeatureConfigs.FIX_TYPE_CYCLE == "manually":
+        if fix_method == "manually" or (
+            fix_method is None and TypeFeatureConfigs.FIX_TYPE_CYCLE == "manually"
+        ):
             if len(cycles) == 0:
                 for c in self.c2ps:
                     if c in visited:
@@ -71,7 +75,9 @@ class TreeStruct:
                     continue
                 cycles.append(self._get_cycles(path, backref))
 
-        if TypeFeatureConfigs.FIX_TYPE_CYCLE == "manually":
+        if fix_method == "manually" or (
+            fix_method is None and TypeFeatureConfigs.FIX_TYPE_CYCLE == "manually"
+        ):
             raise ValueError(f"Found cycles: {cycles}")
 
         # those cycles are disjoint, so we can break them one by one

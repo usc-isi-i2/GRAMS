@@ -326,7 +326,7 @@ class GRAMS:
     def get_entity_labels(
         self, qnodes: Dict[str, QNode], verbose: bool = False
     ) -> Dict[str, str]:
-        id2label = {}
+        id2label: Dict[str, str] = {}
         for qnode in tqdm(qnodes.values(), disable=not verbose, desc=""):
             qnode: QNode
             id2label[qnode.id] = str(qnode.label)
@@ -335,7 +335,7 @@ class GRAMS:
                     if stmt.value.is_qnode():
                         qnode_id = stmt.value.as_entity_id()
                         if qnode_id in self.qnode_labels:
-                            label = self.qnode_labels[qnode_id]
+                            label = self.qnode_labels[qnode_id].label
                         else:
                             label = qnode_id
                         id2label[qnode_id] = label
@@ -344,7 +344,7 @@ class GRAMS:
                             if qval.is_qnode():
                                 qnode_id = qval.as_entity_id()
                                 if qnode_id in self.qnode_labels:
-                                    label = self.qnode_labels[qnode_id]
+                                    label = self.qnode_labels[qnode_id].label
                                 else:
                                     label = qnode_id
                                 id2label[qnode_id] = label

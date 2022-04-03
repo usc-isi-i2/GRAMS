@@ -1,6 +1,6 @@
 import itertools
 from enum import IntEnum
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Mapping, Optional, Set, Tuple
 from uuid import uuid4
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
@@ -15,7 +15,6 @@ import numpy as np
 import sm.misc as M
 import sm.outputs as O
 
-from grams.algorithm.wdont import WDOnt
 from grams.inputs.linked_table import LinkedTable
 from kgdata.wikidata.models import QNode, WDClass, WDProperty
 from rdflib import RDFS
@@ -23,6 +22,7 @@ from sm.evaluation import sm_metrics
 from sm.misc import identity_func
 from sm.misc.graph import viz_graph
 from sm.outputs.semantic_model import ClassNode
+from sm.namespaces import WikidataNamespace
 
 
 class SMNodeType(IntEnum):
@@ -33,10 +33,23 @@ class SMNodeType(IntEnum):
     Literal = 4
 
 
-class WikidataSemanticModelHelper(WDOnt):
+class WikidataSemanticModelHelper:
     ENTITY_ID = "Q35120"
     ENTITY_LABEL = "Entity (Q35120)"
     ID_PROPS = {str(RDFS.label)}
+
+    def __init__(
+        self,
+        qnodes: Mapping[str, QNode],
+        qnode_labels: Mapping[str, str],
+        wdclasses: Mapping[str, WDClass],
+        wdprops: Mapping[str, WDProperty],
+    ):
+        self.qnodes = qnodes
+        self.qnode_labels = qnode_labels
+        self.wdclasses = wdclasses
+        self.wdprops = wdprops
+        self.wdns = WikidataNamespace.create()
 
     def norm_sm(self, sm: O.SemanticModel):
         """ "Normalize the semantic model with the following modifications:
@@ -44,18 +57,21 @@ class WikidataSemanticModelHelper(WDOnt):
         2. Convert direct link (without statement) to have statement except the id props.
         """
         new_sm = sm.deep_copy()
+        wdns = self.wdns
 
         # update readable label
         for n in new_sm.iter_nodes():
             if isinstance(n, O.ClassNode):
-                if self.is_uri_qnode(n.abs_uri):
-                    n.readable_label = self.get_qnode_label(n.abs_uri)
+                if wdns.is_abs_uri_qnode(n.abs_uri):
+                    n.readable_label = self.get_qnode_label(
+                        wdns.get_entity_id(n.abs_uri)
+                    )
             elif isinstance(n, O.LiteralNode):
-                if self.is_uri_qnode(n.value):
-                    n.readable_label = self.get_qnode_label(n.value)
+                if wdns.is_abs_uri_qnode(n.value):
+                    n.readable_label = self.get_qnode_label(wdns.get_entity_id(n.value))
         for e in new_sm.iter_edges():
             if e.abs_uri not in self.ID_PROPS:
-                e.readable_label = self.get_pnode_label(e.abs_uri)
+                e.readable_label = self.get_pnode_label(wdns.get_prop_id(e.abs_uri))
 
         # convert direct link
         for edge in list(new_sm.iter_edges()):
@@ -66,19 +82,17 @@ class WikidataSemanticModelHelper(WDOnt):
 
             if (
                 not isinstance(source, O.ClassNode)
-                or source.abs_uri != WDOnt.STATEMENT_URI
+                or source.abs_uri != WikidataNamespace.STATEMENT_URI
             ) and (
                 not isinstance(target, O.ClassNode)
-                or target.abs_uri != WDOnt.STATEMENT_URI
+                or target.abs_uri != WikidataNamespace.STATEMENT_URI
             ):
                 # this is direct link, we replace its edge
                 assert len(new_sm.get_edges_between_nodes(source.id, target.id)) == 1
                 new_sm.remove_edges_between_nodes(source.id, target.id)
                 stmt = O.ClassNode(
-                    WDOnt.STATEMENT_URI,
-                    WDOnt.STATEMENT_REL_URI,
-                    False,
-                    "Statement",
+                    abs_uri=WikidataNamespace.STATEMENT_URI,
+                    rel_uri=wdns.get_rel_uri(WikidataNamespace.STATEMENT_URI),
                 )
                 new_sm.add_node(stmt)
 
@@ -112,7 +126,10 @@ class WikidataSemanticModelHelper(WDOnt):
         new_sm = sm.copy()
 
         for n in sm.iter_nodes():
-            if isinstance(n, O.ClassNode) and n.abs_uri == WDOnt.STATEMENT_URI:
+            if (
+                isinstance(n, O.ClassNode)
+                and n.abs_uri == WikidataNamespace.STATEMENT_URI
+            ):
                 inedges = sm.in_edges(n.id)
                 outedges = sm.out_edges(n.id)
                 if len(outedges) == 1 and outedges[0].abs_uri == inedges[0].abs_uri:
@@ -137,6 +154,7 @@ class WikidataSemanticModelHelper(WDOnt):
         """Create a semantic model from outputs of CPA and CTA tasks"""
         sm = O.SemanticModel()
         classmap = {}  # mapping from column to its class node
+        wdns = self.wdns
         for cid, qnode_id in cta.items():
             dnode = O.DataNode(
                 col_index=cid,
@@ -146,15 +164,15 @@ class WikidataSemanticModelHelper(WDOnt):
             # somehow, they may end-up predict multiple classes, we need to select one
             if qnode_id.find(" ") != -1:
                 qnode_id = qnode_id.split(" ")[0]
-            curl = self.get_qnode_uri(qnode_id)
+            curl = wdns.get_entity_abs_uri(qnode_id)
 
             try:
-                cnode_label = self.get_qnode_label(curl)
+                cnode_label = self.get_qnode_label(qnode_id)
             except KeyError:
-                cnode_label = f"wd:{qnode_id}"
+                cnode_label = wdns.get_entity_rel_uri(qnode_id)
             cnode = O.ClassNode(
                 abs_uri=curl,
-                rel_uri=f"wd:{qnode_id}",
+                rel_uri=wdns.get_entity_rel_uri(qnode_id),
                 readable_label=cnode_label,
             )
             sm.add_node(dnode)
@@ -165,7 +183,7 @@ class WikidataSemanticModelHelper(WDOnt):
                     source=cnode.id,
                     target=dnode.id,
                     abs_uri=str(RDFS.label),
-                    rel_uri="rdfs:label",
+                    rel_uri=wdns.get_rel_uri(RDFS.label),
                 )
             )
 
@@ -182,11 +200,11 @@ class WikidataSemanticModelHelper(WDOnt):
                 )
                 sm.add_node(dnode)
 
-                curl = self.get_qnode_uri(self.ENTITY_ID)
+                curl = wdns.get_entity_abs_uri(self.ENTITY_ID)
                 cnode_id = sm.add_node(
                     O.ClassNode(
                         abs_uri=curl,
-                        rel_uri=f"wd:{self.ENTITY_ID}",
+                        rel_uri=wdns.get_entity_rel_uri(self.ENTITY_ID),
                         readable_label=self.ENTITY_LABEL,
                     )
                 )
@@ -214,7 +232,7 @@ class WikidataSemanticModelHelper(WDOnt):
             elif isinstance(unode, CGEntityValueNode):
                 if unode.id not in cpa_idmap:
                     source = O.LiteralNode(
-                        value=self.get_qnode_uri(unode.qnode_id),
+                        value=wdns.get_entity_abs_uri(unode.qnode_id),
                         readable_label=self.get_qnode_label(unode.qnode_id),
                         datatype=O.LiteralNodeDataType.Entity,
                         is_in_context=unode.qnode_id == table.context.page_entity_id,
@@ -229,8 +247,8 @@ class WikidataSemanticModelHelper(WDOnt):
                 if unode.id not in cpa_idmap:
                     # create a statement node
                     source = O.ClassNode(
-                        abs_uri=WDOnt.STATEMENT_URI,
-                        rel_uri=WDOnt.STATEMENT_REL_URI,
+                        abs_uri=wdns.STATEMENT_URI,
+                        rel_uri=wdns.get_rel_uri(wdns.STATEMENT_URI),
                     )
                     cpa_idmap[unode.id] = sm.add_node(source)
                 else:
@@ -252,7 +270,7 @@ class WikidataSemanticModelHelper(WDOnt):
             elif isinstance(vnode, CGEntityValueNode):
                 if vnode.id not in cpa_idmap:
                     target = O.LiteralNode(
-                        value=self.get_qnode_uri(vnode.qnode_id),
+                        value=wdns.get_entity_abs_uri(vnode.qnode_id),
                         readable_label=self.get_qnode_label(vnode.qnode_id),
                         datatype=O.LiteralNodeDataType.Entity,
                         is_in_context=vnode.qnode_id == table.context.page_entity_id,
@@ -274,21 +292,20 @@ class WikidataSemanticModelHelper(WDOnt):
                 if vnode.id not in cpa_idmap:
                     # create a statement node
                     target = O.ClassNode(
-                        abs_uri=WDOnt.STATEMENT_URI,
-                        rel_uri=WDOnt.STATEMENT_REL_URI,
+                        abs_uri=WikidataNamespace.STATEMENT_URI,
+                        rel_uri=wdns.get_rel_uri(WikidataNamespace.STATEMENT_URI),
                     )
                     cpa_idmap[vnode.id] = sm.add_node(target)
                 else:
                     target = sm.get_node(cpa_idmap[vnode.id])
 
-            prop_uri = self.get_prop_uri(edge.predicate)
             sm.add_edge(
                 O.Edge(
                     source=source.id,
                     target=target.id,
-                    abs_uri=self.get_prop_uri(edge.predicate),
-                    rel_uri=f"p:{edge.predicate}",
-                    readable_label=self.get_pnode_label(prop_uri),
+                    abs_uri=wdns.get_prop_abs_uri(edge.predicate),
+                    rel_uri=wdns.get_prop_rel_uri(edge.predicate),
+                    readable_label=self.get_pnode_label(edge.predicate),
                 )
             )
 
@@ -300,7 +317,7 @@ class WikidataSemanticModelHelper(WDOnt):
         sm: O.SemanticModel,
         strict: bool = True,
         force_inversion: bool = False,
-        incorrect_invertible_props: Set[str] = None,
+        incorrect_invertible_props: Optional[Set[str]] = None,
     ):
         """Given a semantic model (not being modified), generate equivalent models by inferring inverse properties.
 
@@ -322,20 +339,22 @@ class WikidataSemanticModelHelper(WDOnt):
         Currently, we only inverse the properties, not qualifiers.
         """
         sm = self.norm_sm(sm)
+        wdns = self.wdns
+
         if incorrect_invertible_props is None:
             incorrect_invertible_props = set()
         invertible_stmts: List[O.ClassNode] = []
         is_class_fn = lambda n1: isinstance(n1, O.ClassNode) or (
-            isinstance(n1, O.LiteralNode) and self.is_uri_qnode(n1.value)
+            isinstance(n1, O.LiteralNode) and wdns.is_abs_uri_qnode(n1.value)
         )
 
         for n in sm.iter_nodes():
-            if isinstance(n, O.ClassNode) and WDOnt.is_uri_statement(n.abs_uri):
+            if isinstance(n, O.ClassNode) and wdns.is_abs_uri_statement(n.abs_uri):
                 inedges = sm.in_edges(n.id)
                 outedges = sm.out_edges(n.id)
                 # only has one prop
                 (prop,) = list({inedge.abs_uri for inedge in inedges})
-                pid = self.get_prop_id(prop)
+                pid = wdns.get_prop_id(prop)
                 stmt_has_value = False
                 for outedge in outedges:
                     if outedge.abs_uri != prop:
@@ -377,9 +396,15 @@ class WikidataSemanticModelHelper(WDOnt):
                 (stmt, None, None)
             ]
             for invprop in self.wdprops[
-                self.get_prop_id(inedge.abs_uri)
+                wdns.get_prop_id(inedge.abs_uri)
             ].inverse_properties:
-                choice.append((stmt, self.get_prop_uri(invprop), f"p:{invprop}"))
+                choice.append(
+                    (
+                        stmt,
+                        wdns.get_prop_abs_uri(invprop),
+                        wdns.get_prop_rel_uri(invprop),
+                    )
+                )
             all_choices.append(choice)
 
         n_choices = np.prod([len(c) for c in all_choices]) - 1
@@ -400,7 +425,7 @@ class WikidataSemanticModelHelper(WDOnt):
             for stmt, invprop_abs_uri, invprop_rel_uri in choice_perm:
                 if invprop_abs_uri is None or invprop_rel_uri is None:
                     continue
-                readable_label = self.get_pnode_label(invprop_abs_uri)
+                readable_label = self.get_pnode_label(wdns.get_prop_id(invprop_abs_uri))
                 # assume that each statement only has one incoming link! fix the for loop if this assumption doesn't hold
                 (inedge,) = sm.in_edges(stmt.id)
                 # statement must have only one property
@@ -421,8 +446,8 @@ class WikidataSemanticModelHelper(WDOnt):
                 if not is_class_fn(target):
                     assert isinstance(target, O.DataNode)
                     dummy_class_node = O.ClassNode(
-                        abs_uri="http://wikiba.se/ontology#DummyClassForInversion",
-                        rel_uri="wikibase:DummyClassForInversion",
+                        abs_uri=wdns.DUMMY_CLASS_FOR_INVERSION_URI,
+                        rel_uri=wdns.get_rel_uri(wdns.DUMMY_CLASS_FOR_INVERSION_URI),
                     )
                     new_sm.add_node(dummy_class_node)
                     new_sm.add_edge(
@@ -473,7 +498,7 @@ class WikidataSemanticModelHelper(WDOnt):
                     source = sm.get_node(inedges[0].source)
                     assert isinstance(
                         source, O.ClassNode
-                    ) and not self.is_uri_statement(source.abs_uri)
+                    ) and not self.wdns.is_abs_uri_statement(source.abs_uri)
                     ent_columns.append(dnode.col_index)
         return ent_columns
 
@@ -500,9 +525,10 @@ class WikidataSemanticModelHelper(WDOnt):
         """
         # norm the semantic model first
         sm = self.norm_sm(sm)
+        wdns = self.wdns
         schemas = {}
         for u in sm.iter_nodes():
-            if not isinstance(u, O.ClassNode) or WDOnt.is_uri_statement(u.abs_uri):
+            if not isinstance(u, O.ClassNode) or wdns.is_abs_uri_statement(u.abs_uri):
                 continue
 
             schema = {"props": {}, "subject": None, "sm_node_id": u.id}
@@ -515,10 +541,12 @@ class WikidataSemanticModelHelper(WDOnt):
                     continue
 
                 s = sm.get_node(us_edge.target)
-                assert isinstance(s, O.ClassNode) and WDOnt.is_uri_statement(s.abs_uri)
-                assert WDOnt.is_uri_property(us_edge.abs_uri)
+                assert isinstance(s, O.ClassNode) and wdns.is_abs_uri_statement(
+                    s.abs_uri
+                )
+                assert wdns.is_abs_uri_property(us_edge.abs_uri)
 
-                pnode = WDOnt.get_prop_id(us_edge.abs_uri)
+                pnode = wdns.get_prop_id(us_edge.abs_uri)
                 if pnode not in schema["props"]:
                     schema["props"][pnode] = []
 
@@ -531,7 +559,7 @@ class WikidataSemanticModelHelper(WDOnt):
                 for sv_edge in sm.out_edges(s.id):
                     v = sm.get_node(sv_edge.target)
 
-                    assert WDOnt.is_uri_property(sv_edge.abs_uri)
+                    assert wdns.is_abs_uri_property(sv_edge.abs_uri)
                     if sv_edge.abs_uri == us_edge.abs_uri:
                         assert stmt["value"] is None, "only one property"
                         # this is property
@@ -548,7 +576,7 @@ class WikidataSemanticModelHelper(WDOnt):
                             stmt["qualifiers"].append(
                                 {
                                     "type": "classnode",
-                                    "pnode": WDOnt.get_prop_id(sv_edge.abs_uri),
+                                    "pnode": wdns.get_prop_id(sv_edge.abs_uri),
                                     "value": v.id,
                                 }
                             )
@@ -556,7 +584,7 @@ class WikidataSemanticModelHelper(WDOnt):
                             stmt["qualifiers"].append(
                                 {
                                     "type": "datanode",
-                                    "pnode": WDOnt.get_prop_id(sv_edge.abs_uri),
+                                    "pnode": wdns.get_prop_id(sv_edge.abs_uri),
                                     "value": v.col_index,
                                 }
                             )
@@ -565,7 +593,7 @@ class WikidataSemanticModelHelper(WDOnt):
                             stmt["qualifiers"].append(
                                 {
                                     "type": "literalnode",
-                                    "pnode": WDOnt.get_prop_id(sv_edge.abs_uri),
+                                    "pnode": wdns.get_prop_id(sv_edge.abs_uri),
                                     "value": v.value,
                                 }
                             )
@@ -607,7 +635,7 @@ class WikidataSemanticModelHelper(WDOnt):
                     ents = [
                         {
                             "id": qnode_id,
-                            "uri": WDOnt.get_qnode_uri(qnode_id),
+                            "uri": wdns.get_entity_abs_uri(qnode_id),
                             "label": self.qnodes[qnode_id].label,
                             "props": {},
                         }
@@ -716,3 +744,19 @@ class WikidataSemanticModelHelper(WDOnt):
                     new_record[ent_id] = ent
             new_records.append(new_record)
         return records
+
+    def get_qnode_label(self, qid: str):
+        """Get QNode label from id"""
+        if qid in self.wdclasses:
+            label = self.wdclasses[qid].label
+        elif qid in self.qnodes:
+            label = self.qnodes[qid].label
+        else:
+            label = self.qnode_labels.get(qid, qid)
+        return f"{label} ({qid})"
+
+    def get_pnode_label(self, pid: str):
+        """Get PNode label from id"""
+        if pid not in self.wdprops:
+            return pid
+        return f"{self.wdprops[pid].label} ({pid})"

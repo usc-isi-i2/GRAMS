@@ -1,9 +1,14 @@
+import warnings
 from enum import IntEnum
 from typing import Dict, Mapping
 
 from kgdata.wikidata.models import QNode, WDClass, WDProperty
-from kgdata.wikidata.models.qnode import QNodeLabel
 from sm.misc import identity_func
+
+warnings.warn(
+    "WDOnt is deprecated and will be removed in a future release.",
+    DeprecationWarning,
+)
 
 
 class OutOfNamespace(Exception):
