@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, uuid, logging
+import re, os, uuid, logging
 from typing import (
     Dict,
     Generic,
@@ -86,20 +86,24 @@ class PSLModel:
         force_setall: bool = True,
     ):
         """Set data of the current model"""
-        name2predicate = self.name2predicate.copy()
-        for partition, partition_data in [
-            (Partition.OBSERVATIONS, observations),
-            (Partition.TARGETS, targets),
-            (Partition.TRUTH, truth),
-        ]:
-            for pname, d in partition_data.items():
-                p = name2predicate.pop(pname).clear_data()
-                if len(d) > 0:
-                    p.add_data(partition, d)
+        pnames = set(observations.keys()).union(targets, truth)
 
-        if force_setall and len(name2predicate) > 0:
+        for pname in pnames:
+            p = self.name2predicate[pname]
+            p.clear_data()
+
+            for partition, partition_data in [
+                (Partition.OBSERVATIONS, observations),
+                (Partition.TARGETS, targets),
+                (Partition.TRUTH, truth),
+            ]:
+                if pname in partition_data and len(partition_data[pname]) > 0:
+                    p.add_data(partition, partition_data[pname])
+
+        if force_setall and len(self.name2predicate) != len(pnames):
             raise Exception(
-                "Missing predicates: " + ", ".join(list(name2predicate.keys()))
+                "Missing predicates: "
+                + ", ".join(list(set(self.name2predicate.keys()).difference(pnames)))
             )
 
     def predict(
@@ -188,6 +192,27 @@ class IDMap(Generic[K]):
     def im(self, new_key: str) -> K:
         """Get the old key from the new key"""
         return self.invert_map[new_key]
+
+    def to_readable(self) -> dict[str, str]:
+        """Transform the IDMap so that the keys reserve the original values as much as possible
+
+        Returns:
+            dict: A dictionary mapping the original keys to the new keys so that you can
+                  update objects that has been mapped before
+        """
+        map, invert_map = {}, {}
+        trans = {}
+        for v, k in self.map.items():
+            newk = "n-" + re.sub(r"""[:"'{}+=]""", "-", str(v))
+            assert newk not in map
+            map[v] = newk
+            invert_map[newk] = v
+            trans[k] = newk
+
+        self.map = map
+        self.invert_map = invert_map
+
+        return trans
 
 
 class RuleContainer(MutableMapping[str, Rule]):
