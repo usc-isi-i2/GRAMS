@@ -33,12 +33,17 @@ class PostProcessingSteinerTree:
         dg: DGGraph,
         edge_probs: Dict[CGEdgeTriple, float],
         threshold: float,
+        additional_terminal_nodes: Optional[list[str]] = None,
     ):
         self.table = table
         self.cg = cg
         self.dg = dg
         self.edge_probs = edge_probs
         self.threshold = threshold
+
+        # extra terminal nodes that the tree should have, usually used in
+        # interactive modeling where users add some entity nodes in their model
+        self.additional_terminal_nodes = additional_terminal_nodes
 
     def get_result(self) -> CGGraph:
         """Select edges that forms a tree"""
@@ -52,6 +57,8 @@ class PostProcessingSteinerTree:
         terminal_nodes = {
             u.id for u in subcg.iter_nodes() if isinstance(u, CGColumnNode)
         }
+        if self.additional_terminal_nodes is not None:
+            terminal_nodes.update(self.additional_terminal_nodes)
         if len(terminal_nodes) == 0:
             # if the tree does not have any column, we essentially don't predict anything
             # so we return an empty graph
@@ -86,35 +93,7 @@ class PostProcessingSteinerTree:
 
         tree = cast(CGGraph, trees[0])
         tree.remove_dangling_statement()
-        # add back statement property if missing into to ensure a correct model
-        for s in tree.nodes():
-            if not isinstance(s, CGStatementNode):
-                continue
-            (in_edge,) = tree.in_edges(s.id)
-            for out_edge in subcg.out_edges(s.id):
-                if out_edge.predicate == in_edge.predicate:
-                    # there is a statement prop in the sub candidate graph
-                    # if it's not in the tree, we need to add it back
-                    if not tree.has_node(out_edge.target):
-                        ent = subcg.get_node(out_edge.target)
-                        assert isinstance(
-                            ent, (CGEntityValueNode, CGLiteralValueNode)
-                        ), f"The only reason why we don't have statement value is it is an literal"
-                        tree.add_node(ent.clone())
-                        tree.add_edge(out_edge.clone())
-                elif not tree.has_edge_between_nodes(
-                    out_edge.source, out_edge.target, out_edge.predicate
-                ):
-                    v = subcg.get_node(out_edge.target)
-                    if (
-                        isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
-                        and v.is_in_context
-                    ):
-                        # we should have this as PSL think it's correct
-                        # only add context nodes
-                        if not tree.has_node(v.id):
-                            tree.add_node(v.clone())
-                        tree.add_edge(out_edge.clone())
+
         if PSLConfigs.POSTPROCESSING_STEINER_TREE_FORCE_ADDING_CONTEXT:
             # add back the context node or entity that are appeared in the psl results but not in the predicted tree
             for v in subcg.iter_nodes():
@@ -168,6 +147,43 @@ class PostProcessingSteinerTree:
                     us_edge.source, us_edge.target, us_edge.predicate
                 ):
                     tree.add_edge(us_edge.clone())
+
+        # add back statement property if missing into to ensure a correct model
+        for s in tree.nodes():
+            if not isinstance(s, CGStatementNode):
+                continue
+            (in_edge,) = tree.in_edges(s.id)
+            for out_edge in subcg.out_edges(s.id):
+                if out_edge.predicate == in_edge.predicate:
+                    # there is a statement prop in the sub candidate graph
+                    # if it's not in the tree, we need to add it back
+                    if not tree.has_node(out_edge.target):
+                        ent = subcg.get_node(out_edge.target)
+                        assert isinstance(
+                            ent, (CGEntityValueNode, CGLiteralValueNode)
+                        ), f"The only reason why we don't have statement value is it is an literal"
+                        tree.add_node(ent.clone())
+                        tree.add_edge(out_edge.clone())
+                    else:
+                        assert tree.has_edge_between_nodes(
+                            out_edge.source, out_edge.target, out_edge.predicate
+                        )
+                # NOTE: the below code seems add back the context node that PSL thinks correct, but it
+                # is implemented above, so I comment it out for now.
+                # elif not tree.has_edge_between_nodes(
+                #     out_edge.source, out_edge.target, out_edge.predicate
+                # ):
+                #     v = subcg.get_node(out_edge.target)
+                #     if (
+                #         isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
+                #         and v.is_in_context
+                #     ):
+                #         # we should have this as PSL think it's correct
+                #         # only add context nodes
+                #         if not tree.has_node(v.id):
+                #             tree.add_node(v.clone())
+                #         tree.add_edge(out_edge.clone())
+
         return tree
 
     def compare_solutions(self, a: Solution, b: Solution) -> int:
