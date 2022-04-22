@@ -321,6 +321,8 @@ class WikidataSemanticModelHelper:
     ):
         """Given a semantic model (not being modified), generate equivalent models by inferring inverse properties.
 
+        Currently, we only inverse the properties, not qualifiers.
+
         Parameters
         ----------
         sm: the input semantic model (original)
@@ -330,13 +332,6 @@ class WikidataSemanticModelHelper:
 
         Returns
         -------
-
-        """
-        """Given an semantic model (not being modified), generate equivalent models
-        by inferring inverse properties. Running on strict mode mean it will check if the invertible property is apply
-        to a non-class node (column that .
-
-        Currently, we only inverse the properties, not qualifiers.
         """
         sm = self.norm_sm(sm)
         wdns = self.wdns
