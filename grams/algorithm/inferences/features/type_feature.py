@@ -74,10 +74,19 @@ class TypeFeatures:
                 for cell in cells
                 if len(cell.qnode_ids) > 0
             ]
+
             if len(covered_fractions) == 0:
                 continue
+
             avg_covered_fractions = np.mean(covered_fractions)
             if avg_covered_fractions < 0.8:
+                if avg_covered_fractions == 0:
+                    avg_cell_len = np.mean(
+                        [len(cell.value) for cell in cells if len(cell.qnode_ids) > 0]
+                    )
+                    if avg_cell_len < 1:
+                        # links are likely to be image such as national flag, so we still model them
+                        tagged_columns.append(u)
                 continue
 
             tagged_columns.append(u)
