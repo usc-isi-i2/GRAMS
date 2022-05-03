@@ -47,7 +47,7 @@ class Annotation:
     dg: DGGraph
     # candidate graph
     cg: CGGraph
-    # probabilities of each edge in sg (uid, vid, eid)
+    # probabilities of each edge in cg (uid, vid, edge key)
     cg_edge_probs: Dict[Tuple[str, str, str], float]
     # probabilities of types of each column: column index -> type -> probability
     cta_probs: Dict[int, Dict[str, float]]

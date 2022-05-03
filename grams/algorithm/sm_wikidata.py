@@ -317,6 +317,7 @@ class WikidataSemanticModelHelper:
         sm: O.SemanticModel,
         strict: bool = True,
         force_inversion: bool = False,
+        limited_invertible_props: Optional[Set[str]] = None,
         incorrect_invertible_props: Optional[Set[str]] = None,
     ):
         """Given a semantic model (not being modified), generate equivalent models by inferring inverse properties.
@@ -329,7 +330,8 @@ class WikidataSemanticModelHelper:
         strict: whether to throw exception when target of an inverse property is not a class.
         force_inversion: only work when strict mode is set to false. Without force_inverse, we skip inverse properties,
                        otherwise, we generate an inverse model with a special class: wikibase:DummyClassForInversion
-
+        limited_invertible_props: if provided, only generate inverse properties for these properties.
+        incorrect_invertible_props: if provided, skip generating inverse properties for these properties.
         Returns
         -------
         """
@@ -338,6 +340,7 @@ class WikidataSemanticModelHelper:
 
         if incorrect_invertible_props is None:
             incorrect_invertible_props = set()
+
         invertible_stmts: List[O.ClassNode] = []
         is_class_fn = lambda n1: isinstance(n1, O.ClassNode) or (
             isinstance(n1, O.LiteralNode) and wdns.is_abs_uri_qnode(n1.value)
@@ -362,6 +365,10 @@ class WikidataSemanticModelHelper:
                 if (
                     len(self.wdprops[pid].inverse_properties) > 0
                     and pid not in incorrect_invertible_props
+                    and (
+                        limited_invertible_props is None
+                        or pid in limited_invertible_props
+                    )
                     and stmt_has_value
                 ):
                     # invertible property
