@@ -1,4 +1,5 @@
-from typing import Dict, Optional, Callable, List, Tuple, TypedDict, cast
+from collections import defaultdict
+from typing import Dict, Optional, Callable, List, Set, Tuple, TypedDict, cast, final
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEdge,
@@ -6,26 +7,42 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGEntityValueNode,
     CGGraph,
     CGLiteralValueNode,
+    CGNode,
     CGStatementNode,
 )
 from itertools import chain, combinations
 from grams.algorithm.data_graph.dg_graph import DGGraph
+from grams.algorithm.inferences.psl_lib import PSLModel
+from grams.algorithm.postprocessing.common import (
+    PSEUDO_ROOT_ID,
+    add_context,
+    add_pseudo_root,
+    ensure_valid_statements,
+)
 from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
 from grams.algorithm.psl_solver import PSLConfigs
 from grams.inputs.linked_table import LinkedTable
 from operator import itemgetter
 from graph.interface import EdgeTriple
-from graph.retworkx.api import dag_longest_path, digraph_all_simple_paths
-from steiner_tree.bank import BankSolver
-from steiner_tree.bank.struct import NoSingleRootException, Solution
-
-
-_AddContextPathType = TypedDict(
-    "_Path", {"path": Tuple[CGEdge, CGEdge], "score": float}
+from graph.retworkx.api import dag_longest_path, digraph_all_simple_paths, has_cycle
+from networkx.algorithms.planarity import top_of_stack
+from steiner_tree.bank.solver import BankSolver
+from steiner_tree.bank.struct import (
+    BankEdge,
+    BankGraph,
+    BankNode,
+    NoSingleRootException,
+    Solution,
+    UpwardTraversal,
 )
+from copy import copy
 
 
-class PostProcessingSteinerTree:
+class SteinerTreeConfig:
+    INCLUDE_CONTEXT = True
+
+
+class SteinerTree:
     def __init__(
         self,
         table: LinkedTable,
@@ -41,15 +58,19 @@ class PostProcessingSteinerTree:
         self.edge_probs = edge_probs
         self.threshold = threshold
 
+        self.top_k_st = 500
+        self.top_k_path = 500
+
         # extra terminal nodes that the tree should have, usually used in
         # interactive modeling where users add some entity nodes in their model
         self.additional_terminal_nodes = additional_terminal_nodes
 
     def get_result(self) -> CGGraph:
         """Select edges that forms a tree"""
-        # first step is to remove
-        selected_edges = [e for e, p in self.edge_probs.items() if p >= self.threshold]
-        subcg = self.cg.subgraph_from_edge_triples(selected_edges)
+        edge_probs = {e: p for e, p in self.edge_probs.items() if p >= self.threshold}
+
+        # first step is to remove dangling statements and standalone nodes
+        subcg = self.cg.subgraph_from_edge_triples(edge_probs.keys())
         subcg.remove_dangling_statement()
         subcg.remove_standalone_nodes()
 
@@ -64,125 +85,63 @@ class PostProcessingSteinerTree:
             # so we return an empty graph
             return CGGraph()
 
-        norm_edge_probs = self.normalize_probs(eps=0.001)
-        solver = BankSolver(
-            original_graph=subcg,
-            terminal_nodes=terminal_nodes,
-            top_k_st=50,
-            top_k_path=50,
-            weight_fn=lambda e: 1.0
-            / max(
-                1e-7,
-                norm_edge_probs[e.source, e.target, e.predicate],
-            ),
-            solution_cmp_fn=self.compare_solutions,
-        )
+        # add pseudo root
+        new_subcg = add_pseudo_root(subcg)
+        edge_weights = {e: 1.0 / p for e, p in edge_probs.items()}  # p > 0.5
+        total_weight = sum(edge_weights.values())
+        for edge in new_subcg.out_edges(PSEUDO_ROOT_ID):
+            edge_weights[edge.source, edge.target, edge.predicate] = total_weight + 1
 
+        # we can improve this by detecting disconnected components
+        # and run them separately, so the graph with pseudo root
+        # will perform just as well as the graph without pseudo root
         try:
+            solver = BankSteinerTree(
+                original_graph=subcg,
+                terminal_nodes=terminal_nodes,
+                top_k_st=self.top_k_st,
+                top_k_path=self.top_k_path,
+                weight_fn=lambda e: edge_weights[e.source, e.target, e.predicate],
+                solution_cmp_fn=self.compare_solutions,
+                invalid_roots={
+                    u.id for u in subcg.nodes() if isinstance(u, CGStatementNode)
+                },
+                allow_shorten_graph=False,
+            )
             trees, _solutions = solver.run()
         except NoSingleRootException:
-            # we don't have any solutions from bank
-            trees = []
-
-        if len(trees) == 0:
-            # all back to use simple path
-            pp = PostProcessingSimplePath(
-                self.table, self.cg, self.dg, self.edge_probs, self.threshold
+            solver = BankSteinerTree(
+                original_graph=new_subcg,
+                terminal_nodes=terminal_nodes,
+                top_k_st=self.top_k_st,
+                top_k_path=self.top_k_path,
+                weight_fn=lambda e: edge_weights[e.source, e.target, e.predicate],
+                solution_cmp_fn=self.compare_solutions,
+                invalid_roots={
+                    u.id for u in subcg.nodes() if isinstance(u, CGStatementNode)
+                },
+                allow_shorten_graph=False,
             )
-            return pp.get_result()
+            trees, _solutions = solver.run()
+        finally:
+            pass
 
         tree = cast(CGGraph, trees[0])
+        if tree.has_node(PSEUDO_ROOT_ID):
+            tree.remove_node(PSEUDO_ROOT_ID)
         tree.remove_dangling_statement()
 
-        if PSLConfigs.POSTPROCESSING_STEINER_TREE_FORCE_ADDING_CONTEXT:
-            # add back the context node or entity that are appeared in the psl results but not in the predicted tree
-            for v in subcg.iter_nodes():
-                if (
-                    not isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
-                    or not v.is_in_context
-                    or tree.has_node(v.id)
-                ):
-                    continue
-
-                # find the paths that connect the vid to the tree and select the one with highest score and do not create cycle
-                paths: List[_AddContextPathType] = []
-                for sv_edge in subcg.in_edges(v.id):
-                    if sv_edge.predicate == "P31":
-                        continue
-                    for us_edge in subcg.in_edges(sv_edge.source):
-                        if not tree.has_node(us_edge.source):
-                            continue
-                        paths.append(
-                            {
-                                "path": (
-                                    us_edge,
-                                    sv_edge,
-                                ),
-                                "score": norm_edge_probs[
-                                    (us_edge.source, us_edge.target, us_edge.predicate)
-                                ]
-                                + norm_edge_probs[
-                                    (sv_edge.source, sv_edge.target, sv_edge.predicate)
-                                ],
-                            }
-                        )
-
-                paths = sorted(paths, key=itemgetter("score"), reverse=True)
-                # TODO: filter out the path that will create cycle
-
-                if len(paths) == 0:
-                    continue
-
-                us_edge, sv_edge = paths[0]["path"]
-                tree.add_node(v.clone())
-                if not tree.has_node(sv_edge.source):
-                    s = subcg.get_node(sv_edge.source)
-                    tree.add_node(s.clone())
-                assert not tree.has_edge_between_nodes(
-                    sv_edge.source, sv_edge.target, sv_edge.predicate
-                )
-                tree.add_edge(sv_edge.clone())
-
-                if not tree.has_edge_between_nodes(
-                    us_edge.source, us_edge.target, us_edge.predicate
-                ):
-                    tree.add_edge(us_edge.clone())
+        if SteinerTreeConfig.INCLUDE_CONTEXT:
+            add_context(subcg, tree, edge_probs)
 
         # add back statement property if missing into to ensure a correct model
-        for s in tree.nodes():
-            if not isinstance(s, CGStatementNode):
-                continue
-            (in_edge,) = tree.in_edges(s.id)
-            for out_edge in subcg.out_edges(s.id):
-                if out_edge.predicate == in_edge.predicate:
-                    # there is a statement prop in the sub candidate graph
-                    # if it's not in the tree, we need to add it back
-                    if not tree.has_node(out_edge.target):
-                        ent = subcg.get_node(out_edge.target)
-                        assert isinstance(
-                            ent, (CGEntityValueNode, CGLiteralValueNode)
-                        ), f"The only reason why we don't have statement value is it is an literal"
-                        tree.add_node(ent.clone())
-                        tree.add_edge(out_edge.clone())
-                    else:
-                        assert tree.has_edge_between_nodes(
-                            out_edge.source, out_edge.target, out_edge.predicate
-                        )
-                # NOTE: the below code seems add back the context node that PSL thinks correct, but it
-                # is implemented above, so I comment it out for now.
-                # elif not tree.has_edge_between_nodes(
-                #     out_edge.source, out_edge.target, out_edge.predicate
-                # ):
-                #     v = subcg.get_node(out_edge.target)
-                #     if (
-                #         isinstance(v, (CGEntityValueNode, CGLiteralValueNode))
-                #         and v.is_in_context
-                #     ):
-                #         # we should have this as PSL think it's correct
-                #         # only add context nodes
-                #         if not tree.has_node(v.id):
-                #             tree.add_node(v.clone())
-                #         tree.add_edge(out_edge.clone())
+        ensure_valid_statements(subcg, tree, create_if_not_exists=False)
+
+        # fmt: off
+        # from graph.viz.graphviz import draw
+        # draw(graph=tree, filename="/tmp/graphviz/st204.png", **CGGraph.graphviz_props())
+        # draw(graph=tree, filename="/tmp/graphviz/g25.png", **CGGraph.graphviz_props())
+        # fmt: on
 
         return tree
 
@@ -202,31 +161,152 @@ class PostProcessingSteinerTree:
             setattr(b, "depth", len(dag_longest_path(b.graph)))
         return getattr(a, "depth") - getattr(b, "depth")
 
-    def normalize_probs(self, eps: float = 0.001):
-        """The prob. score can be noisy (e.g., from PSL), i.e., equal edge may have
-        slightly different scores. This function groups values that are close
-        within the range [-eps, +eps] together, and replace them with the average value
-        """
-        norm_edge_probs = {}
-        lst = sorted(
-            [x for x in self.edge_probs.items() if x[1] >= self.threshold],
-            key=itemgetter(1),
-        )
-        clusters = []
-        pivot = 1
-        clusters = [[lst[0]]]
-        while pivot < len(lst):
-            x = lst[pivot - 1][1]
-            y = lst[pivot][1]
-            if (y - x) <= eps:
-                # same clusters
-                clusters[-1].append(lst[pivot])
-            else:
-                # different clusters
-                clusters.append([lst[pivot]])
-            pivot += 1
-        for cluster in clusters:
-            avg_prob = sum([x[1] for x in cluster]) / len(cluster)
-            for k, _prob in cluster:
-                norm_edge_probs[k] = avg_prob
-        return norm_edge_probs
+
+class BankSteinerTree(BankSolver[CGNode, CGEdge]):
+    ADD_MISSING_STATEMENT_PROPS = True
+
+    def _solve(
+        self, g: BankGraph, terminal_nodes: Set[str], top_k_st: int, top_k_path: int
+    ):
+        """Override the main algorithm to handle statement"""
+        roots = {u.id for u in g.iter_nodes() if u.id not in self.invalid_roots}
+
+        attr_visit_hists: List[Tuple[str, UpwardTraversal]] = []
+        # to ensure the order
+        for uid in list(sorted(terminal_nodes)):
+            visit_hist = UpwardTraversal.top_k_beamsearch(g, uid, top_k_path)
+            roots = roots.intersection(visit_hist.paths.keys())
+            attr_visit_hists.append((uid, visit_hist))
+
+        if len(roots) == 0:
+            raise NoSingleRootException()
+
+        # to ensure the order again & remove randomness
+        roots = sorted(roots)
+
+        # merge the paths using beam search
+        results = []
+        for root in roots:
+            current_states = []
+            uid, visit_hist = attr_visit_hists[0]
+            for path in visit_hist.paths[root]:
+                pg = BankGraph()
+                if len(path.path) > 0:
+                    assert uid == path.path[0].target
+                pg.add_node(BankNode(uid))
+                for e in path.path:
+                    pg.add_node(BankNode(e.source))
+                    pg.add_edge(e.clone())
+
+                self.add_missing_statement(pg)
+                current_states.append(pg)
+
+            if len(current_states) > top_k_st:
+                current_states = [
+                    _s.graph for _s in self._sort_solutions(current_states)[:top_k_st]
+                ]
+
+            for uid, visit_hist in attr_visit_hists[1:]:
+                next_states = []
+                for state in current_states:
+                    for path in visit_hist.paths[root]:
+                        pg = state.copy()
+                        if len(path.path) > 0:
+                            assert uid == path.path[0].target
+                        if not pg.has_node(uid):
+                            pg.add_node(BankNode(uid))
+                        for e in path.path:
+                            if not pg.has_node(e.source):
+                                pg.add_node(BankNode(id=e.source))
+                            # TODO: here we don't check by edge_key because we may create another edge of different key
+                            # hope this new path has been exploited before.
+                            if not pg.has_edges_between_nodes(e.source, e.target):
+                                pg.add_edge(e.clone())
+                        self.add_missing_statement(pg)
+
+                        # if there are more than path between two nodes within
+                        # two hop, we'll select one
+                        update_graph = False
+                        for n in pg.iter_nodes():
+                            if pg.in_degree(n.id) >= 2:
+                                grand_parents: Dict[
+                                    str, List[Tuple[BankEdge, ...]]
+                                ] = defaultdict(list)
+                                for inedge in pg.in_edges(n.id):
+                                    grand_parents[inedge.source].append((inedge,))
+                                    for grand_inedge in pg.in_edges(inedge.source):
+                                        grand_parents[grand_inedge.source].append(
+                                            (grand_inedge, inedge)
+                                        )
+
+                                for grand_parent, edges in grand_parents.items():
+                                    if len(edges) > 1:
+                                        # we need to select one path from this grand parent to the rest
+                                        # they have the same length, so we select the one has smaller weight
+                                        edges = sorted(
+                                            edges,
+                                            key=lambda x: x[0].weight + x[1].weight
+                                            if len(x) == 2
+                                            else x[0].weight * 2,
+                                        )
+
+                                        for lst in edges[1:]:
+                                            for edge in lst:
+                                                # TODO: handle removing edges multiple times
+                                                try:
+                                                    pg.remove_edge(edge.id)
+                                                except:
+                                                    continue
+                                        update_graph = True
+                        if update_graph:
+                            for n in pg.nodes():
+                                if pg.in_degree(n.id) == 0 and pg.out_degree(n.id) == 0:
+                                    pg.remove_node(n.id)
+                        # after add a path to the graph, it can create new cycle, detect and fix it
+                        if has_cycle(pg):
+                            # we can show that if the graph contain cycle, there is a better path
+                            # so no need to try to break cycles as below
+                            # cycles_iter = [(uid, vid) for uid, vid, eid, orien in cycles_iter]
+                            # for _g in self._break_cycles(root, pg, cycles_iter):
+                            #     next_states.append(_g)
+                            pass
+                        else:
+                            next_states.append(pg)
+
+                        # the output graph should not have parallel edges
+                        assert not pg.has_parallel_edges()
+                if len(next_states) > top_k_st:
+                    next_states = [
+                        _s.graph for _s in self._sort_solutions(next_states)[:top_k_st]
+                    ]
+                # assert all(_.check_integrity() for _ in next_states)
+                current_states = next_states
+                # cgs = [g for g in next_states if len(list(nx.simple_cycles(g))) > 0]
+                # nx.draw_networkx(cgs[0]); plt.show()
+                # nx.draw(cgs[0]); plt.show()
+            results += current_states
+
+        return self._sort_solutions(results)
+
+    def add_missing_statement(self, g: BankGraph):
+        if not self.ADD_MISSING_STATEMENT_PROPS:
+            return
+
+        cg = cast(CGGraph, self.original_graph)
+        for uprime in g.iter_nodes():
+            u = cg.get_node(uprime.id)
+            if isinstance(u, CGStatementNode):
+                (inedge,) = cg.in_edges(u.id)
+                if all(outedge.key != inedge.key for outedge in g.out_edges(u.id)):
+                    # no statement property, add it back
+                    (main_prop,) = [
+                        outedge
+                        for outedge in self.graph.out_edges(u.id)
+                        if outedge.key == inedge.key
+                    ]
+                    if not g.has_node(main_prop.target):
+                        target_id = g.add_node(
+                            copy(self.graph.get_node(main_prop.target))
+                        )
+                        assert target_id == main_prop.target
+                    g.add_edge(main_prop.clone())

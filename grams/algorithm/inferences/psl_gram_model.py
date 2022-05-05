@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable, Dict, List, Mapping, Optional, Tuple, Literal
+from typing import Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Literal
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEdgeTriple,
@@ -74,6 +74,7 @@ class PSLGramModel:
         wdprops: Mapping[str, WDProperty],
         wd_numprop_stats: Mapping[str, WDQuantityPropertyStats],
         sim_fn: Optional[Callable[[str, str], float]] = None,
+        disable_rules: Optional[Iterable[str]] = None,
     ):
         self.qnodes = qnodes
         self.qnode_labels = qnode_labels
@@ -81,6 +82,7 @@ class PSLGramModel:
         self.wdprops = wdprops
         self.wd_numprop_stats = wd_numprop_stats
         self.sim_fn = sim_fn
+        self.disable_rules = set(disable_rules or [])
 
         self.model = self.get_model()
         self.model.set_parameters(
@@ -234,6 +236,14 @@ class PSLGramModel:
                 weight=0.0,
                 squared=True,
             )
+
+        if self.disable_rules.difference(rules.keys()):
+            raise Exception(
+                f"Attempt to disable rules: {list(self.disable_rules.difference(rules.keys()))} that are not defined"
+            )
+
+        for rule in self.disable_rules:
+            rules.pop(rule)
 
         return PSLModel(
             rules=rules,

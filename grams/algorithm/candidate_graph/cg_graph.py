@@ -312,3 +312,30 @@ class CGGraph(RetworkXStrDiGraph[str, CGNode, CGEdge]):
         for u in self.nodes():
             if self.degree(u.id) == 0:
                 self.remove_node(u.id)
+
+    @staticmethod
+    def graphviz_props():
+        """Return necessary props for the function graph.viz.graphviz.draw"""
+
+        def node_label(u: CGNode):
+            if isinstance(u, CGColumnNode):
+                return f"{u.label} (column {u.column})"
+            if isinstance(u, CGStatementNode):
+                return u.id
+            return u.label
+
+        def node_styles(u: CGNode):
+            if isinstance(u, CGColumnNode):
+                return dict(
+                    shape="plaintext",
+                    style="filled",
+                    fillcolor="gold",
+                )
+            return dict(
+                shape="ellipse",
+                style="filled",
+                color="white",
+                fillcolor="lightgray",
+            )
+
+        return {"node_label": node_label, "node_styles": node_styles}

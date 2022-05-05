@@ -8,9 +8,11 @@ from grams.algorithm.candidate_graph.cg_factory import CGFactory
 from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.psl_gram_model import PSLGramModel
+from grams.algorithm.inferences.psl_lib import PSLModel
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
+from grams.algorithm.postprocessing.arborescence import MinimumArborescence
 from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
-from grams.algorithm.postprocessing.steiner_tree import PostProcessingSteinerTree
+from grams.algorithm.postprocessing.steiner_tree import SteinerTree
 from hugedict.parallel.parallel import Parallel
 from kgdata.wikidata.models.qnode import QNodeLabel
 from loguru import logger
@@ -182,38 +184,27 @@ class GRAMS:
             cg = cg_factory.create_cg(table, dg)
 
         with self.timer.watch("run inference"):
-
-            # def sim_fn(x, y):
-            #     return 1 - rltk.levenshtein_distance(x.lower(), y.lower()) / max(
-            #         len(x), len(y)
-            #     )
-            sim_fn = None
-
             edge_probs, cta_probs = PSLGramModel(
                 qnodes=qnodes,
                 qnode_labels=self.qnode_labels,
                 wdclasses=wdclasses,
                 wdprops=wdprops,
                 wd_numprop_stats=self.wd_numprop_stats,
-                sim_fn=sim_fn,
+                disable_rules=self.cfg.psl.disable_rules,
             ).predict(table, cg, dg, verbose=verbose, debug=True)
-            # psl_solver = PSLInference(
-            #     qnodes,
-            #     wdclasses,
-            #     wdprops,
-            #     self.wd_numprop_stats,
-            #     disable_rules=set(self.cfg.psl.disable_rules),
-            #     sim_fn=sim_fn,
-            #     enable_logging=self.cfg.psl.enable_logging,
-            # )
-            # edge_probs, cta_probs = psl_solver.run(table, dg, cg)
 
-            if self.cfg.psl.postprocessing == "select_simplepath":
+            edge_probs = PSLModel.normalize_probs(
+                edge_probs, eps=self.cfg.psl.eps, threshold=self.cfg.psl.threshold
+            )
+
+            if self.cfg.psl.postprocessing == "simplepath":
                 pp = PostProcessingSimplePath(
                     table, cg, dg, edge_probs, self.cfg.psl.threshold
                 )
             elif self.cfg.psl.postprocessing == "steiner_tree":
-                pp = PostProcessingSteinerTree(
+                pp = SteinerTree(table, cg, dg, edge_probs, self.cfg.psl.threshold)
+            elif self.cfg.psl.postprocessing == "arborescence":
+                pp = MinimumArborescence(
                     table, cg, dg, edge_probs, self.cfg.psl.threshold
                 )
             else:

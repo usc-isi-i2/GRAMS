@@ -1,6 +1,7 @@
 from __future__ import annotations
 import re, os, uuid, logging
 from typing import (
+    Any,
     Dict,
     Generic,
     List,
@@ -19,6 +20,10 @@ from loguru import logger
 from pathlib import Path
 from copy import copy
 from functools import partial
+from operator import itemgetter
+
+
+K = TypeVar("K")
 
 
 class PSLModel:
@@ -161,6 +166,50 @@ class PSLModel:
         logger.error(str(error))
         print("\n".join(self.logs))
 
+    @staticmethod
+    def normalize_probs(
+        target_values: Dict[K, float], eps: float = 0.001, threshold: float = 0.0
+    ) -> Dict[K, float]:
+        """The predicted probabilities can be noisy due to numerical optimizations, i.e., equal variables
+        can have slightly different scores. This function groups values that are close
+        within the range [-eps, +eps] together, and replace them with the average value
+        to reduce the noises.
+
+        Args:
+            target_values: probability of grounded values of a predicate
+            eps: group values within [-eps, +eps] together
+            threshold: remove values with probability less than threshold
+
+        Return:
+            A dictionary of normalized probabilities >= threshold
+        """
+        norm_probs = {}
+        lst = sorted(
+            [x for x in target_values.items() if x[1] >= threshold], key=itemgetter(1)
+        )
+
+        if len(lst) == 0:
+            return {}
+
+        clusters = []
+        pivot = 1
+        clusters = [[lst[0]]]
+        while pivot < len(lst):
+            x = lst[pivot - 1][1]
+            y = lst[pivot][1]
+            if (y - x) <= eps:
+                # same clusters
+                clusters[-1].append(lst[pivot])
+            else:
+                # different clusters
+                clusters.append([lst[pivot]])
+            pivot += 1
+        for cluster in clusters:
+            avg_prob = sum([x[1] for x in cluster]) / len(cluster)
+            for k, _prob in cluster:
+                norm_probs[k] = avg_prob
+        return norm_probs
+
 
 class InMemHandler(logging.Handler):
     def __init__(self, storage: list):
@@ -169,9 +218,6 @@ class InMemHandler(logging.Handler):
 
     def emit(self, record):
         self.storage.append(self.format(record))
-
-
-K = TypeVar("K")
 
 
 class IDMap(Generic[K]):
