@@ -1,5 +1,6 @@
 from grams.algorithm.helpers import K
 from grams.algorithm.postprocessing.common import add_context, ensure_valid_statements
+from grams.algorithm.postprocessing.config import PostprocessingConfig
 from grams.algorithm.psl_solver import PSLConfigs
 from graph.interface import BaseNode
 import networkx as nx
@@ -16,11 +17,6 @@ from grams.algorithm.candidate_graph.cg_graph import (
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.psl_lib import PSLModel
 from grams.inputs.linked_table import LinkedTable
-
-
-class MinimumArborescenceConfig:
-    # adding back the context
-    INCLUDE_CONTEXT = True
 
 
 class MinimumArborescence:
@@ -114,7 +110,7 @@ class MinimumArborescence:
 
         clean_entities(tree)
 
-        if MinimumArborescenceConfig.INCLUDE_CONTEXT:
+        if PostprocessingConfig.INCLUDE_CONTEXT:
             add_context(subcg, tree, edge_probs)
 
         ensure_valid_statements(subcg, tree, create_if_not_exists=True)

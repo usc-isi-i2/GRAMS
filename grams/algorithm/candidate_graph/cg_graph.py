@@ -290,7 +290,7 @@ class CGEdge(BaseEdge[str, str]):
 
 
 CGNode = Union[CGColumnNode, CGEntityValueNode, CGLiteralValueNode, CGStatementNode]
-CGEdgeTriple = Tuple[str, str, str]
+CGEdgeTriple = Tuple[str, str, str]  # source, target, predicate
 
 
 class CGGraph(RetworkXStrDiGraph[str, CGNode, CGEdge]):

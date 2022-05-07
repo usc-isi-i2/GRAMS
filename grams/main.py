@@ -197,14 +197,14 @@ class GRAMS:
                 edge_probs, eps=self.cfg.psl.eps, threshold=self.cfg.psl.threshold
             )
 
-            if self.cfg.psl.postprocessing == "simplepath":
-                pp = PostProcessingSimplePath(
-                    table, cg, dg, edge_probs, self.cfg.psl.threshold
-                )
-            elif self.cfg.psl.postprocessing == "steiner_tree":
+            if self.cfg.psl.postprocessing == "steiner_tree":
                 pp = SteinerTree(table, cg, dg, edge_probs, self.cfg.psl.threshold)
             elif self.cfg.psl.postprocessing == "arborescence":
                 pp = MinimumArborescence(
+                    table, cg, dg, edge_probs, self.cfg.psl.threshold
+                )
+            elif self.cfg.psl.postprocessing == "simplepath":
+                pp = PostProcessingSimplePath(
                     table, cg, dg, edge_probs, self.cfg.psl.threshold
                 )
             else:

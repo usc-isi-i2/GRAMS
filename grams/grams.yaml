@@ -22,9 +22,8 @@ psl:
   threshold: 0.5
   # eps: 0.001 # for normalizing the probs
   eps: 0.0
-  # select_simplepath, steiner_tree, arborescence, external:semtab2020
+  # steiner_tree, arborescence, simplepath, pairwise
   postprocessing: steiner_tree
-  # postprocessing: arborescence
   disable_rules:
     []
     # - HeaderSimimilarity

@@ -19,6 +19,7 @@ from grams.algorithm.postprocessing.common import (
     add_pseudo_root,
     ensure_valid_statements,
 )
+from grams.algorithm.postprocessing.config import PostprocessingConfig
 from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
 from grams.algorithm.psl_solver import PSLConfigs
 from grams.inputs.linked_table import LinkedTable
@@ -38,10 +39,6 @@ from steiner_tree.bank.struct import (
 from copy import copy
 
 
-class SteinerTreeConfig:
-    INCLUDE_CONTEXT = True
-
-
 class SteinerTree:
     def __init__(
         self,
@@ -58,8 +55,8 @@ class SteinerTree:
         self.edge_probs = edge_probs
         self.threshold = threshold
 
-        self.top_k_st = 500
-        self.top_k_path = 500
+        self.top_k_st = 50
+        self.top_k_path = 50
 
         # extra terminal nodes that the tree should have, usually used in
         # interactive modeling where users add some entity nodes in their model
@@ -131,7 +128,7 @@ class SteinerTree:
             tree.remove_node(PSEUDO_ROOT_ID)
         tree.remove_dangling_statement()
 
-        if SteinerTreeConfig.INCLUDE_CONTEXT:
+        if PostprocessingConfig.INCLUDE_CONTEXT:
             add_context(subcg, tree, edge_probs)
 
         # add back statement property if missing into to ensure a correct model
