@@ -10,42 +10,9 @@ from grams.algorithm.candidate_graph.cg_graph import (
 from operator import itemgetter
 
 
-PSEUDO_ROOT_ID = "root"
-PSEUDO_EDGE_KEY = "to_root"
-
 _AddContextPathType = TypedDict(
     "_Path", {"path": Tuple[CGEdge, CGEdge], "score": float}
 )
-
-
-def add_pseudo_root(cg: CGGraph) -> CGGraph:
-    """Add a pseudo root node and edges from non-statement nodes to the pseudo root
-    so that we can always have a directed rooted tree
-
-    Args:
-        cg: the graph to impute
-
-    Returns:
-        an imputed candidate graph
-    """
-    global PSEUDO_ROOT_ID
-
-    assert cg.has_node(PSEUDO_ROOT_ID) is False
-
-    newcg = cg.copy()
-    newcg.add_node(
-        CGColumnNode(id=PSEUDO_ROOT_ID, label=PSEUDO_ROOT_ID, column=-1, nodes=set())
-    )
-
-    for node in cg.iter_nodes():
-        if isinstance(node, CGStatementNode):
-            continue
-
-        newcg.add_edge(
-            CGEdge(PSEUDO_ROOT_ID, node.id, predicate=PSEUDO_EDGE_KEY, features={})
-        )
-
-    return newcg
 
 
 def ensure_valid_statements(

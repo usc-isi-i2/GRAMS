@@ -14,9 +14,7 @@ from itertools import chain, combinations
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.psl_lib import PSLModel
 from grams.algorithm.postprocessing.common import (
-    PSEUDO_ROOT_ID,
     add_context,
-    add_pseudo_root,
     ensure_valid_statements,
 )
 from grams.algorithm.postprocessing.config import PostprocessingConfig
@@ -27,7 +25,7 @@ from operator import itemgetter
 from graph.interface import EdgeTriple
 from graph.retworkx.api import dag_longest_path, digraph_all_simple_paths, has_cycle
 from networkx.algorithms.planarity import top_of_stack
-from steiner_tree.bank.solver import BankSolver
+from steiner_tree.bank.solver import BankSolver, PSEUDO_ROOT_ID
 from steiner_tree.bank.struct import (
     BankEdge,
     BankGraph,
@@ -83,49 +81,23 @@ class SteinerTree:
             return CGGraph()
 
         # add pseudo root
-        new_subcg = add_pseudo_root(subcg)
         edge_weights = {e: 1.0 / p for e, p in edge_probs.items()}  # p > 0.5
-        total_weight = sum(edge_weights.values())
-        for edge in new_subcg.out_edges(PSEUDO_ROOT_ID):
-            edge_weights[edge.source, edge.target, edge.predicate] = total_weight + 1
 
-        # we can improve this by detecting disconnected components
-        # and run them separately, so the graph with pseudo root
-        # will perform just as well as the graph without pseudo root
-        try:
-            solver = BankSteinerTree(
-                original_graph=subcg,
-                terminal_nodes=terminal_nodes,
-                top_k_st=self.top_k_st,
-                top_k_path=self.top_k_path,
-                weight_fn=lambda e: edge_weights[e.source, e.target, e.predicate],
-                solution_cmp_fn=self.compare_solutions,
-                invalid_roots={
-                    u.id for u in subcg.nodes() if isinstance(u, CGStatementNode)
-                },
-                allow_shorten_graph=False,
-            )
-            trees, _solutions = solver.run()
-        except NoSingleRootException:
-            solver = BankSteinerTree(
-                original_graph=new_subcg,
-                terminal_nodes=terminal_nodes,
-                top_k_st=self.top_k_st,
-                top_k_path=self.top_k_path,
-                weight_fn=lambda e: edge_weights[e.source, e.target, e.predicate],
-                solution_cmp_fn=self.compare_solutions,
-                invalid_roots={
-                    u.id for u in subcg.nodes() if isinstance(u, CGStatementNode)
-                },
-                allow_shorten_graph=False,
-            )
-            trees, _solutions = solver.run()
-        finally:
-            pass
+        solver = BankSteinerTree(
+            original_graph=subcg,
+            terminal_nodes=terminal_nodes,
+            top_k_st=self.top_k_st,
+            top_k_path=self.top_k_path,
+            weight_fn=lambda e: edge_weights[e.source, e.target, e.predicate],
+            solution_cmp_fn=self.compare_solutions,
+            invalid_roots={
+                u.id for u in subcg.nodes() if isinstance(u, CGStatementNode)
+            },
+            allow_shorten_graph=False,
+        )
+        trees, _solutions = solver.run()
 
         tree = cast(CGGraph, trees[0])
-        if tree.has_node(PSEUDO_ROOT_ID):
-            tree.remove_node(PSEUDO_ROOT_ID)
         tree.remove_dangling_statement()
 
         if PostprocessingConfig.INCLUDE_CONTEXT:
@@ -291,6 +263,8 @@ class BankSteinerTree(BankSolver[CGNode, CGEdge]):
 
         cg = cast(CGGraph, self.original_graph)
         for uprime in g.iter_nodes():
+            if uprime.id == PSEUDO_ROOT_ID:
+                continue
             u = cg.get_node(uprime.id)
             if isinstance(u, CGStatementNode):
                 (inedge,) = cg.in_edges(u.id)
