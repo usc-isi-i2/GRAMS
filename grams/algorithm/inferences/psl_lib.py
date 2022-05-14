@@ -183,6 +183,9 @@ class PSLModel:
         Return:
             A dictionary of normalized probabilities >= threshold
         """
+        if eps == 0.0 and threshold == 0.0:
+            return target_values
+
         norm_probs = {}
         lst = sorted(
             [x for x in target_values.items() if x[1] >= threshold], key=itemgetter(1)
