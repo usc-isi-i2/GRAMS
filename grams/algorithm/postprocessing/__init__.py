@@ -1,3 +1,5 @@
 from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
 from grams.algorithm.postprocessing.steiner_tree import SteinerTree
-from grams.algorithm.postprocessing.semtab2020 import PostProcessingSemTab2020
+from grams.algorithm.postprocessing.arborescence import MinimumArborescence
+from grams.algorithm.postprocessing.known_targets import KnownTargets
+from grams.algorithm.postprocessing.pairwise_selection import PairwiseSelection
