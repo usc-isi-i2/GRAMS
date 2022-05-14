@@ -10,9 +10,12 @@ from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.psl_gram_model import PSLGramModel
 from grams.algorithm.inferences.psl_lib import PSLModel
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
-from grams.algorithm.postprocessing.arborescence import MinimumArborescence
-from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
-from grams.algorithm.postprocessing.steiner_tree import SteinerTree
+from grams.algorithm.postprocessing import (
+    MinimumArborescence,
+    PairwiseSelection,
+    PostProcessingSimplePath,
+    SteinerTree,
+)
 from hugedict.parallel.parallel import Parallel
 from kgdata.wikidata.models.qnode import QNodeLabel
 from loguru import logger
@@ -193,9 +196,7 @@ class GRAMS:
                 disable_rules=self.cfg.psl.disable_rules,
             ).predict(table, cg, dg, verbose=verbose, debug=True)
 
-            edge_probs = PSLModel.normalize_probs(
-                edge_probs, eps=self.cfg.psl.eps, threshold=self.cfg.psl.threshold
-            )
+            edge_probs = PSLModel.normalize_probs(edge_probs, eps=self.cfg.psl.eps)
 
             if self.cfg.psl.postprocessing == "steiner_tree":
                 pp = SteinerTree(table, cg, dg, edge_probs, self.cfg.psl.threshold)
@@ -205,6 +206,10 @@ class GRAMS:
                 )
             elif self.cfg.psl.postprocessing == "simplepath":
                 pp = PostProcessingSimplePath(
+                    table, cg, dg, edge_probs, self.cfg.psl.threshold
+                )
+            elif self.cfg.psl.postprocessing == "pairwise":
+                pp = PairwiseSelection(
                     table, cg, dg, edge_probs, self.cfg.psl.threshold
                 )
             else:
