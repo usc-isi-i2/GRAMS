@@ -144,7 +144,7 @@ class TypeFeatures:
 
         # longest distance, can't use distance to root because root node
         # can even have shorter distance than one of its children due to varied tree length
-        longest_distance = max(best_distance.values())
+        longest_distance = max(1, max(best_distance.values()))
         for c, distance in best_distance.items():
             output.add(
                 (self.idmap.m(u.id), self.idmap.m(c), distance / longest_distance)
@@ -161,7 +161,7 @@ class TypeFeatures:
         tree = self.get_candidate_types_as_maps(u)
 
         top_classes = sorted(classes.items(), key=itemgetter(1), reverse=True)[:2]
-        # now calculate the distance from the top classes into its children
+        # now calculate the distance from the top classes into its parents
         base = set(c for c, f in top_classes)
         best_distance: Dict[str, float] = {c: 0 for c in base}
         for c in base:
@@ -176,11 +176,15 @@ class TypeFeatures:
                 for p in tree.c2ps[node]:
                     if p not in base:
                         stack.append((p, distance + 1))
+
+        longest_distance = max(1, max(best_distance.values()))
+
         for c in extended_classes:
             if c not in best_distance:
-                best_distance[c] = 0
+                # we can't reach these classes from the top classes
+                # TODO: what should be the value? for now, we just set it to be half of the max value (50%)
+                best_distance[c] = longest_distance / 2
 
-        longest_distance = max(best_distance.values())
         for c, distance in best_distance.items():
             output.add(
                 (self.idmap.m(u.id), self.idmap.m(c), distance / longest_distance)
@@ -201,8 +205,13 @@ class TypeFeatures:
             classes = {}
             for qnode, prob in cell2qnodes[cell.id]:
                 for stmt in qnode.props.get(self.INSTANCE_OF, []):
-                    classes[stmt.value.as_entity_id()] = max(
-                        prob, classes.get(stmt.value.as_entity_id(), 0)
+                    stmt_value_ent_id = stmt.value.as_entity_id()
+                    if stmt_value_ent_id not in self.wdclasses:
+                        # sometimes people just tag things incorrectly, e.g.,
+                        # Q395 is not instanceof Q41511 (Q41511 is not a class)
+                        continue
+                    classes[stmt_value_ent_id] = max(
+                        prob, classes.get(stmt_value_ent_id, 0)
                     )
 
             for c, prob in classes.items():
@@ -226,8 +235,13 @@ class TypeFeatures:
             classes = {}
             for qnode, prob in cell2qnodes[cell.id]:
                 for stmt in qnode.props.get(self.INSTANCE_OF, []):
-                    classes[stmt.value.as_entity_id()] = max(
-                        prob, classes.get(stmt.value.as_entity_id(), 0)
+                    stmt_value_ent_id = stmt.value.as_entity_id()
+                    if stmt_value_ent_id not in self.wdclasses:
+                        # sometimes people just tag things incorrectly, e.g.,
+                        # Q395 is not instanceof Q41511 (Q41511 is not a class)
+                        continue
+                    classes[stmt_value_ent_id] = max(
+                        prob, classes.get(stmt_value_ent_id, 0)
                     )
             classes = self._get_extended_type_freq_of_cell(
                 classes, TypeFeaturesConfigs.EXTENDED_DISTANCE
