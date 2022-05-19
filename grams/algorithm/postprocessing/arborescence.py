@@ -1,7 +1,6 @@
 from grams.algorithm.helpers import K
 from grams.algorithm.postprocessing.common import add_context, ensure_valid_statements
 from grams.algorithm.postprocessing.config import PostprocessingConfig
-from grams.algorithm.psl_solver import PSLConfigs
 from graph.interface import BaseNode
 import networkx as nx
 from typing import Dict, List, Optional, Tuple

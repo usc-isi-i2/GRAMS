@@ -14,16 +14,18 @@ from typing import (
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.features.tree_utils import TreeStruct
 from grams.algorithm.inferences.psl_lib import IDMap
-from kgdata.wikidata.models.wdclass import WDClass
 from sm.misc import CacheMethod
-import networkx as nx
 import numpy as np
-from copy import copy
 from grams.algorithm.data_graph import CellNode
 from grams.algorithm.literal_matchers import TextParser
 from grams.algorithm.candidate_graph.cg_graph import CGColumnNode, CGGraph
 from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
+from kgdata.wikidata.models import (
+    WDEntity,
+    WDProperty,
+    WDQuantityPropertyStats,
+    WDClass,
+)
 from operator import itemgetter
 
 
@@ -41,7 +43,7 @@ class TypeFeatures:
         table: LinkedTable,
         cg: CGGraph,
         dg: DGGraph,
-        qnodes: Mapping[str, QNode],
+        wdentities: Mapping[str, WDEntity],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
         wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
@@ -51,7 +53,7 @@ class TypeFeatures:
         self.table = table
         self.cg = cg
         self.dg = dg
-        self.qnodes = qnodes
+        self.wdentities = wdentities
         self.wdclasses = wdclasses
         self.wdprops = wdprops
         self.wd_num_prop_stats = wd_num_prop_stats
@@ -68,11 +70,13 @@ class TypeFeatures:
             # using heuristic to determine if we should tag this column
             covered_fractions = [
                 sum(
-                    span.length for spans in cell.qnodes_span.values() for span in spans
+                    span.length
+                    for spans in cell.entity_spans.values()
+                    for span in spans
                 )
                 / max(len(cell.value), 1)
                 for cell in cells
-                if len(cell.qnode_ids) > 0
+                if len(cell.entity_ids) > 0
             ]
 
             if len(covered_fractions) == 0:
@@ -82,7 +86,7 @@ class TypeFeatures:
             if avg_covered_fractions < 0.8:
                 if avg_covered_fractions == 0:
                     avg_cell_len = np.mean(
-                        [len(cell.value) for cell in cells if len(cell.qnode_ids) > 0]
+                        [len(cell.value) for cell in cells if len(cell.entity_ids) > 0]
                     )
                     if avg_cell_len < 1:
                         # links are likely to be image such as national flag, so we still model them
@@ -205,6 +209,7 @@ class TypeFeatures:
             classes = {}
             for qnode, prob in cell2qnodes[cell.id]:
                 for stmt in qnode.props.get(self.INSTANCE_OF, []):
+                    assert stmt.value.is_entity_id(stmt.value), stmt.value
                     stmt_value_ent_id = stmt.value.as_entity_id()
                     if stmt_value_ent_id not in self.wdclasses:
                         # sometimes people just tag things incorrectly, e.g.,
@@ -235,7 +240,7 @@ class TypeFeatures:
             classes = {}
             for qnode, prob in cell2qnodes[cell.id]:
                 for stmt in qnode.props.get(self.INSTANCE_OF, []):
-                    stmt_value_ent_id = stmt.value.as_entity_id()
+                    stmt_value_ent_id = stmt.value.as_entity_id_safe()
                     if stmt_value_ent_id not in self.wdclasses:
                         # sometimes people just tag things incorrectly, e.g.,
                         # Q395 is not instanceof Q41511 (Q41511 is not a class)
@@ -286,7 +291,7 @@ class TypeFeatures:
     @CacheMethod.cache(CacheMethod.single_object_arg)
     def get_cell_to_qnodes(
         self, u: CGColumnNode
-    ) -> Dict[str, List[Tuple[QNode, float]]]:
+    ) -> Dict[str, List[Tuple[WDEntity, float]]]:
         """Get a mapping to associated qnodes of a cell"""
         cells = self.get_cells(u)
         cell2qnodes = {}
@@ -295,37 +300,37 @@ class TypeFeatures:
         return cell2qnodes
 
     def _add_merge_qnodes(
-        self, cell: CellNode, cell2qnodes: Dict[str, List[Tuple[QNode, float]]]
+        self, cell: CellNode, cell2qnodes: Dict[str, List[Tuple[WDEntity, float]]]
     ):
         """merge qnodes that are sub of each other
         attempt to merge qnodes (spatial) if they are contained in each other
         we should go even higher order
         """
         assert cell.id not in cell2qnodes
-        if len(cell.qnode_ids) > 1:
+        if len(cell.entity_ids) > 1:
             # attempt to merge qnodes (spatial) if they are contained in each other
             # we should go even higher order
             ignore_qnodes = set()
-            for q0_id in cell.qnode_ids:
-                q0 = self.qnodes[q0_id]
+            for q0_id in cell.entity_ids:
+                q0 = self.wdentities[q0_id]
                 vals = {
-                    stmt.value.as_entity_id()
+                    stmt.value.as_entity_id_safe()
                     for p in self.HIERARCHY_PROPS
                     for stmt in q0.props.get(p, [])
                 }
-                for q1_id in cell.qnode_ids:
+                for q1_id in cell.entity_ids:
                     if q0_id == q1_id:
                         continue
                     if q1_id in vals:
                         # q0 is inside q1, ignore q1
                         ignore_qnodes.add(q1_id)
             qnode_lst = [
-                self.qnodes[q_id]
-                for q_id in cell.qnode_ids
+                self.wdentities[q_id]
+                for q_id in cell.entity_ids
                 if q_id not in ignore_qnodes
             ]
-        elif len(cell.qnode_ids) > 0:
-            qnode_lst = [self.qnodes[cell.qnode_ids[0]]]
+        elif len(cell.entity_ids) > 0:
+            qnode_lst = [self.wdentities[cell.entity_ids[0]]]
         else:
             qnode_lst = []
 

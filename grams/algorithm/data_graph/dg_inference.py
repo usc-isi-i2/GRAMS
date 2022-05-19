@@ -3,7 +3,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Mapping, Optional, Tuple, Set
 import networkx as nx
-from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
+from kgdata.wikidata.models import WDEntity, WDValue, WDProperty, WDClass
 from grams.algorithm.data_graph.dg_graph import (
     CellNode,
     DGEdge,
@@ -17,7 +17,7 @@ from grams.algorithm.data_graph.dg_graph import (
     DGPathEdge,
     EntityValueNode,
     DGPathNodeStatement,
-    DGPathNodeQNode,
+    DGPathNodeEntity,
     DGPathNodeLiteralValue,
     DGPathExistingNode,
     FlowProvenance,
@@ -28,15 +28,15 @@ class KGInference:
     def __init__(
         self,
         dg: DGGraph,
-        qnodes: Mapping[str, QNode],
+        wdentities: Mapping[str, WDEntity],
         wdprops: Mapping[str, WDProperty],
     ):
         # mapping from qnode id, and property to a list of statement values (with the corresponding DG statement node if exist)
         # the reason we want to include all is that we want to know if we need to add new statement value or reuse existing value
         self.subkg: Dict[
-            Tuple[str, str], List[Tuple[Optional[StatementNode], DataValue]]
+            Tuple[str, str], List[Tuple[Optional[StatementNode], WDValue]]
         ] = {}
-        self.qnodes = qnodes
+        self.wdentities = wdentities
         self.wdprops = wdprops
         self.dg = dg
 
@@ -384,7 +384,7 @@ class KGInference:
         """Ensure that the subkg has values of the qnode's property"""
         if (qnode_id, prop) not in self.subkg:
             lst = []
-            for stmt_i, stmt in enumerate(self.qnodes[qnode_id].props.get(prop, [])):
+            for stmt_i, stmt in enumerate(self.wdentities[qnode_id].props.get(prop, [])):
                 lst.append((None, stmt.value))
             self.subkg[qnode_id, prop] = lst
 
@@ -410,7 +410,7 @@ class KGInference:
         prop: str,
         stmt_index: int,
         stmt: StatementNode,
-        value: DataValue,
+        value: WDValue,
     ):
         self._track_property(qnode_id, prop)
         assert stmt_index == len(self.subkg[qnode_id, prop]), "Can only add new value"
@@ -427,7 +427,7 @@ class KGInference:
             for p2 in props:
                 if p1 == p2:
                     continue
-                if p2 in self.wdprops[p1].parents_closure:
+                if p2 in self.wdprops[p1].ancestors:
                     parent_props[p1].append(p2)
             if len(parent_props[p1]) == 0:
                 parent_props.pop(p1)
@@ -444,7 +444,7 @@ class InferredNewProp:
     # the value associated with the property (use it to compare if the statement exists) - the reason we use
     # the value instead of the whole statement is that sometimes, desire them to match the qualifier does not
     # sense, if the value exist, then some how the algorithm is already match it so it should be okay
-    value: DataValue
+    value: WDValue
 
     # the source nodes in the data graph
     source_id: str

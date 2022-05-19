@@ -34,10 +34,10 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGStatementNode,
 )
 from grams.algorithm.data_graph.dg_graph import DGGraph, DGNode
-from grams.algorithm.link_feature import LinkFeatureExtraction
+from grams.algorithm.deprecated.link_feature import LinkFeatureExtraction
 
 # from grams.algorithm.postprocessing.semtab2020 import SemTab2020PostProcessing
-from grams.algorithm.type_feature import TypeFeatureExtraction
+from grams.algorithm.deprecated.type_feature import TypeFeatureExtraction
 from grams.inputs.linked_table import LinkedTable
 
 # from grams.algorithm.postprocessing.simple_path import (
@@ -46,7 +46,7 @@ from grams.inputs.linked_table import LinkedTable
 from graph.retworkx.api import dag_longest_path
 from hugedict.parallel.parallel import Parallel
 from kgdata.wikidata.models import (
-    QNode,
+    WDEntity,
     WDClass,
     WDProperty,
     WDQuantityPropertyStats,
@@ -122,7 +122,7 @@ class PSLInference:
 
     def __init__(
         self,
-        qnodes: Mapping[str, QNode],
+        qnodes: Mapping[str, WDEntity],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
         wd_numprop_stats: Mapping[str, WDQuantityPropertyStats],
@@ -687,7 +687,7 @@ class PSLInference:
         wdprops: Mapping[str, WDProperty] = global_objects["wdprops"]
         wdclasses: Mapping[str, WDClass] = global_objects["wdclasses"]
         wd_numprop_stats = global_objects["wd_numprop_stats"]
-        qnodes: Mapping[str, QNode] = global_objects["qnodes"]
+        qnodes: Mapping[str, WDEntity] = global_objects["qnodes"]
         cache_dir = global_objects["cache_dir"]
         sim_fn = global_objects["sim_fn"]
 

@@ -1,16 +1,12 @@
 from typing import Tuple, cast
 from grams.algorithm.literal_matchers.text_parser import ParsedTextRepr
-from kgdata.wikidata.models.qnode import (
-    DataValue,
-    DataValueMonolingualText,
-    DataValueString,
-)
+from kgdata.wikidata.models import WDValueMonolingualText, WDValueString
 import rltk
 from grams.algorithm.literal_matchers.types import LiteralMatchKit
 
 
 def monolingual_exact_test(
-    kgval: DataValue, val: ParsedTextRepr, kit: LiteralMatchKit
+    kgval: WDValueMonolingualText, val: ParsedTextRepr, kit: LiteralMatchKit
 ) -> Tuple[bool, float]:
     """Compare if the value in KG matches with value in the cell
 
@@ -22,14 +18,14 @@ def monolingual_exact_test(
     Returns:
         a tuple of (whether it's matched, confidence)
     """
-    kgtext = cast(DataValueMonolingualText, kgval.value)
+    kgtext = kgval.value
     if val.normed_string == kgtext["text"].strip():
         return True, 1.0
     return False, 0.0
 
 
 def string_exact_test(
-    kgval: DataValue, val: ParsedTextRepr, kit: LiteralMatchKit
+    kgval: WDValueString, val: ParsedTextRepr, kit: LiteralMatchKit
 ) -> Tuple[bool, float]:
     """Compare if the value in KG matches with value in the cell
 
@@ -41,14 +37,14 @@ def string_exact_test(
     Returns:
         a tuple of (whether it's matched, confidence)
     """
-    kgtext = cast(DataValueString, kgval.value)
+    kgtext = kgval.value
     if val.normed_string == kgtext.strip():
         return True, 1.0
     return False, 0.0
 
 
 def monolingual_similarity_test(
-    kgval: DataValue, val: ParsedTextRepr, kit: LiteralMatchKit
+    kgval: WDValueMonolingualText, val: ParsedTextRepr, kit: LiteralMatchKit
 ) -> Tuple[bool, float]:
     """Compare if the value in KG matches with value in the cell
 
@@ -60,12 +56,12 @@ def monolingual_similarity_test(
     Returns:
         a tuple of (whether it's matched, confidence)
     """
-    kgtext = cast(DataValueMonolingualText, kgval.value)
+    kgtext = kgval.value
     return string_match_similarity(kgtext["text"].strip(), val.normed_string)
 
 
 def string_similarity_test(
-    kgval: DataValue, val: ParsedTextRepr, kit: LiteralMatchKit
+    kgval: WDValueString, val: ParsedTextRepr, kit: LiteralMatchKit
 ) -> Tuple[bool, float]:
     """Compare if the value in KG matches with value in the cell
 
@@ -77,7 +73,7 @@ def string_similarity_test(
     Returns:
         a tuple of (whether it's matched, confidence)
     """
-    kgtext = cast(DataValueString, kgval.value)
+    kgtext = kgval.value
     return string_match_similarity(kgtext.strip(), val.normed_string)
 
 

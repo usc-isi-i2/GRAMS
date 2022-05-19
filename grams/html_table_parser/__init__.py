@@ -1,16 +1,13 @@
-from typing import Callable
+from typing import Callable, Optional
 import requests
 from grams.html_table_parser.table_parser import HTMLTableParser
-from grams.html_table_parser.parsing_exception import *
-from grams.html_table_parser.html_table import HTMLTable
-from requests.models import Response
 
 
 def fetch_tables(
     url: str,
     auto_span: bool = True,
     auto_pad: bool = True,
-    fetch: Callable[[str], str] = None,
+    fetch: Optional[Callable[[str], str]] = None,
 ):
     """Fetch tables from a webpage"""
     if fetch is None:

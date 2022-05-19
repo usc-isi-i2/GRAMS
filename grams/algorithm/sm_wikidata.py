@@ -16,7 +16,7 @@ import sm.misc as M
 import sm.outputs as O
 
 from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import QNode, WDClass, WDProperty
+from kgdata.wikidata.models import WDEntity, WDClass, WDProperty
 from rdflib import RDFS
 from sm.evaluation import sm_metrics
 from sm.misc import identity_func
@@ -40,13 +40,13 @@ class WikidataSemanticModelHelper:
 
     def __init__(
         self,
-        qnodes: Mapping[str, QNode],
-        qnode_labels: Mapping[str, str],
+        wdentities: Mapping[str, WDEntity],
+        wdentity_labels: Mapping[str, str],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
     ):
-        self.qnodes = qnodes
-        self.qnode_labels = qnode_labels
+        self.wdentities = wdentities
+        self.wdentity_labels = wdentity_labels
         self.wdclasses = wdclasses
         self.wdprops = wdprops
         self.wdns = WikidataNamespace.create()
@@ -638,7 +638,7 @@ class WikidataSemanticModelHelper:
                         {
                             "id": qnode_id,
                             "uri": wdns.get_entity_abs_uri(qnode_id),
-                            "label": self.qnodes[qnode_id].label,
+                            "label": self.wdentities[qnode_id].label,
                             "props": {},
                         }
                         for qnode_id in qnode_ids
@@ -748,13 +748,13 @@ class WikidataSemanticModelHelper:
         return records
 
     def get_qnode_label(self, qid: str):
-        """Get QNode label from id"""
+        """Get WDEntity label from id"""
         if qid in self.wdclasses:
             label = self.wdclasses[qid].label
-        elif qid in self.qnodes:
-            label = self.qnodes[qid].label
+        elif qid in self.wdentities:
+            label = self.wdentities[qid].label
         else:
-            label = self.qnode_labels.get(qid, qid)
+            label = self.wdentity_labels.get(qid, qid)
         return f"{label} ({qid})"
 
     def get_pnode_label(self, pid: str):

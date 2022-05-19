@@ -4,12 +4,12 @@ from grams.algorithm.literal_matchers.text_parser import (
     ParsedTextRepr,
     ParsedDatetimeRepr,
 )
-from kgdata.wikidata.models.qnode import DataValueQuantity, DataValue
+from kgdata.wikidata.models import WDValueQuantity
 from grams.algorithm.literal_matchers.types import LiteralMatchKit
 
 
 def quantity_test(
-    kgval: DataValue, val: ParsedTextRepr, kit: LiteralMatchKit
+    kgval: WDValueQuantity, val: ParsedTextRepr, kit: LiteralMatchKit
 ) -> Tuple[bool, float]:
     """Compare if the value in KG matches with value in the cell
 
@@ -24,7 +24,7 @@ def quantity_test(
     if val.number is None:
         return False, 0.0
 
-    kgnum = float(cast(DataValueQuantity, kgval.value)["amount"])
+    kgnum = float(kgval.value["amount"])
     num = val.number.number
 
     if abs(kgnum - num) < 1e-5:

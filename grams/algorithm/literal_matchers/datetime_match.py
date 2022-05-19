@@ -5,11 +5,11 @@ from grams.algorithm.literal_matchers.text_parser import (
     ParsedDatetimeRepr,
 )
 from grams.algorithm.literal_matchers.types import LiteralMatchKit
-from kgdata.wikidata.models.qnode import DataValueTime, DataValue
+from kgdata.wikidata.models import WDValueTime
 
 
 def time_test(
-    kgvalue: DataValue, value: ParsedTextRepr, kit: LiteralMatchKit
+    kgvalue: WDValueTime, value: ParsedTextRepr, kit: LiteralMatchKit
 ) -> Tuple[bool, float]:
     """Compare if the value in KG matches with value in the cell
 
@@ -24,7 +24,7 @@ def time_test(
     if celldt is None:
         return False, 0.0
 
-    kgtime = cast(DataValueTime, kgvalue.value)
+    kgtime = kgvalue.value
     timestr = kgtime["time"]
     # there are two calendar:
     # gregorian calendar, and julian calendar (just 13 days behind gregorian)

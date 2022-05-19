@@ -31,7 +31,7 @@ PageElement = Union[Tag, NavigableString]
 
 
 class HTMLTableParser:
-    NUM_REGEX = re.compile("(\d+)")
+    NUM_REGEX = re.compile(r"(\d+)")
     IGNORE_TAGS = set(["div", "span"])
 
     @dataclass

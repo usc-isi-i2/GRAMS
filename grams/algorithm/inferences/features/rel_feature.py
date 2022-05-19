@@ -7,18 +7,12 @@ from typing import (
     List,
     Mapping,
     Optional,
-    Set,
     Tuple,
-    TYPE_CHECKING,
     TypeVar,
 )
 from operator import attrgetter
 from grams.algorithm.data_graph.dg_graph import DGGraph, DGNode, EntityValueNode
 from grams.algorithm.inferences.psl_lib import IDMap
-from kgdata.wikidata.models.qnode import QNodeLabel
-from kgdata.wikidata.models.wdclass import WDClass
-import networkx as nx
-import numpy as np
 
 from grams.algorithm.data_graph import CellNode
 from grams.algorithm.literal_matchers import TextParser
@@ -32,7 +26,13 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGStatementNode,
 )
 from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
+from kgdata.wikidata.models import (
+    WDEntity,
+    WDProperty,
+    WDQuantityPropertyStats,
+    WDEntityLabel,
+    WDClass,
+)
 from sm.misc.fn_cache import CacheMethod
 
 
@@ -47,8 +47,8 @@ class RelFeatures:
         table: LinkedTable,
         cg: CGGraph,
         dg: DGGraph,
-        qnodes: Mapping[str, QNode],
-        qnodes_label: Mapping[str, QNodeLabel],
+        wdentities: Mapping[str, WDEntity],
+        wdentity_labels: Mapping[str, WDEntityLabel],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
         wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
@@ -58,7 +58,7 @@ class RelFeatures:
         self.table = table
         self.cg = cg
         self.dg = dg
-        self.qnodes = qnodes
+        self.wdentities = wdentities
         self.wdclasses = wdclasses
         self.wdprops = wdprops
         self.wd_num_prop_stats = wd_num_prop_stats
@@ -348,15 +348,15 @@ class RelFeatures:
                 ci = v.column
 
             for ri in range(n_rows):
-                if len(self.dg.get_cell_node(f"{ri}-{ci}").qnode_ids) == 0:
+                if len(self.dg.get_cell_node(f"{ri}-{ci}").entity_ids) == 0:
                     n_null_entities += 1
         else:
             uci = u.column
             vci = v.column
 
             for ri in range(n_rows):
-                ucell_unk = len(self.dg.get_cell_node(f"{ri}-{uci}").qnode_ids) == 0
-                vcell_unk = len(self.dg.get_cell_node(f"{ri}-{vci}").qnode_ids) == 0
+                ucell_unk = len(self.dg.get_cell_node(f"{ri}-{uci}").entity_ids) == 0
+                vcell_unk = len(self.dg.get_cell_node(f"{ri}-{vci}").entity_ids) == 0
 
                 if is_data_predicate:
                     if ucell_unk:
@@ -372,7 +372,7 @@ class RelFeatures:
     ):
         """Get number of discovered links that don't match due to value differences. This function do not count if:
         * the link between two DG nodes is impossible
-        * the property/qualifier do not exist in the QNode
+        * the property/qualifier do not exist in the WDEntity
         """
         u = self.cg.get_node(inedge.source)
         v = self.cg.get_node(outedge.target)
@@ -395,7 +395,7 @@ class RelFeatures:
             if isinstance(dgu, CellNode):
                 # the source is cell node
                 # property doesn't exist in any qnode
-                dgu_qnodes = [self.qnodes[qnode_id] for qnode_id in dgu.qnode_ids]
+                dgu_qnodes = [self.wdentities[qnode_id] for qnode_id in dgu.entity_ids]
                 if all(inedge.predicate not in qnode.props for qnode in dgu_qnodes):
                     continue
 
@@ -418,7 +418,7 @@ class RelFeatures:
             else:
                 # the source is entity
                 assert isinstance(dgu, EntityValueNode)
-                dgu_qnode = self.qnodes[dgu.qnode_id]
+                dgu_qnode = self.wdentities[dgu.qnode_id]
                 if inedge.predicate not in dgu_qnode.props:
                     continue
                 if is_outpred_qualifier:
@@ -517,14 +517,14 @@ class RelFeatures:
             # both are cells
             if is_data_predicate:
                 # data predicate: source cell must link to some entities to have possible links
-                return len(dgu.qnode_ids) > 0
+                return len(dgu.entity_ids) > 0
             else:
                 # object predicate: source cell and target cell must link to some entities to have possible links
-                return len(dgu.qnode_ids) > 0 and len(dgv.qnode_ids) > 0
+                return len(dgu.entity_ids) > 0 and len(dgv.entity_ids) > 0
         elif isinstance(dgu, CellNode):
             # the source is cell, the target will be literal/entity value
             # we have link when source cell link to some entities, doesn't depend on type of predicate
-            return len(dgu.qnode_ids) > 0
+            return len(dgu.entity_ids) > 0
         elif isinstance(dgv, CellNode):
             # the target is cell, the source will be literal/entity value
             if is_data_predicate:
@@ -532,7 +532,7 @@ class RelFeatures:
                 return True
             else:
                 # object predicate: have link when the target cell link to some entities
-                return len(dgv.qnode_ids) > 0
+                return len(dgv.entity_ids) > 0
         else:
             # all cells are values, always have link due to how the link is generated in the first place
             return True

@@ -20,20 +20,20 @@ from grams.algorithm.data_graph.dg_graph import (
     StatementNode,
 )
 from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import QNode, WDClass, WDProperty
+from kgdata.wikidata.models import WDEntity, WDClass, WDProperty
 from sm.prelude import M
 
 
 class CGFactory:
     def __init__(
         self,
-        qnodes: Mapping[str, QNode],
-        qnode_labels: Mapping[str, str],
+        wdentities: Mapping[str, WDEntity],
+        wdentity_labels: Mapping[str, str],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
     ):
-        self.qnodes = qnodes
-        self.qnode_labels = qnode_labels
+        self.wdentities = wdentities
+        self.wdentity_labels = wdentity_labels
         self.wdclasses = wdclasses
         self.wdprops = wdprops
 
@@ -181,7 +181,7 @@ class CGFactory:
         if isinstance(u, CellNode):
             return table.table.columns[u.column].name or ""
         if isinstance(u, EntityValueNode):
-            qnode_label = self.qnode_labels.get(u.qnode_id, u.qnode_id)
+            qnode_label = self.wdentity_labels.get(u.qnode_id, u.qnode_id)
             return f"{qnode_label} ({u.qnode_id})"
         if isinstance(u, LiteralValueNode):
             return u.value.to_string_repr()
@@ -197,8 +197,8 @@ class CGFactory:
         if porq.startswith("Q"):
             if porq in self.wdclasses:
                 item = self.wdclasses[porq]
-            elif porq in self.qnodes:
-                item = self.qnodes[porq]
+            elif porq in self.wdentities:
+                item = self.wdentities[porq]
             else:
                 assert False
         else:

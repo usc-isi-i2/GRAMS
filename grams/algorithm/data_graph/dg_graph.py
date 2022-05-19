@@ -18,7 +18,7 @@ import networkx as nx
 import sm.misc as M
 from grams.algorithm.kg_index import KGObjectIndex
 from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import DataValue, QNode, WDClass, WDProperty
+from kgdata.wikidata.models import WDValue, WDEntity, WDClass, WDProperty
 from loguru import logger
 from sm.misc.graph import viz_graph
 from tqdm import tqdm
@@ -41,8 +41,8 @@ class CellNode(BaseNode[str]):
     value: str
     column: int
     row: int
-    qnode_ids: List[str]
-    qnodes_span: Dict[str, List[Span]]
+    entity_ids: List[str]
+    entity_spans: Dict[str, List[Span]]
 
 
 @dataclass
@@ -58,7 +58,7 @@ class ContextSpan:
 @dataclass
 class LiteralValueNode(BaseNode[str]):
     id: str
-    value: DataValue
+    value: WDValue
     # not none if it is appear in the context
     context_span: Optional[ContextSpan]
 
@@ -301,7 +301,7 @@ class DGPathNodeStatement:
 
 
 @dataclass
-class DGPathNodeQNode:
+class DGPathNodeEntity:
     qnode_id: str
 
     def get_id(self):
@@ -310,7 +310,7 @@ class DGPathNodeQNode:
 
 @dataclass
 class DGPathNodeLiteralValue:
-    value: DataValue
+    value: WDValue
 
     def get_id(self):
         return f"val:{self.value.to_string_repr()}"
@@ -325,7 +325,7 @@ class DGPathExistingNode:
 
 
 DGPathNode = Union[
-    DGPathNodeStatement, DGPathNodeQNode, DGPathNodeLiteralValue, DGPathExistingNode
+    DGPathNodeStatement, DGPathNodeEntity, DGPathNodeLiteralValue, DGPathExistingNode
 ]
 
 

@@ -2,7 +2,7 @@ import warnings
 from enum import IntEnum
 from typing import Dict, Mapping
 
-from kgdata.wikidata.models import QNode, WDClass, WDProperty
+from kgdata.wikidata.models import WDEntity, WDClass, WDProperty
 from sm.misc import identity_func
 
 warnings.warn(
@@ -21,7 +21,7 @@ class WDOnt:
 
     def __init__(
         self,
-        qnodes: Mapping[str, QNode],
+        qnodes: Mapping[str, WDEntity],
         qnode_labels: Mapping[str, str],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],

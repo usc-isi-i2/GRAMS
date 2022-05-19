@@ -2,7 +2,7 @@ from typing import List, Mapping, Tuple, Callable, Dict, Union
 from grams.algorithm.literal_matchers.text_parser import (
     ParsedTextRepr,
 )
-from kgdata.wikidata.models.qnode import DataValue, DataValueType, QNode
+from kgdata.wikidata.models import WDValue, WDValueType, WDEntity
 from grams.algorithm.literal_matchers.string_match import (
     string_exact_test,
     monolingual_exact_test,
@@ -15,7 +15,7 @@ from grams.algorithm.literal_matchers.types import LiteralMatchKit
 from sm.misc.funcs import import_func
 
 
-MatchFunc = Callable[[DataValue, ParsedTextRepr, LiteralMatchKit], Tuple[bool, float]]
+MatchFunc = Callable[[WDValue, ParsedTextRepr, LiteralMatchKit], Tuple[bool, float]]
 
 
 class LiteralMatch:
@@ -26,11 +26,11 @@ class LiteralMatch:
     MONOLINGUAL_TEXT = ".monolingual_exact_test"
     ENTITY = ""
 
-    def __init__(self, qnodes: Mapping[str, QNode]):
-        self.match_kit = LiteralMatchKit(qnodes)
+    def __init__(self, wdentities: Mapping[str, WDEntity]):
+        self.match_kit = LiteralMatchKit(wdentities)
 
         self.type2func: Dict[
-            DataValueType,
+            WDValueType,
             List[MatchFunc],
         ] = {}
 
@@ -44,7 +44,7 @@ class LiteralMatch:
         self.type2func["wikibase-entityid"] = self.cfg2funcs(LiteralMatch.ENTITY)
 
     def match(
-        self, pval: DataValue, val: ParsedTextRepr, skip_unmatch: bool = True
+        self, pval: WDValue, val: ParsedTextRepr, skip_unmatch: bool = True
     ) -> List[Tuple[MatchFunc, Tuple[bool, float]]]:
         if skip_unmatch:
             return [

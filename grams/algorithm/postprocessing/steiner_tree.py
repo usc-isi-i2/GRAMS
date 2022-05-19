@@ -19,7 +19,6 @@ from grams.algorithm.postprocessing.common import (
 )
 from grams.algorithm.postprocessing.config import PostprocessingConfig
 from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
-from grams.algorithm.psl_solver import PSLConfigs
 from grams.inputs.linked_table import LinkedTable
 from operator import itemgetter
 from graph.interface import EdgeTriple

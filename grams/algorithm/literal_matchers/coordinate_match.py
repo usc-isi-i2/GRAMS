@@ -1,11 +1,11 @@
 from typing import Tuple
 from grams.algorithm.literal_matchers.text_parser import ParsedTextRepr
-from kgdata.wikidata.models.qnode import DataValue
+from kgdata.wikidata.models import WDValue
 from grams.algorithm.literal_matchers.types import LiteralMatchKit
 
 
 def globecoordinate_test(
-    kgvalue: DataValue, value: ParsedTextRepr, kit: LiteralMatchKit
+    kgvalue: WDValue, value: ParsedTextRepr, kit: LiteralMatchKit
 ) -> Tuple[bool, float]:
     """Compare if the value in KG matches with value in the cell
 

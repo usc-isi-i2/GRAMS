@@ -1,17 +1,13 @@
 from __future__ import annotations
 import re
 from numparser.fsm.parser import DEFAULT_NOT_UNITS
-import rltk
 from dataclasses import dataclass
 from datetime import datetime, MINYEAR
-from enum import Enum
-from typing import Tuple, Optional, Union
+from typing import Optional
 
-import fastnumbers
 import ftfy
 from dateutil.parser import parse as dt_parse, ParserError
 from numparser import ParsedNumber, FSMParser
-from kgdata.wikidata.models import DataValue, QNode
 
 
 class TextParserConfigs:
@@ -79,7 +75,7 @@ class TextParser:
         else:
             raise NotImplementedError()
 
-        self.number_chars = re.compile("[^0-9\.+-]")
+        self.number_chars = re.compile(r"[^0-9\.+-]")
 
     def parse(self, text: str) -> ParsedTextRepr:
         if text not in self.cache:

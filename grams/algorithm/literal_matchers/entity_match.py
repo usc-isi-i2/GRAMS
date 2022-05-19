@@ -1,14 +1,12 @@
 from typing import Tuple
 from grams.algorithm.literal_matchers.string_match import string_match_similarity
 from grams.algorithm.literal_matchers.text_parser import ParsedTextRepr
-from kgdata.wikidata.models.qnode import DataValue, DataValueWikibaseEntityId
-
-from kgdata.wikidata.models.qnode import QNode
+from kgdata.wikidata.models import WDValue
 from grams.algorithm.literal_matchers.types import LiteralMatchKit
 
 
 def entity_similarity_test(
-    kgval: DataValue, val: ParsedTextRepr, kit: LiteralMatchKit
+    kgval: WDValue, val: ParsedTextRepr, kit: LiteralMatchKit
 ) -> Tuple[bool, float]:
     """Compare if the value in KG matches with value in the cell
 
@@ -20,11 +18,11 @@ def entity_similarity_test(
         a tuple of (whether it's matched, confidence)
     """
 
-    if not kgval.is_qnode():
+    if not kgval.is_qnode(kgval):
         # not handle lexical or property yet
         return False, 0.0
 
-    qnode = kit.qnodes[kgval.as_entity_id()]
+    qnode = kit.wdentities[kgval.as_entity_id()]
     lst = [x.strip() for x in val.normed_string.split(",")]
     for label in [str(qnode.label)] + [str(x) for x in qnode.aliases]:
         for item in lst:

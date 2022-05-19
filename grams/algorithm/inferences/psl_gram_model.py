@@ -8,15 +8,18 @@ from grams.algorithm.candidate_graph.cg_graph import (
 )
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.psl_lib import IDMap, PSLModel, RuleContainer
-from grams.algorithm.link_feature import LinkFeatureExtraction
 from grams.algorithm.inferences.features.rel_feature import RelFeatures
 from grams.algorithm.inferences.features.type_feature import (
     TypeFeatures,
 )
 from grams.inputs.linked_table import Link, LinkedTable
-from kgdata.wikidata.models.qnode import QNode, QNodeLabel
-from kgdata.wikidata.models.wdclass import WDClass
-from kgdata.wikidata.models.wdproperty import WDProperty, WDQuantityPropertyStats
+from kgdata.wikidata.models import (
+    WDEntity,
+    WDEntityLabel,
+    WDClass,
+    WDProperty,
+    WDQuantityPropertyStats,
+)
 from pslpython.predicate import Predicate
 from pslpython.model import Model
 from dataclasses import dataclass
@@ -68,16 +71,16 @@ class P:
 class PSLGramModel:
     def __init__(
         self,
-        qnodes: Mapping[str, QNode],
-        qnode_labels: Mapping[str, QNodeLabel],
+        wdentities: Mapping[str, WDEntity],
+        wdentity_labels: Mapping[str, WDEntityLabel],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
         wd_numprop_stats: Mapping[str, WDQuantityPropertyStats],
         sim_fn: Optional[Callable[[str, str], float]] = None,
         disable_rules: Optional[Iterable[str]] = None,
     ):
-        self.qnodes = qnodes
-        self.qnode_labels = qnode_labels
+        self.wdentities = wdentities
+        self.wdentity_labels = wdentity_labels
         self.wdclasses = wdclasses
         self.wdprops = wdprops
         self.wd_numprop_stats = wd_numprop_stats
@@ -298,8 +301,8 @@ class PSLGramModel:
             table,
             cg,
             dg,
-            self.qnodes,
-            self.qnode_labels,
+            self.wdentities,
+            self.wdentity_labels,
             self.wdclasses,
             self.wdprops,
             self.wd_numprop_stats,
@@ -319,7 +322,7 @@ class PSLGramModel:
             table,
             cg,
             dg,
-            self.qnodes,
+            self.wdentities,
             self.wdclasses,
             self.wdprops,
             self.wd_numprop_stats,
@@ -357,7 +360,7 @@ class PSLGramModel:
             (idmap.m(p), idmap.m(pp))
             for p in props
             for pp in props
-            if p != pp and pp in self.wdprops[p].parents_closure
+            if p != pp and pp in self.wdprops[p].ancestors
         ]
 
         class_ids = {idmap.im(x[1]) for x in observations[P.Type.name()]}
@@ -365,7 +368,7 @@ class PSLGramModel:
             (idmap.m(class_id), idmap.m(parent_class_id))
             for class_id in class_ids
             for parent_class_id in class_ids
-            if parent_class_id in self.wdclasses[class_id].parents_closure
+            if parent_class_id in self.wdclasses[class_id].ancestors
         ]
         observations[P.RelHeaderSimilarity.name()] = []
         observations[P.TypeHeaderSimilarity.name()] = []

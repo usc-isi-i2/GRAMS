@@ -232,9 +232,9 @@ class HTMLTable:
 
     def as_relational_linked_table(
         self,
-        table_id: str = None,
-        get_entity_from_url: Callable[[str], Optional[str]] = None,
-        get_entity_from_title: Callable[[str], Optional[str]] = None,
+        table_id: Optional[str] = None,
+        get_entity_from_url: Optional[Callable[[str], Optional[str]]] = None,
+        get_entity_from_title: Optional[Callable[[str], Optional[str]]] = None,
     ):
         assert len(self.rows) > 0
         header = [c.value for c in self.rows[0].cells]

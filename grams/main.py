@@ -1,9 +1,8 @@
-from gc import disable
 import os
 from dataclasses import dataclass
 from operator import itemgetter
 from pathlib import Path
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Set, Tuple, Union
+from typing import Dict, MutableMapping, Set, Tuple, Union
 from grams.algorithm.candidate_graph.cg_factory import CGFactory
 from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.data_graph.dg_graph import DGGraph
@@ -17,30 +16,29 @@ from grams.algorithm.postprocessing import (
     SteinerTree,
 )
 from hugedict.parallel.parallel import Parallel
-from kgdata.wikidata.models.qnode import QNodeLabel
+from kgdata.wikidata.models import WDEntityLabel
 from loguru import logger
-import rltk
 from tqdm import tqdm
-import networkx as nx
 import sm.misc as M
 import sm.outputs as O
 from kgdata.wikidata.db import (
     WDProxyDB,
-    get_qnode_db,
-    get_qnode_label_db,
+    get_entity_db,
+    get_entity_label_db,
     get_wdclass_db,
     get_wdprop_db,
     query_wikidata_entities,
 )
-from kgdata.wikidata.models import QNode, WDClass, WDProperty, WDQuantityPropertyStats
-from rdflib import RDFS
+from kgdata.wikidata.models import (
+    WDEntity,
+    WDClass,
+    WDQuantityPropertyStats,
+)
 
 import grams.inputs as I
 from grams.algorithm.data_graph import DGConfigs, DGFactory
 from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
-from grams.algorithm.psl_solver import PSLInference
 
-# from grams.algorithm.semantic_graph import SemanticGraphConstructor
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 from grams.config import DEFAULT_CONFIG
 
@@ -76,19 +74,19 @@ class GRAMS:
 
         with self.timer.watch("init grams db"):
             read_only = not proxy
-            self.qnodes = get_qnode_db(
-                os.path.join(data_dir, "qnodes.db"),
+            self.wdentities = get_entity_db(
+                os.path.join(data_dir, "wdentities.db"),
                 read_only=read_only,
                 proxy=proxy,
             )
             if proxy:
-                assert isinstance(self.qnodes, WDProxyDB)
-            if os.path.exists(os.path.join(data_dir, "qnode_labels.db")):
-                self.qnode_labels = get_qnode_label_db(
-                    os.path.join(data_dir, "qnode_labels.db"),
+                assert isinstance(self.wdentities, WDProxyDB)
+            if os.path.exists(os.path.join(data_dir, "wdentity_labels.db")):
+                self.wdentity_labels = get_entity_label_db(
+                    os.path.join(data_dir, "wdentity_labels.db"),
                 )
             else:
-                self.qnode_labels: MutableMapping[str, QNodeLabel] = {}
+                self.wdentity_labels: MutableMapping[str, WDEntityLabel] = {}
             self.wdclasses = get_wdclass_db(
                 os.path.join(data_dir, "wdclasses.db"),
                 read_only=read_only,
@@ -135,14 +133,14 @@ class GRAMS:
 
     def annotate(self, table: I.LinkedTable, verbose: bool = False) -> Annotation:
         """Annotate a linked table"""
-        qnode_ids = {
+        wdentity_ids = {
             link.entity_id
             for rlinks in table.links
             for links in rlinks
             for link in links
             if link.entity_id is not None
         }
-        qnode_ids.update(
+        wdentity_ids.update(
             (
                 candidate.entity_id
                 for rlinks in table.links
@@ -152,44 +150,46 @@ class GRAMS:
             )
         )
         if table.context.page_entity_id is not None:
-            qnode_ids.add(table.context.page_entity_id)
+            wdentity_ids.add(table.context.page_entity_id)
 
-        with self.timer.watch("retrieving qnodes"):
-            qnodes = self.get_entities(
-                qnode_ids, n_hop=self.cfg.data_graph.max_n_hop, verbose=verbose
+        with self.timer.watch("retrieving entities"):
+            wdentities = self.get_entities(
+                wdentity_ids, n_hop=self.cfg.data_graph.max_n_hop, verbose=verbose
             )
         wdclasses = self.wdclasses.cache_dict()
         wdprops = self.wdprops.cache_dict()
 
-        nonexistent_qnode_ids = qnode_ids.difference(qnodes.keys())
-        if len(nonexistent_qnode_ids) > 0:
-            logger.info("Removing non-existent qnodes: {}", list(nonexistent_qnode_ids))
-            table.remove_nonexistent_entities(nonexistent_qnode_ids)
+        nonexistent_wdentity_ids = wdentity_ids.difference(wdentities.keys())
+        if len(nonexistent_wdentity_ids) > 0:
+            logger.info(
+                "Removing non-existent entities: {}", list(nonexistent_wdentity_ids)
+            )
+            table.remove_nonexistent_entities(nonexistent_wdentity_ids)
 
-        with self.timer.watch("retrieving qnodes label"):
-            qnode_labels = self.get_entity_labels(qnodes, verbose=verbose)
+        with self.timer.watch("retrieving entities label"):
+            wdentity_labels = self.get_entity_labels(wdentities, verbose=verbose)
 
         with self.timer.watch("build kg object index"):
-            kg_object_index = KGObjectIndex.from_qnodes(
-                list(qnode_ids.intersection(qnodes.keys())),
-                qnodes,
+            kg_object_index = KGObjectIndex.from_entities(
+                list(wdentity_ids.intersection(wdentities.keys())),
+                wdentities,
                 wdprops,
                 n_hop=self.cfg.data_graph.max_n_hop,
                 traversal_option=TraversalOption.TransitiveOnly,
             )
 
         with self.timer.watch("build dg & sg"):
-            dg_factory = DGFactory(qnodes, wdprops)
+            dg_factory = DGFactory(wdentities, wdprops)
             dg = dg_factory.create_dg(
                 table, kg_object_index, max_n_hop=self.cfg.data_graph.max_n_hop
             )
-            cg_factory = CGFactory(qnodes, qnode_labels, wdclasses, wdprops)
+            cg_factory = CGFactory(wdentities, wdentity_labels, wdclasses, wdprops)
             cg = cg_factory.create_cg(table, dg)
 
         with self.timer.watch("run inference"):
             edge_probs, cta_probs = PSLGramModel(
-                qnodes=qnodes,
-                qnode_labels=self.qnode_labels,
+                wdentities=wdentities,
+                wdentity_labels=self.wdentity_labels,
                 wdclasses=wdclasses,
                 wdprops=wdprops,
                 wd_numprop_stats=self.wd_numprop_stats,
@@ -222,7 +222,7 @@ class GRAMS:
             }
 
         sm_helper = WikidataSemanticModelHelper(
-            qnodes, qnode_labels, wdclasses, wdprops
+            wdentities, wdentity_labels, wdclasses, wdprops
         )
         sm = sm_helper.create_sm(table, pred_cpa, pred_cta)
         sm = sm_helper.minify_sm(sm)
@@ -237,23 +237,23 @@ class GRAMS:
         )
 
     def get_entities(
-        self, qnode_ids: Set[str], n_hop: int = 1, verbose: bool = False
-    ) -> Dict[str, QNode]:
+        self, wdentity_ids: Set[str], n_hop: int = 1, verbose: bool = False
+    ) -> Dict[str, WDEntity]:
         assert n_hop <= 2
         batch_size = 30
-        qnodes: Dict[str, QNode] = {}
+        wdentities: Dict[str, WDEntity] = {}
         pp = Parallel()
-        for qnode_id in qnode_ids:
-            qnode = self.qnodes.get(qnode_id, None)
-            if qnode is not None:
-                qnodes[qnode_id] = qnode
+        for wdentity_id in wdentity_ids:
+            wdentity = self.wdentities.get(wdentity_id, None)
+            if wdentity is not None:
+                wdentities[wdentity_id] = wdentity
 
-        if isinstance(self.qnodes, WDProxyDB):
+        if isinstance(self.wdentities, WDProxyDB):
             missing_qnode_ids = [
-                qnode_id
-                for qnode_id in qnode_ids
-                if qnode_id not in qnodes
-                and not self.qnodes.does_not_exist_locally(qnode_id)
+                wdentity_id
+                for wdentity_id in wdentity_ids
+                if wdentity_id not in wdentities
+                and not self.wdentities.does_not_exist_locally(wdentity_id)
             ]
             if len(missing_qnode_ids) > 0:
                 resp = pp.map(
@@ -268,46 +268,45 @@ class GRAMS:
                 )
                 for odict in resp:
                     for k, v in odict.items():
-                        qnodes[k] = v
-                        self.qnodes[k] = v
+                        wdentities[k] = v
+                        self.wdentities[k] = v
 
         if n_hop > 1:
-            next_qnode_ids = set()
-            # for qnode in tqdm(
-            #     qnodes.values(), desc="gather entities in 2nd hop", disable=not verbose
-            # ):
-            for qnode in qnodes.values():
-                for p, stmts in qnode.props.items():
+            next_wdentity_ids = set()
+            for wdentity in wdentities.values():
+                for p, stmts in wdentity.props.items():
                     for stmt in stmts:
-                        if stmt.value.is_qnode():
-                            next_qnode_ids.add(stmt.value.as_entity_id())
+                        if stmt.value.is_qnode(stmt.value):
+                            next_wdentity_ids.add(stmt.value.as_entity_id())
                         for qvals in stmt.qualifiers.values():
-                            next_qnode_ids = next_qnode_ids.union(
-                                qval.as_entity_id() for qval in qvals if qval.is_qnode()
+                            next_wdentity_ids = next_wdentity_ids.union(
+                                qval.as_entity_id()
+                                for qval in qvals
+                                if qval.is_qnode(qval)
                             )
-            next_qnode_ids = list(next_qnode_ids.difference(qnodes.keys()))
-            for qnode_id in tqdm(
-                next_qnode_ids,
+            next_wdentity_ids = list(next_wdentity_ids.difference(wdentities.keys()))
+            for wdentity_id in tqdm(
+                next_wdentity_ids,
                 desc="load entities in 2nd hop from db",
                 disable=not verbose,
             ):
-                qnode = self.qnodes.get(qnode_id, None)
-                if qnode is not None:
-                    qnodes[qnode_id] = qnode
+                wdentity = self.wdentities.get(wdentity_id, None)
+                if wdentity is not None:
+                    wdentities[wdentity_id] = wdentity
 
-            if isinstance(self.qnodes, WDProxyDB):
-                next_qnode_ids = [
+            if isinstance(self.wdentities, WDProxyDB):
+                next_wdentity_ids = [
                     qnode_id
-                    for qnode_id in next_qnode_ids
-                    if qnode_id not in qnodes
-                    and not self.qnodes.does_not_exist_locally(qnode_id)
+                    for qnode_id in next_wdentity_ids
+                    if qnode_id not in wdentities
+                    and not self.wdentities.does_not_exist_locally(qnode_id)
                 ]
-                if len(next_qnode_ids) > 0:
+                if len(next_wdentity_ids) > 0:
                     resp = pp.map(
                         query_wikidata_entities,
                         [
-                            next_qnode_ids[i : i + batch_size]
-                            for i in range(0, len(next_qnode_ids), batch_size)
+                            next_wdentity_ids[i : i + batch_size]
+                            for i in range(0, len(next_wdentity_ids), batch_size)
                         ],
                         show_progress=verbose,
                         progress_desc=f"query wikidata for get missing entities in hop {n_hop}",
@@ -315,32 +314,32 @@ class GRAMS:
                     )
                     for odict in resp:
                         for k, v in odict.items():
-                            qnodes[k] = v
-                            self.qnodes[k] = v
-        return qnodes
+                            wdentities[k] = v
+                            self.wdentities[k] = v
+        return wdentities
 
     def get_entity_labels(
-        self, qnodes: Dict[str, QNode], verbose: bool = False
+        self, wdentities: Dict[str, WDEntity], verbose: bool = False
     ) -> Dict[str, str]:
         id2label: Dict[str, str] = {}
-        for qnode in tqdm(qnodes.values(), disable=not verbose, desc=""):
-            qnode: QNode
+        for qnode in tqdm(wdentities.values(), disable=not verbose, desc=""):
+            qnode: WDEntity
             id2label[qnode.id] = str(qnode.label)
             for stmts in qnode.props.values():
                 for stmt in stmts:
-                    if stmt.value.is_qnode():
+                    if stmt.value.is_qnode(stmt.value):
                         qnode_id = stmt.value.as_entity_id()
-                        if qnode_id in self.qnode_labels:
-                            label = self.qnode_labels[qnode_id].label
+                        if qnode_id in self.wdentity_labels:
+                            label = self.wdentity_labels[qnode_id].label
                         else:
                             label = qnode_id
                         id2label[qnode_id] = label
                     for qvals in stmt.qualifiers.values():
                         for qval in qvals:
-                            if qval.is_qnode():
+                            if qval.is_qnode(qval):
                                 qnode_id = qval.as_entity_id()
-                                if qnode_id in self.qnode_labels:
-                                    label = self.qnode_labels[qnode_id].label
+                                if qnode_id in self.wdentity_labels:
+                                    label = self.wdentity_labels[qnode_id].label
                                 else:
                                     label = qnode_id
                                 id2label[qnode_id] = label

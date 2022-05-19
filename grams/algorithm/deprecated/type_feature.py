@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Callable, Dict, List, Mapping, Optional, Tuple
 from grams.algorithm.data_graph.dg_graph import DGGraph
-from kgdata.wikidata.models.wdclass import WDClass
+from kgdata.wikidata.deprecated.wdclass import WDClass
 
 import networkx as nx
 import numpy as np
@@ -10,7 +10,7 @@ from grams.algorithm.data_graph import CellNode
 from grams.algorithm.literal_matchers import TextParser
 from grams.algorithm.candidate_graph.cg_graph import CGColumnNode, CGGraph
 from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
+from kgdata.wikidata.models import WDEntity, WDProperty, WDQuantityPropertyStats
 
 
 class TypeFeatureExtraction:
@@ -24,7 +24,7 @@ class TypeFeatureExtraction:
         table: LinkedTable,
         cg: CGGraph,
         dg: DGGraph,
-        qnodes: Mapping[str, QNode],
+        qnodes: Mapping[str, WDEntity],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
         wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
@@ -47,7 +47,7 @@ class TypeFeatureExtraction:
         freq_type = {}
         freq_over_row = {}
         freq_inherit_over_row = {}
-        cell2qnodes: Dict[str, List[Tuple[QNode, float]]] = {}
+        cell2qnodes: Dict[str, List[Tuple[WDEntity, float]]] = {}
         column2types = {}
         header_sim_types = {}
 
@@ -61,11 +61,13 @@ class TypeFeatureExtraction:
             cells: List[CellNode] = [self.dg.get_cell_node(cid) for cid in u.nodes]
             covered_fractions = [
                 sum(
-                    span.length for spans in cell.qnodes_span.values() for span in spans
+                    span.length
+                    for spans in cell.entity_spans.values()
+                    for span in spans
                 )
                 / max(len(cell.value), 1)
                 for cell in cells
-                if len(cell.qnode_ids) > 0
+                if len(cell.entity_ids) > 0
             ]
             if len(covered_fractions) == 0:
                 continue
@@ -128,25 +130,25 @@ class TypeFeatureExtraction:
         return output
 
     def add_merge_qnodes(
-        self, cell: CellNode, cell2qnodes: Dict[str, List[Tuple[QNode, float]]]
+        self, cell: CellNode, cell2qnodes: Dict[str, List[Tuple[WDEntity, float]]]
     ):
         # merge qnodes that are sub of each other
         # attempt to merge qnodes (spatial) if they are contained in each other
         # we should go even higher order
         assert cell.id not in cell2qnodes
 
-        if len(cell.qnode_ids) > 1:
+        if len(cell.entity_ids) > 1:
             # attempt to merge qnodes (spatial) if they are contained in each other
             # we should go even higher order
             ignore_qnodes = set()
-            for q0_id in cell.qnode_ids:
+            for q0_id in cell.entity_ids:
                 q0 = self.qnodes[q0_id]
                 vals = {
                     stmt.value.as_entity_id()
                     for p in self.hierarchy_props
                     for stmt in q0.props.get(p, [])
                 }
-                for q1_id in cell.qnode_ids:
+                for q1_id in cell.entity_ids:
                     if q0_id == q1_id:
                         continue
                     if q1_id in vals:
@@ -154,11 +156,11 @@ class TypeFeatureExtraction:
                         ignore_qnodes.add(q1_id)
             qnode_lst = [
                 self.qnodes[q_id]
-                for q_id in cell.qnode_ids
+                for q_id in cell.entity_ids
                 if q_id not in ignore_qnodes
             ]
-        elif len(cell.qnode_ids) > 0:
-            qnode_lst = [self.qnodes[cell.qnode_ids[0]]]
+        elif len(cell.entity_ids) > 0:
+            qnode_lst = [self.qnodes[cell.entity_ids[0]]]
         else:
             qnode_lst = []
 

@@ -7,7 +7,7 @@ from typing import Dict, Iterable, Mapping, Set, Union, List, NamedTuple, Option
 import sm.misc as M
 from loguru import logger
 from tqdm.auto import tqdm
-from kgdata.wikidata.models import QNode, WDProperty
+from kgdata.wikidata.models import WDEntity, WDProperty
 
 Relationship = NamedTuple(
     "Relationship", [("prop", str), ("quals", List[str]), ("both", bool)]
@@ -47,9 +47,9 @@ class KGObjectIndex:
         self.traversal_option = traversal_option
 
     @staticmethod
-    def from_qnodes(
+    def from_entities(
         index_qnode_ids: List[str],
-        qnodes: Mapping[str, QNode],
+        entities: Mapping[str, WDEntity],
         wdprops: Mapping[str, WDProperty],
         n_hop: int = 1,
         traversal_option: TraversalOption = TraversalOption.TransitiveOnly,
@@ -72,7 +72,7 @@ class KGObjectIndex:
         )
 
         for index_qnode_id in index_qnode_ids:
-            qnode = qnodes[index_qnode_id]
+            qnode = entities[index_qnode_id]
             hop1_index[qnode.id] = dict(build_one_hop_index(qnode))
             pbar.update(1)
 
@@ -96,24 +96,24 @@ class KGObjectIndex:
                     if transitive_props is not None:
                         hop1_props = {path.relationship.prop for path in hop1_paths}
 
-                    if uid not in qnodes:
+                    if uid not in entities:
                         # this can happen due to some of the qnodes is in the link, but is missing in the KG
                         # this is very rare so we can employ some check to make sure this is not due to
                         # our wikidata subset
                         is_error_in_kg = any(
                             any(
-                                _s.value.is_qnode()
-                                and _s.value.as_entity_id() in qnodes
+                                _s.value.is_entity_id(_s.value)
+                                and _s.value.as_entity_id() in entities
                                 for _s in _stmts
                             )
-                            for _p, _stmts in qnodes[index_qnode_id].props.items()
+                            for _p, _stmts in entities[index_qnode_id].props.items()
                         )
                         if not is_error_in_kg:
                             raise Exception(f"Missing qnodes in your KG subset: {uid}")
                         continue
 
                     for vid, hop2_paths in build_one_hop_index(
-                        qnodes[uid], transitive_props
+                        entities[uid], transitive_props
                     ).items():
                         hop2_paths = [
                             hop2_path
@@ -156,7 +156,7 @@ class KGObjectIndex:
         return self.two_hop_index[source_qnode_id].get(target_qnode_id, [])
 
 
-def build_one_hop_index(qnode: QNode, filter_props: Set[str] = None):
+def build_one_hop_index(qnode: WDEntity, filter_props: Optional[Set[str]] = None):
     hop1_index = defaultdict(list)
     if filter_props is None:
         iter = qnode.props.items()
@@ -166,13 +166,13 @@ def build_one_hop_index(qnode: QNode, filter_props: Set[str] = None):
     for p, stmts in iter:
         for stmt_i, stmt in enumerate(stmts):
             lst = defaultdict(list)
-            if stmt.value.is_qnode():
+            if stmt.value.is_entity_id(stmt.value):
                 target_qnode_id = stmt.value.as_entity_id()
                 lst[target_qnode_id].append(None)
 
             for q, qvals in stmt.qualifiers.items():
                 for target_qnode_id in {
-                    qval.as_entity_id() for qval in qvals if qval.is_qnode()
+                    qval.as_entity_id() for qval in qvals if qval.is_entity_id(qval)
                 }:
                     lst[target_qnode_id].append(q)
 

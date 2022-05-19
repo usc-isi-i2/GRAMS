@@ -1,4 +1,10 @@
 import copy
+from grams.algorithm.data_graph.dg_graph import (
+    DGGraph,
+    CellNode,
+    EntityValueNode,
+    LiteralValueNode,
+)
 from graph.retworkx import BaseNode, BaseEdge, RetworkXStrDiGraph
 import numpy as np
 from dataclasses import dataclass
@@ -15,12 +21,12 @@ from typing import (
 from uuid import uuid4
 
 import networkx as nx
-from rdflib import RDFS
-from kgdata.wikidata.models import DataValue
+from kgdata.wikidata.models import WDValue
 from grams.algorithm.data_graph import (
     ContextSpan,
     FlowProvenance,
 )
+from sand.models.entity import Entity
 import sm.outputs as O
 import sm.misc as M
 
@@ -62,7 +68,7 @@ class CGEntityValueNode(BaseNode[str]):
 class CGLiteralValueNode(BaseNode[str]):
     id: str
     label: str
-    value: DataValue
+    value: WDValue
     context_span: Optional[ContextSpan]
 
     @property
@@ -133,8 +139,8 @@ class CGStatementNode(BaseNode[str]):
 
     def compute_freq(
         self,
-        _sg: nx.MultiDiGraph,
-        dg: nx.MultiDiGraph,
+        _cg: "CGGraph",
+        dg: DGGraph,
         edge: "CGEdge",
         is_unique_freq: bool,
     ):
@@ -176,43 +182,43 @@ class CGStatementNode(BaseNode[str]):
                 if target_flow.edge_id != edge.predicate:
                     continue
 
-                dg_source = dg.nodes[source_flow.dg_source_id]["data"]
-                if dg_source.is_cell:
+                dg_source = dg.get_node(source_flow.dg_source_id)
+                if isinstance(dg_source, CellNode):
                     source_val = dg_source.value
                 else:
-                    assert dg_source.is_entity_value
+                    assert isinstance(dg_source, EntityValueNode)
                     source_val = dg_source.qnode_id
 
-                dg_target = dg.nodes[target_flow.dg_target_id]["data"]
-                if dg_target.is_cell:
+                dg_target = dg.get_node(target_flow.dg_target_id)
+                if isinstance(dg_target, CellNode):
                     target_val = dg_target.value
-                elif dg_target.is_literal_value:
+                elif isinstance(dg_target, LiteralValueNode):
                     target_val = dg_target.value.to_string_repr()
                 else:
-                    assert dg_target.is_entity_value
+                    assert isinstance(dg_target, EntityValueNode)
                     target_val = dg_target.qnode_id
 
                 unique_pairs.add((source_val, target_val))
         else:
             for source_flow, target_flows in self.forward_flow.items():
-                dg_source = dg.nodes[source_flow.dg_source_id]["data"]
-                if dg_source.is_cell:
+                dg_source = dg.get_node(source_flow.dg_source_id)
+                if isinstance(dg_source, CellNode):
                     source_val = dg_source.value
                 else:
-                    assert dg_source.is_entity_value
+                    assert isinstance(dg_source, EntityValueNode)
                     source_val = dg_source.qnode_id
                 for target_flow in target_flows.keys():
                     if (
                         target_flow.sg_target_id == edge.target
                         and target_flow.edge_id == edge.predicate
                     ):
-                        dg_target = dg.nodes[target_flow.dg_target_id]["data"]
-                        if dg_target.is_cell:
+                        dg_target = dg.get_node(target_flow.dg_target_id)
+                        if isinstance(dg_target, CellNode):
                             target_val = dg_target.value
-                        elif dg_target.is_literal_value:
+                        elif isinstance(dg_target, LiteralValueNode):
                             target_val = dg_target.value.to_string_repr()
                         else:
-                            assert dg_target.is_entity_value
+                            assert isinstance(dg_target, EntityValueNode)
                             target_val = dg_target.qnode_id
                         unique_pairs.add((source_val, target_val))
 

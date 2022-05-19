@@ -52,7 +52,9 @@ class Tree:
         return self
 
     def preorder(
-        self, fn: Callable[["Tree", List["Tree"]], None], path: List["Tree"] = None
+        self,
+        fn: Callable[["Tree", List["Tree"]], None],
+        path: Optional[List["Tree"]] = None,
     ):
         if path is None:
             path = []

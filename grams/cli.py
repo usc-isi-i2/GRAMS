@@ -120,6 +120,7 @@ def io_parser(infiles: str, outfiles: str) -> List[IOFile]:
     outputs = []
     for infile in sorted(glob.glob(infile_glob_ptn)):
         m = re.match(infile_re_ptn, infile)
+        assert m is not None
         outfile = outfiles.format(**m.groupdict())
         outputs.append(IOFile(infile=Path(infile), outfile=Path(outfile)))
     return outputs

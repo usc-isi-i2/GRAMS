@@ -1,8 +1,8 @@
 from grams.algorithm.literal_matchers import TextParser, LiteralMatch
-from grams.inputs import LinkedTable
+from grams.inputs.linked_table import LinkedTable
 import networkx as nx
-from typing import Dict, Mapping, Set, Union, cast
-from kgdata.wikidata.models import QNode, DataValue, WDProperty, WDClass
+from typing import Dict, Mapping, Optional, Set, Union, cast
+from kgdata.wikidata.models import WDEntity, WDProperty, WDClass
 from grams.algorithm.data_graph.dg_graph import (
     DGGraph,
     CellNode,
@@ -16,7 +16,7 @@ from grams.algorithm.data_graph.dg_graph import (
     EdgeFlowTarget,
     EntityValueNode,
     DGPathNodeStatement,
-    DGPathNodeQNode,
+    DGPathNodeEntity,
     DGPathNodeLiteralValue,
     DGPathExistingNode,
     LiteralValueNode,
@@ -32,11 +32,13 @@ import sm.misc as M
 
 
 class DGFactory:
-    def __init__(self, qnodes: Mapping[str, QNode], wdprops: Mapping[str, WDProperty]):
-        self.qnodes = qnodes
+    def __init__(
+        self, wdentities: Mapping[str, WDEntity], wdprops: Mapping[str, WDProperty]
+    ):
+        self.wdentities = wdentities
         self.wdprops = wdprops
         self.textparser = TextParser()
-        self.literal_match = LiteralMatch(qnodes)
+        self.literal_match = LiteralMatch(wdentities)
 
         if DGConfigs.USE_KG_INDEX:
             self._path_object_search = self._path_object_search_v2
@@ -47,7 +49,7 @@ class DGFactory:
         self,
         table: LinkedTable,
         kg_object_index: KGObjectIndex,
-        ignore_columns: Set[int] = None,
+        ignore_columns: Optional[Set[int]] = None,
         max_n_hop: int = 2,
         verbose: bool = False,
     ):
@@ -100,14 +102,14 @@ class DGFactory:
                     value=val,
                     column=ci,
                     row=ri,
-                    qnode_ids=list(cell_qnodes),
-                    qnodes_span=cell_qnode_spans,
+                    entity_ids=list(cell_qnodes),
+                    entity_spans=cell_qnode_spans,
                 )
                 dg.add_node(node)
 
         if DGConfigs.USE_CONTEXT and table.context.page_entity_id is not None:
             assert table.context.page_title is not None
-            context_node_id = DGPathNodeQNode(table.context.page_entity_id).get_id()
+            context_node_id = DGPathNodeEntity(table.context.page_entity_id).get_id()
             node = EntityValueNode(
                 id=context_node_id,
                 qnode_id=table.context.page_entity_id,
@@ -168,7 +170,7 @@ class DGFactory:
                                     is_in_kg=True,
                                 )
                             )
-                        elif isinstance(value, DGPathNodeQNode):
+                        elif isinstance(value, DGPathNodeEntity):
                             dg.add_node(
                                 EntityValueNode(
                                     id=nodeid,
@@ -226,7 +228,7 @@ class DGFactory:
         #                     print(uid, sid, vid, eid, e2)
 
         KGInference(
-            dg, self.qnodes, self.wdprops
+            dg, self.wdentities, self.wdprops
         ).infer_subproperty().kg_transitive_inference()
 
         # pruning unnecessary paths
@@ -265,9 +267,9 @@ class DGFactory:
 
         # no qnode in the source
         u_qnodes = (
-            [self.qnodes[u.qnode_id]]
+            [self.wdentities[u.qnode_id]]
             if isinstance(u, EntityValueNode)
-            else [self.qnodes[qnode_id] for qnode_id in u.qnode_ids]
+            else [self.wdentities[qnode_id] for qnode_id in u.entity_ids]
         )
         if len(u_qnodes) == 0:
             if bidirection:
@@ -282,9 +284,9 @@ class DGFactory:
             return []
 
         v_qnodes = (
-            [self.qnodes[v.qnode_id]]
+            [self.wdentities[v.qnode_id]]
             if isinstance(v, EntityValueNode)
-            else [self.qnodes[qnode_id] for qnode_id in v.qnode_ids]
+            else [self.wdentities[qnode_id] for qnode_id in v.entity_ids]
         )
         if isinstance(v, EntityValueNode):
             # entity in the context
@@ -325,7 +327,7 @@ class DGFactory:
 
         return paths
 
-    def _path_value_search(self, source: QNode, value):
+    def _path_value_search(self, source: WDEntity, value):
         matches = []
         for p, stmts in source.props.items():
             if p == "P31":
@@ -360,8 +362,8 @@ class DGFactory:
                             qval, value, skip_unmatch=True
                         ):
                             if not has_stmt_value:
-                                if stmt.value.is_qnode():
-                                    pn_stmt_value = DGPathNodeQNode(
+                                if stmt.value.is_qnode(stmt.value):
+                                    pn_stmt_value = DGPathNodeEntity(
                                         stmt.value.as_entity_id()
                                     )
                                 else:
@@ -403,8 +405,8 @@ class DGFactory:
     def _path_object_search_v1(
         self,
         kg_object_index: KGObjectIndex,
-        source: QNode,
-        target: QNode,
+        source: WDEntity,
+        target: WDEntity,
         max_n_hop=2,
     ):
         # max_n_hop = 2 mean we will find a path that go from source to target through an hidden node
@@ -427,15 +429,15 @@ class DGFactory:
 
                 # to simplify the design, we do not consider a statement that its value do not exist in KQ
                 # due to an error on KG
-                if stmt.value.is_qnode():
-                    if stmt.value.as_entity_id() not in self.qnodes:
+                if stmt.value.is_qnode(stmt.value):
+                    if stmt.value.as_entity_id() not in self.wdentities:
                         # this can happen due to some of the qnodes is in the link, but is missing in the KG
                         # this is very rare so we can employ some check to make sure this is not due to
                         # our wikidata subset
                         is_error_in_kg = any(
                             any(
-                                _s.value.is_qnode()
-                                and _s.value.as_entity_id() in self.qnodes
+                                _s.value.is_qnode(_s.value)
+                                and _s.value.as_entity_id() in self.wdentities
                                 for _s in _stmts
                             )
                             for _p, _stmts in source.props.items()
@@ -446,7 +448,7 @@ class DGFactory:
                             )
                         continue
 
-                if stmt.value.is_qnode():
+                if stmt.value.is_qnode(stmt.value):
                     # found by match entity
                     if stmt.value.as_entity_id() == target.id:
                         matches.append(
@@ -465,13 +467,13 @@ class DGFactory:
                         stmt_value_qnode_id = stmt.value.as_entity_id()
                         if stmt_value_qnode_id.startswith("L"):
                             assert (
-                                stmt_value_qnode_id not in self.qnodes
+                                stmt_value_qnode_id not in self.wdentities
                             ), "The L nodes (lexical) is not in the Wikidata dump"
                             continue
 
                         for nextpath in self._path_object_search(
                             kg_object_index,
-                            self.qnodes[stmt_value_qnode_id],
+                            self.wdentities[stmt_value_qnode_id],
                             target,
                             max_n_hop - 1,
                         ):
@@ -483,7 +485,7 @@ class DGFactory:
                                             source.id, p, stmt_i
                                         ),
                                         DGPathEdge.p(p),
-                                        DGPathNodeQNode(stmt_value_qnode_id),
+                                        DGPathNodeEntity(stmt_value_qnode_id),
                                     ]
                                     + nextpath.sequence
                                 )
@@ -492,11 +494,11 @@ class DGFactory:
 
                 for q, qvals in stmt.qualifiers.items():
                     for qval in qvals:
-                        if qval.is_qnode():
+                        if qval.is_qnode(qval):
                             if qval.as_entity_id() == target.id:
                                 if not has_stmt_value:
-                                    if stmt.value.is_qnode():
-                                        pn_stmt_value = DGPathNodeQNode(
+                                    if stmt.value.is_qnode(stmt.value):
+                                        pn_stmt_value = DGPathNodeEntity(
                                             stmt.value.as_entity_id()
                                         )
                                     else:
@@ -532,18 +534,19 @@ class DGFactory:
                                 qval_qnode_id = qval.as_entity_id()
                                 if qval_qnode_id.startswith("L"):
                                     assert (
-                                        qval_qnode_id not in self.qnodes
+                                        qval_qnode_id not in self.wdentities
                                     ), "The L nodes (lexical) is not in the Wikidata dump"
                                     continue
 
-                                if qval_qnode_id not in self.qnodes:
+                                if qval_qnode_id not in self.wdentities:
                                     # this can happen due to some of the qnodes is in the link, but is missing in the KG
                                     # this is very rare so we can employ some check to make sure this is not due to
                                     # our wikidata subset
                                     is_error_in_kg = any(
                                         any(
-                                            _s.value.is_qnode()
-                                            and _s.value.as_entity_id() in self.qnodes
+                                            _s.value.is_qnode(_s.value)
+                                            and _s.value.as_entity_id()
+                                            in self.wdentities
                                             for _s in _stmts
                                         )
                                         for _p, _stmts in source.props.items()
@@ -557,7 +560,7 @@ class DGFactory:
                                 _n_matches = len(matches)
                                 for nextpath in self._path_object_search(
                                     kg_object_index,
-                                    self.qnodes[qval_qnode_id],
+                                    self.wdentities[qval_qnode_id],
                                     target,
                                     max_n_hop - 1,
                                 ):
@@ -569,15 +572,15 @@ class DGFactory:
                                                     source.id, p, stmt_i
                                                 ),
                                                 DGPathEdge.q(q),
-                                                DGPathNodeQNode(qval.as_entity_id()),
+                                                DGPathNodeEntity(qval.as_entity_id()),
                                             ]
                                             + nextpath.sequence
                                         )
                                     )
 
                                 if len(matches) > _n_matches and not has_stmt_value:
-                                    if stmt.value.is_qnode():
-                                        pn_stmt_value = DGPathNodeQNode(
+                                    if stmt.value.is_qnode(stmt.value):
+                                        pn_stmt_value = DGPathNodeEntity(
                                             stmt.value.as_entity_id()
                                         )
                                     else:
@@ -603,8 +606,8 @@ class DGFactory:
     def _path_object_search_v2(
         self,
         kg_object_index: KGObjectIndex,
-        source: QNode,
-        target: QNode,
+        source: WDEntity,
+        target: WDEntity,
         max_n_hop=2,
     ):
         # max_n_hop = 2 mean we will find a path that go from source to target through an hidden node
@@ -621,8 +624,8 @@ class DGFactory:
 
             if len(rel.quals) > 0 and not rel.both:
                 # the prop doesn't match, have to add it
-                if stmt.value.is_qnode():
-                    pn_stmt_value = DGPathNodeQNode(stmt.value.as_entity_id())
+                if stmt.value.is_qnode(stmt.value):
+                    pn_stmt_value = DGPathNodeEntity(stmt.value.as_entity_id())
                 else:
                     pn_stmt_value = DGPathNodeLiteralValue(stmt.value)
                 matches.append(
@@ -671,7 +674,7 @@ class DGFactory:
                     continue
                 hop1_paths = match_item.hop1
                 hop2_paths = match_item.hop2
-                middle_qnode = self.qnodes[match_item.qnode]
+                middle_qnode = self.wdentities[match_item.qnode]
 
                 # we don't care about transitive here, so we do a cross product
                 hop1_seqs = []
@@ -684,8 +687,8 @@ class DGFactory:
                         # we don't have the statement value yet, add it to the matches
                         # the prop doesn't match, have to add it, we don't worry about duplication
                         # as it is resolve during the merge provenance phase
-                        if stmt.value.is_qnode():
-                            pn_stmt_value = DGPathNodeQNode(stmt.value.as_entity_id())
+                        if stmt.value.is_qnode(stmt.value):
+                            pn_stmt_value = DGPathNodeEntity(stmt.value.as_entity_id())
                         else:
                             pn_stmt_value = DGPathNodeLiteralValue(stmt.value)
                         matches.append(
@@ -703,7 +706,7 @@ class DGFactory:
                     else:
                         # add prop to the seqs that we need to expand next, and so stmt.value must be a qnode
                         # as it is the middle qnode
-                        assert stmt.value.as_entity_id() == middle_qnode.id
+                        assert stmt.value.as_entity_id_safe() == middle_qnode.id
                         hop1_seqs.append(
                             [
                                 DGPathEdge.p(rel.prop),
@@ -711,7 +714,7 @@ class DGFactory:
                                     source.id, rel.prop, stmt_i
                                 ),
                                 DGPathEdge.p(rel.prop),
-                                DGPathNodeQNode(middle_qnode.id),
+                                DGPathNodeEntity(middle_qnode.id),
                             ]
                         )
 
@@ -723,7 +726,7 @@ class DGFactory:
                                     source.id, rel.prop, stmt_i
                                 ),
                                 DGPathEdge.p(qual),
-                                DGPathNodeQNode(middle_qnode.id),
+                                DGPathNodeEntity(middle_qnode.id),
                             ]
                         )
 
@@ -733,8 +736,8 @@ class DGFactory:
                     stmt = middle_qnode.props[rel.prop][stmt_i]
 
                     if len(rel.quals) > 0 and not rel.both:
-                        if stmt.value.is_qnode():
-                            pn_stmt_value = DGPathNodeQNode(stmt.value.as_entity_id())
+                        if stmt.value.is_qnode(stmt.value):
+                            pn_stmt_value = DGPathNodeEntity(stmt.value.as_entity_id())
                         else:
                             pn_stmt_value = DGPathNodeLiteralValue(stmt.value)
 

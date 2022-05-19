@@ -8,7 +8,7 @@ from grams.algorithm.data_graph.dg_graph import DGGraph, EntityValueNode
 import networkx as nx
 from typing import Dict, Iterable, Mapping, Tuple, Set, List, Optional, Callable, cast
 
-from kgdata.wikidata.models import QNode, WDProperty, WDQuantityPropertyStats
+from kgdata.wikidata.models import WDEntity, WDProperty, WDQuantityPropertyStats
 from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.data_graph import DGNode
 from grams.algorithm.candidate_graph.cg_graph import (
@@ -50,7 +50,7 @@ class LinkFeatureExtraction:
         table: LinkedTable,
         cg: CGGraph,
         dg: DGGraph,
-        qnodes: Mapping[str, QNode],
+        qnodes: Mapping[str, WDEntity],
         wdprops: Mapping[str, WDProperty],
         wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
         sim_fn: Optional[Callable[[str, str], float]] = None,
@@ -393,15 +393,15 @@ class LinkFeatureExtraction:
                 ci = v.column
 
             for ri in range(n_rows):
-                if len(self.dg.get_cell_node(f"{ri}-{ci}").qnode_ids) == 0:
+                if len(self.dg.get_cell_node(f"{ri}-{ci}").entity_ids) == 0:
                     n_null_entities += 1
         else:
             uci = u.column
             vci = v.column
 
             for ri in range(n_rows):
-                ucell_unk = len(self.dg.get_cell_node(f"{ri}-{uci}").qnode_ids) == 0
-                vcell_unk = len(self.dg.get_cell_node(f"{ri}-{vci}").qnode_ids) == 0
+                ucell_unk = len(self.dg.get_cell_node(f"{ri}-{uci}").entity_ids) == 0
+                vcell_unk = len(self.dg.get_cell_node(f"{ri}-{vci}").entity_ids) == 0
 
                 if is_data_predicate:
                     if ucell_unk:
@@ -418,14 +418,14 @@ class LinkFeatureExtraction:
             # both are cells
             if is_data_predicate:
                 # data predicate: source cell must link to some entities to have possible links
-                return len(dgu.qnode_ids) > 0
+                return len(dgu.entity_ids) > 0
             else:
                 # object predicate: source cell and target cell must link to some entities to have possible links
-                return len(dgu.qnode_ids) > 0 and len(dgv.qnode_ids) > 0
+                return len(dgu.entity_ids) > 0 and len(dgv.entity_ids) > 0
         elif isinstance(dgu, CellNode):
             # the source is cell, the target will be literal/entity value
             # we have link when source cell link to some entities, doesn't depend on type of predicate
-            return len(dgu.qnode_ids) > 0
+            return len(dgu.entity_ids) > 0
         elif isinstance(dgv, CellNode):
             # the target is cell, the source will be literal/entity value
             if is_data_predicate:
@@ -433,7 +433,7 @@ class LinkFeatureExtraction:
                 return True
             else:
                 # object predicate: have link when the target cell link to some entities
-                return len(dgv.qnode_ids) > 0
+                return len(dgv.entity_ids) > 0
         else:
             # all cells are values, always have link due to how the link is generated in the first place
             return True
@@ -449,7 +449,7 @@ class LinkFeatureExtraction:
     ):
         """Get number of discovered links that don't match due to value differences. This function do not count if:
         * the link between two DG nodes is impossible
-        * the property/qualifier do not exist in the QNode
+        * the property/qualifier do not exist in the WDEntity
         """
         u = self.cg.get_node(uid)
         v = self.cg.get_node(vid)
@@ -470,7 +470,7 @@ class LinkFeatureExtraction:
             if isinstance(dgu, CellNode):
                 # the source is cell node
                 # property doesn't exist in any qnode
-                dgu_qnodes = [self.qnodes[qnode_id] for qnode_id in dgu.qnode_ids]
+                dgu_qnodes = [self.qnodes[qnode_id] for qnode_id in dgu.entity_ids]
                 if all(inpred not in qnode.props for qnode in dgu_qnodes):
                     continue
 

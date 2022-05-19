@@ -38,7 +38,7 @@ class DGPruning:
         We made the following heuristics:
         * If there is no other node connect to n, then n is a root node and is from the context. We should not
         prune this node, so just skip it.
-        * For all another node ui \in U that connects to n via the path: LEG1: ui -> pi -> s' -> pi' -> n, if there is always a better
+        * For all another node ui in U that connects to n via the path: LEG1: ui -> pi -> s' -> pi' -> n, if there is always a better
         path LEG* between ui and v, then we can remove the path LEG2. U contains nodes in cells or context, otherwise
         ui will be an entity to entity that won't be in the final model anyway.
         Note: LEG* is better than LEG2 when it's shorter, also from wikidata link or if not, it must have better match confidence (i.e., better provenance)
