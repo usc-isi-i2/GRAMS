@@ -7,6 +7,7 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGStatementNode,
 )
 from grams.algorithm.data_graph.dg_graph import DGGraph
+from grams.algorithm.inferences.features.structure_feature import StructureFeature
 from grams.algorithm.inferences.psl_lib import IDMap, PSLModel, RuleContainer
 from grams.algorithm.inferences.features.rel_feature import RelFeatures
 from grams.algorithm.inferences.features.type_feature import (
@@ -319,6 +320,7 @@ class PSLGramModel:
                 P.RelNotFuncDependency.name(),
             ]
         )
+
         type_feats = TypeFeatures(
             idmap,
             table,
@@ -338,6 +340,29 @@ class PSLGramModel:
             ]
         )
 
+        candidate_types = {}
+        for c, t, p in type_feats[P.TypeFreqOverRow.name()]:
+            uid = idmap.im(c)
+            if uid not in candidate_types:
+                candidate_types[uid] = []
+            candidate_types[uid].append(idmap.im(t))
+
+        struct_feats = StructureFeature(
+            idmap,
+            table,
+            cg,
+            dg,
+            self.wdentities,
+            self.wdentity_labels,
+            self.wdclasses,
+            self.wdprops,
+            self.wd_numprop_stats,
+            self.sim_fn,
+            candidate_types,
+        ).extract_features(
+            [P.Rel.name(), P.Type.name(), P.Statement.name(), P.SubProp.name()]
+        )
+
         observations: Dict[str, list] = {}
         targets: Dict[str, list] = {}
 
@@ -347,39 +372,24 @@ class PSLGramModel:
                 observations[p.name()] = rel_feats[p.name()]
             if p.name() in type_feats:
                 observations[p.name()] = type_feats[p.name()]
+            if p.name() in struct_feats:
+                observations[p.name()] = struct_feats[p.name()]
 
-        observations[P.Rel.name()] = [
-            (idmap.m(e.source), idmap.m(e.target), idmap.m(e.predicate))
-            for e in cg_edges
-        ]
-        observations[P.Type.name()] = [
-            (c, t) for c, t, p in observations[P.TypeFreqOverRow.name()]
-        ]
-        observations[P.Statement.name()] = [
-            (idmap.m(u.id),) for u in cg_nodes if isinstance(u, CGStatementNode)
-        ]
-        observations[P.SubProp.name()] = [
-            (idmap.m(p), idmap.m(pp))
-            for p in props
-            for pp in props
-            if p != pp and pp in self.wdprops[p].ancestors
-        ]
-
-        class_ids = {idmap.im(x[1]) for x in observations[P.Type.name()]}
-        observations[P.SubType.name()] = [
-            (idmap.m(class_id), idmap.m(parent_class_id))
-            for class_id in class_ids
-            for parent_class_id in class_ids
-            if parent_class_id in self.wdclasses[class_id].ancestors
-        ]
-        observations[P.RelHeaderSimilarity.name()] = []
+        # observations[P.RelHeaderSimilarity.name()] = []
         observations[P.TypeHeaderSimilarity.name()] = []
 
         targets[P.CorrectRel.name()] = observations[P.Rel.name()].copy()
         targets[P.CorrectType.name()] = observations[P.Type.name()].copy()
 
         # fitlering predicates that are not in the model (e.g. because they are not used in any rule)
-        observations = {
+        filtered_observations = {
             k: v for k, v in observations.items() if k in self.model.name2predicate
         }
-        return idmap, observations, targets
+
+        if len(filtered_observations) != len(observations):
+            logger.warning(
+                "The code is not efficient as it extracts more features than needed: {}",
+                set(observations.keys()).difference(filtered_observations),
+            )
+
+        return idmap, filtered_observations, targets
