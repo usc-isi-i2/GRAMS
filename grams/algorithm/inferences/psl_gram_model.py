@@ -94,9 +94,6 @@ class PSLGramModel:
                 "REL_PRIOR_NEG_PARENT_PROP_1": 0.1,
                 "REL_PRIOR_NEG_PARENT_PROP_2": 0.1,
                 "REL_PRIOR_NEG_PARENT_QUALIFIER": 0.1,
-                "CASCADING_ERROR_1": 2,
-                "CASCADING_ERROR_2": 2,
-                "CASCADING_ERROR_3": 2,
                 P.RelFreqOverRow.name(): 2,
                 P.RelFreqOverEntRow.name(): 2,
                 P.RelFreqOverPosRel.name(): 2,
@@ -110,6 +107,9 @@ class PSLGramModel:
                 "TYPE_PROP_RANGE": 2,
                 P.ExtendedTypeFreqOverRow.name(): 2,
                 P.TypeHeaderSimilarity.name(): 0.1,
+                "CASCADING_ERROR_1": 2,
+                "CASCADING_ERROR_2": 2,
+                "CASCADING_ERROR_3": 2,
             }
         )
 
