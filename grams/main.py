@@ -194,7 +194,7 @@ class GRAMS:
                 wdprops=wdprops,
                 wd_numprop_stats=self.wd_numprop_stats,
                 disable_rules=self.cfg.psl.disable_rules,
-            ).predict(table, cg, dg, verbose=verbose, debug=True)
+            ).predict(table, cg, dg, verbose=verbose, debug=False)
 
             edge_probs = PSLModel.normalize_probs(edge_probs, eps=self.cfg.psl.eps)
 

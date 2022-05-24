@@ -270,7 +270,9 @@ class PSLGramModel:
                 if len(observations[pname]) == 0:
                     logger.debug(f"No observations for predicate {pname}")
 
-        output = self.model.predict(observations, targets, {}, force_setall=True)
+        output = self.model.predict(
+            observations, targets, {}, force_setall=True, cleanup_tempdir=not debug
+        )
         rel_probs = {
             tuple(idmap.im(t) for t in terms): prob
             for terms, prob in output[P.CorrectRel.name()].items()

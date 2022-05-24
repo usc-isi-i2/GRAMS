@@ -1,5 +1,6 @@
 from __future__ import annotations
 import re, os, uuid, logging
+import shutil
 from typing import (
     Any,
     Dict,
@@ -41,6 +42,7 @@ class PSLModel:
             temp_dir
             or f"/tmp/psl-python-{datetime.now().strftime('%y%m%d-%H%M%S')}-{str(uuid.uuid4()).replace('-', '')}"
         )
+        assert not Path(self.temp_dir).exists(), f"{self.temp_dir} already exists"
 
         if ignore_predicates_not_in_rules:
             using_predicates = []
@@ -117,6 +119,7 @@ class PSLModel:
         targets: Dict[str, list],
         truth: Optional[Dict[str, list]] = None,
         force_setall: bool = True,
+        cleanup_tempdir: bool = True,
     ):
         try:
             self.set_data(observations, targets, truth or {}, force_setall)
@@ -124,11 +127,14 @@ class PSLModel:
                 logger=self.logger,
                 additional_cli_optons=["--h2path", os.path.join(self.temp_dir, "h2")],
                 temp_dir=self.temp_dir,
-                # cleanup_temp=False,
+                cleanup_temp=False,
             )
         except ModelError as e:
             self.log_errors(e)
             raise
+
+        if cleanup_tempdir:
+            shutil.rmtree(self.temp_dir)
 
         output = {}
         for p, df in resp.items():
