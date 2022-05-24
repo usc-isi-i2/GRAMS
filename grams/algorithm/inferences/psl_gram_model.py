@@ -47,6 +47,7 @@ class P:
     HasSubType = Predicate("HAS_SUB_TYPE", closed=True, size=2)
     TypeDistance = Predicate("TYPE_DISTANCE", closed=True, size=2)
     NotRange = Predicate("NOT_RANGE", closed=True, size=2)
+    DataProperty = Predicate("DATA_PROPERTY", closed=True, size=1)
 
     # features
     RelFreqOverRow = Predicate("REL_FREQ_OVER_ROW", closed=True, size=3)
@@ -59,7 +60,7 @@ class P:
         "REL_FREQ_UNMATCH_OVER_POS_REL", closed=True, size=3
     )
     RelNotFuncDependency = Predicate("REL_NOT_FUNC_DEPENDENCY", closed=True, size=3)
-    RelIncorrectDataType = Predicate("REL_INCORRECT_DATA_TYPE", closed=True, size=3)
+    # RelIncorrectDataType = Predicate("REL_INCORRECT_DATA_TYPE", closed=True, size=3)
     RelHeaderSimilarity = Predicate("REL_HEADER_SIMILARITY", closed=True, size=3)
 
     TypeFreqOverRow = Predicate("TYPE_FREQ_OVER_ROW", closed=True, size=2)
@@ -101,7 +102,7 @@ class PSLGramModel:
                 P.RelFreqUnmatchOverEntRow.name(): 2,
                 P.RelFreqUnmatchOverPosRel.name(): 2,
                 P.RelHeaderSimilarity.name(): 2,
-                P.RelIncorrectDataType.name(): 2,
+                # P.RelIncorrectDataType.name(): 2,
                 P.RelNotFuncDependency.name(): 100,
                 "TYPE_PRIOR_NEG": 1,
                 "TYPE_PRIOR_NEG_PARENT": 0.1,
@@ -111,6 +112,7 @@ class PSLGramModel:
                 "CASCADING_ERROR_1": 2,
                 "CASCADING_ERROR_2": 2,
                 "CASCADING_ERROR_3": 2,
+                P.DataProperty.name() + "_1": 2,
             }
         )
 
@@ -147,6 +149,18 @@ class PSLGramModel:
             ~{P.Statement.name()}(N2) & 
             {P.CorrectRel.name()}(N1, N2, P) &
             {P.RelNotFuncDependency.name()}(N2, N3, P2) -> ~{P.CorrectRel.name()}(N2, N3, P2)
+            """,
+            weighted=True,
+            squared=True,
+            weight=0.0,
+        )
+
+        # ontology rules
+        # target of a data property can't be an entity
+        rules[P.DataProperty.name() + "_1"] = Rule(
+            f"""
+            {P.Rel.name()}(S, V, P) & {P.Statement.name()}(S) & 
+            {P.DataProperty.name()}(P) & {P.CorrectRel.name()}(S, V, P) -> ~{P.CorrectType.name()}(V, T)
             """,
             weighted=True,
             squared=True,
@@ -293,10 +307,6 @@ class PSLGramModel:
 
     def extract_data(self, table: LinkedTable, cg: CGGraph, dg: DGGraph):
         """Extract data for our PSL model"""
-        cg_nodes = cg.nodes()
-        cg_edges = cg.edges()
-        props = {e.predicate for e in cg_edges}
-
         idmap = IDMap()
 
         rel_feats = RelFeatures(
@@ -360,7 +370,13 @@ class PSLGramModel:
             self.sim_fn,
             candidate_types,
         ).extract_features(
-            [P.Rel.name(), P.Type.name(), P.Statement.name(), P.SubProp.name()]
+            [
+                P.Rel.name(),
+                P.Type.name(),
+                P.Statement.name(),
+                P.SubProp.name(),
+                P.DataProperty.name(),
+            ]
         )
 
         observations: Dict[str, list] = {}

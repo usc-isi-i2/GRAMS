@@ -158,6 +158,12 @@ class StructureFeature:
         idmap = self.idmap
         return [(idmap.m(p.id),) for p in props.values() if p.is_data_property()]
 
+    def DOMAIN_OF_PROPERTY(self) -> List[Tuple[str, str]]:
+        assert False
+
+    def RANGE_OF_PROPERTY(self) -> List[Tuple[str, str]]:
+        assert False
+
     @CacheMethod.cache(CacheMethod.as_is_posargs)
     def get_props(self) -> Dict[str, WDProperty]:
         """Get properties used in the candidate graph"""
