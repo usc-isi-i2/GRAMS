@@ -48,11 +48,29 @@ class PSLModel:
             using_predicates = []
             for p in predicates:
                 pname = p.name() + "("
-                if any(
-                    r._rule_body.find(pname) != -1
+                subrules = [
+                    r
                     for r in rules.values()
-                    if r._rule_body is not None
-                ):
+                    if r._rule_body is not None and r._rule_body.find(pname) != -1
+                ]
+                ignore = True
+
+                if len(subrules) > 0:
+                    for r in subrules:
+                        body: str = r._rule_body  # type: ignore
+                        start = 0
+                        while (idx := body.find(pname, start)) != -1:
+                            if idx == 0:
+                                ignore = False
+                                break
+                            if re.match("[a-zA-Z0-9_]", body[idx - 1]) is None:
+                                ignore = False
+                                break
+                            start = idx + 1
+                        if not ignore:
+                            break
+
+                if not ignore:
                     using_predicates.append(p)
                 else:
                     logger.debug(
@@ -83,7 +101,23 @@ class PSLModel:
     def set_parameters(self, params: Dict[str, float]):
         """Set parameters of the model"""
         for name, rule in self.rules.items():
-            rule.set_weight(params[name])
+            if rule.weighted():
+                rule.set_weight(params[name])
+
+    def extend_rules(self, rules: RuleContainer, predicates: List[Predicate]):
+        """Extend the model with new rules and predicates. This is usually used
+        to add rules that were pre-grounded.
+
+        Note: this function must be called before `set_data` or `predict`.
+        """
+        self.rules.update(rules)
+        for r in rules.values():
+            self.model.add_rule(r)
+
+        for p in predicates:
+            if p.name() not in self.name2predicate:
+                self.model.add_predicate(p)
+                self.name2predicate[p.name()] = p
 
     def set_data(
         self,
@@ -270,6 +304,24 @@ class IDMap(Generic[K]):
         return trans
 
 
+class ReadableIDMap(IDMap[K]):
+    def __init__(self):
+        self.map: Dict[K, str] = {}
+        self.invert_map: Dict[str, K] = {}
+
+    def m(self, key: K) -> str:
+        """Get a new key from old key"""
+        if key not in self.map:
+            new_key = "n-" + re.sub(r"""[:"'{}+=]""", "-", str(key))
+            self.map[key] = new_key
+            self.invert_map[new_key] = key
+        return self.map[key]
+
+    def im(self, new_key: str) -> K:
+        """Get the old key from the new key"""
+        return self.invert_map[new_key]
+
+
 class RuleContainer(MutableMapping[str, Rule]):
     def __init__(self, rules: Optional[Dict[str, Rule]] = None):
         self.rules: Dict[str, Rule] = rules if rules is not None else {}
@@ -299,8 +351,8 @@ class RuleContainer(MutableMapping[str, Rule]):
     def __getitem__(self, key: str) -> Rule:
         return self.rules[key]
 
-    def __delitem__(self, __v: str) -> None:
-        raise Exception("Not support operation")
+    def __delitem__(self, key: str) -> None:
+        self.rules.pop(key)
 
     def print(self):
         """Print list of rules"""
