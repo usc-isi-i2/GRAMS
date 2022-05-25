@@ -11,6 +11,7 @@ from grams.algorithm.inferences.features.structure_feature import StructureFeatu
 from grams.algorithm.inferences.psl_lib import (
     IDMap,
     PSLModel,
+    ReadableIDMap,
     RuleContainer,
 )
 from grams.algorithm.inferences.features.rel_feature import RelFeatures
@@ -39,6 +40,8 @@ class P:
     # target predicates
     CorrectRel = Predicate("CORRECT_REL", closed=False, size=3)
     CorrectType = Predicate("CORRECT_TYPE", closed=False, size=2)
+    # surrogated target predicates
+    HasType = Predicate("HAS_TYPE", closed=False, size=1)
 
     # graph structure
     Rel = Predicate("REL", closed=True, size=3)
@@ -68,13 +71,17 @@ class P:
     RelHeaderSimilarity = Predicate("REL_HEADER_SIMILARITY", closed=True, size=3)
 
     TypeFreqOverRow = Predicate("TYPE_FREQ_OVER_ROW", closed=True, size=2)
+    TypeFreqOverEntRow = Predicate("TYPE_FREQ_OVER_ENT_ROW", closed=True, size=2)
     ExtendedTypeFreqOverRow = Predicate(
         "EXTENDED_TYPE_FREQ_OVER_ROW", closed=True, size=2
+    )
+    ExtendedTypeFreqOverEntRow = Predicate(
+        "EXTENDED_TYPE_FREQ_OVER_ENT_ROW", closed=True, size=2
     )
     TypeHeaderSimilarity = Predicate("TYPE_HEADER_SIMILARITY", closed=True, size=2)
 
 
-class PSLGramModel:
+class PSLGramModelExp:
     def __init__(
         self,
         wdentities: Mapping[str, WDEntity],
@@ -84,6 +91,7 @@ class PSLGramModel:
         wd_numprop_stats: Mapping[str, WDQuantityPropertyStats],
         sim_fn: Optional[Callable[[str, str], float]] = None,
         disable_rules: Optional[Iterable[str]] = None,
+        example_id: Optional[str] = None,
     ):
         self.wdentities = wdentities
         self.wdentity_labels = wdentity_labels
@@ -92,6 +100,7 @@ class PSLGramModel:
         self.wd_numprop_stats = wd_numprop_stats
         self.sim_fn = sim_fn
         self.disable_rules = set(disable_rules or [])
+        self.example_id = example_id
 
         self.model = self.get_model()
         self.model.set_parameters(
@@ -106,16 +115,21 @@ class PSLGramModel:
                 P.RelFreqUnmatchOverEntRow.name(): 2,
                 P.RelFreqUnmatchOverPosRel.name(): 2,
                 P.RelHeaderSimilarity.name(): 2,
-                # P.RelIncorrectDataType.name(): 2,
                 P.RelNotFuncDependency.name(): 100,
                 P.Type.name() + "_PRIOR_NEG": 1,
+                P.HasType.name() + "_PRIOR_NEG": 0.1,
                 "TYPE_PRIOR_NEG_PARENT": 0.1,
                 "TYPE_PROP_RANGE": 2,
-                P.ExtendedTypeFreqOverRow.name(): 2,
+                P.ExtendedTypeFreqOverRow.name(): 4,
+                P.ExtendedTypeFreqOverEntRow.name(): 6,
                 P.TypeHeaderSimilarity.name(): 0.1,
                 "CASCADING_ERROR_1": 2,
                 "CASCADING_ERROR_2": 2,
                 "CASCADING_ERROR_3": 2,
+                P.DataProperty.name() + "_1": 2,
+                P.DataProperty.name() + "_2": 2,
+                "HAS_TYPE_HAS_OUT_EDGE": 2,
+                "CORRECT_TYPE_IMPLY_HAS_TYPE": 4,
             }
         )
 
@@ -152,6 +166,36 @@ class PSLGramModel:
             ~{P.Statement.name()}(N2) & 
             {P.CorrectRel.name()}(N1, N2, P) &
             {P.RelNotFuncDependency.name()}(N2, N3, P2) -> ~{P.CorrectRel.name()}(N2, N3, P2)
+            """,
+            weighted=True,
+            squared=True,
+            weight=0.0,
+        )
+
+        # ontology rules
+        # target of a data property can't be an entity
+        rules[P.DataProperty.name() + "_1"] = Rule(
+            f"""
+            {P.Rel.name()}(S, V, P) & {P.Statement.name()}(S) & 
+            {P.DataProperty.name()}(P) & {P.CorrectRel.name()}(S, V, P) -> ~{P.CorrectType.name()}(V, T)
+            """,
+            weighted=True,
+            squared=True,
+            weight=0.0,
+        )
+        rules[P.DataProperty.name() + "_2"] = Rule(
+            f"""
+            {P.Rel.name()}(S, V, P) & {P.Statement.name()}(S) & 
+            {P.DataProperty.name()}(P) & {P.CorrectType.name()}(V, T) -> ~{P.CorrectRel.name()}(S, V, P)
+            """,
+            weighted=True,
+            squared=True,
+            weight=0.0,
+        )
+        rules["HAS_TYPE_HAS_OUT_EDGE"] = Rule(
+            f"""
+            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & 
+            ~{P.HasType.name()}(U) -> ~{P.CorrectRel.name()}(U, S, P)
             """,
             weighted=True,
             squared=True,
@@ -208,6 +252,17 @@ class PSLGramModel:
         rules["TYPE_PRIOR_NEG"] = Rule(
             f"~{P.CorrectType.name()}(N, T)", weight=0.0, weighted=True, squared=True
         )
+        rules[P.HasType.name() + "_PRIOR_NEG"] = Rule(
+            f"~{P.HasType.name()}(N)", weight=0.0, weighted=True, squared=True
+        )
+        rules["CORRECT_TYPE_IMPLY_HAS_TYPE"] = Rule(
+            f"{P.CorrectType.name()}(N, T) -> {P.HasType.name()}(N)",
+            weight=0.0,
+            weighted=True,
+            squared=True,
+        )
+        # don't use this rule as the more candidate types we have, the more likely that they all have low probabilities.
+        # Rule(f"{P.CorrectType.name()}(N, +T) <= 1", weighted=False)
 
         rules["CASCADING_ERROR_1"] = Rule(
             f"""
@@ -236,7 +291,11 @@ class PSLGramModel:
             squared=True,
         )
 
-        for feat in [P.ExtendedTypeFreqOverRow, P.TypeHeaderSimilarity]:
+        for feat in [
+            # P.ExtendedTypeFreqOverRow,
+            P.ExtendedTypeFreqOverEntRow,
+            P.TypeHeaderSimilarity,
+        ]:
             rules[feat.name()] = Rule(
                 f"""
                 {P.Type.name()}(N, T) & {feat.name()}(N, T) -> {P.CorrectType.name()}(N, T)
@@ -258,6 +317,9 @@ class PSLGramModel:
             rules=rules,
             predicates=[x for x in vars(P).values() if isinstance(x, Predicate)],
             ignore_predicates_not_in_rules=True,
+            temp_dir=f"/tmp/pslpython/{self.example_id}"
+            if self.example_id is not None
+            else None,
         )
 
     def predict(
@@ -298,7 +360,7 @@ class PSLGramModel:
 
     def extract_data(self, table: LinkedTable, cg: CGGraph, dg: DGGraph):
         """Extract data for our PSL model"""
-        idmap = IDMap()
+        idmap = ReadableIDMap()
 
         rel_feats = RelFeatures(
             idmap,
@@ -336,6 +398,7 @@ class PSLGramModel:
             [
                 P.TypeFreqOverRow.name(),
                 P.ExtendedTypeFreqOverRow.name(),
+                P.ExtendedTypeFreqOverEntRow.name(),
                 P.TypeDistance.name(),
                 P.HasSubType.name(),
             ]
@@ -364,8 +427,10 @@ class PSLGramModel:
             [
                 P.Rel.name(),
                 P.Type.name(),
+                P.HasType.name(),
                 P.Statement.name(),
                 P.SubProp.name(),
+                P.DataProperty.name(),
             ]
         )
 
@@ -386,6 +451,13 @@ class PSLGramModel:
 
         targets[P.CorrectRel.name()] = observations[P.Rel.name()].copy()
         targets[P.CorrectType.name()] = observations[P.Type.name()].copy()
+
+        targets[P.HasType.name()] = [
+            obs for obs in observations[P.HasType.name()] if len(obs) == 1
+        ]
+        observations[P.HasType.name()] = [
+            obs for obs in observations[P.HasType.name()] if len(obs) == 2
+        ]
 
         # fitlering predicates that are not in the model (e.g. because they are not used in any rule)
         filtered_observations = {

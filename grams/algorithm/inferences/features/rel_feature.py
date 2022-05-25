@@ -321,7 +321,7 @@ class RelFeatures:
         if not isinstance(u, CGColumnNode) and not isinstance(v, CGColumnNode):
             return 1
 
-        # instead of going through each node attach to the node in the semantic graph, we cheat by directly generating
+        # instead of going through each node attach to the node in the semantic graph, we avoid by directly generating
         # the data node ID
         n_rows = self.table.size()
         n_null_entities = 0

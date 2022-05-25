@@ -120,6 +120,24 @@ class TypeFeatures:
             output.append((self.idmap.m(u.id), self.idmap.m(c), freq / n_rows))
         return output
 
+    def TYPE_FREQ_OVER_ENT_ROW(self, u: CGColumnNode) -> List[Tuple[str, str, float]]:
+        type_freq = self.get_type_freq(u)
+        output = []
+        n_ent_rows = self.get_num_ent_rows(u)
+        for c, freq in type_freq.items():
+            output.append((self.idmap.m(u.id), self.idmap.m(c), freq / n_ent_rows))
+        return output
+
+    def EXTENDED_TYPE_FREQ_OVER_ENT_ROW(
+        self, u: CGColumnNode
+    ) -> List[Tuple[str, str, float]]:
+        extended_type_freq = self.get_extended_type_freq(u)
+        output = []
+        n_ent_rows = self.get_num_ent_rows(u)
+        for c, freq in extended_type_freq.items():
+            output.append((self.idmap.m(u.id), self.idmap.m(c), freq / n_ent_rows))
+        return output
+
     def HAS_SUB_TYPE(self, u: CGColumnNode):
         output = set()
         classes = self.get_extended_type_freq(u)
@@ -287,6 +305,11 @@ class TypeFeatures:
     def get_cells(self, u: CGColumnNode) -> List[CellNode]:
         """Get cells of a column node"""
         return [self.dg.get_cell_node(cid) for cid in u.nodes]
+
+    @CacheMethod.cache(CacheMethod.single_object_arg)
+    def get_num_ent_rows(self, u: CGColumnNode) -> int:
+        """Get number of rows of entities in a column"""
+        return sum([1 for cell in self.get_cells(u) if len(cell.entity_ids) > 0])
 
     @CacheMethod.cache(CacheMethod.single_object_arg)
     def get_cell_to_qnodes(

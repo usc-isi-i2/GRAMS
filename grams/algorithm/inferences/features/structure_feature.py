@@ -9,6 +9,7 @@ from typing import (
     Optional,
     Tuple,
     TypeVar,
+    Union,
 )
 from operator import attrgetter
 from grams.algorithm.data_graph.dg_graph import DGGraph, DGNode, EntityValueNode
@@ -107,6 +108,20 @@ class StructureFeature:
             for uid, types in self.candidate_types.items()
             for type in types
         ]
+
+    def HAS_TYPE(self) -> List[Union[Tuple[str], Tuple[str, float]]]:
+        idmap = self.idmap
+        lst: List[Union[Tuple[str], Tuple[str, float]]] = [
+            (idmap.m(uid),) for uid in self.candidate_types.keys()
+        ]
+        for node in self.cg_nodes:
+            if isinstance(node, CGEntityValueNode):
+                lst.append((idmap.m(node.id), 1.0))
+            elif isinstance(node, CGLiteralValueNode):
+                lst.append((idmap.m(node.id), 0.0))
+            elif isinstance(node, CGColumnNode) and node.id not in self.candidate_types:
+                lst.append((idmap.m(node.id), 0.0))
+        return lst
 
     def STATEMENT(self) -> List[Tuple[str]]:
         """Extract nodes that are statements in CG"""
