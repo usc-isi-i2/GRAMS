@@ -62,6 +62,7 @@ class RelFeatures:
         self.wdclasses = wdclasses
         self.wdprops = wdprops
         self.wd_num_prop_stats = wd_num_prop_stats
+        self.sim_fn = sim_fn
 
     def extract_features(self, features: List[str]) -> Dict[str, list]:
         rels = []
@@ -243,6 +244,37 @@ class RelFeatures:
             )
             output.append(key + (prob,))
 
+        return output
+
+    def REL_HEADER_SIMILARITY(self, rels: List[Tuple[CGStatementNode, CGEdge, CGEdge]]):
+        if self.sim_fn is None:
+            return []
+
+        props = self.get_props()
+        output = []
+        for s, inedge, outedge in rels:
+            target = self.cg.get_node(outedge.target)
+            if not isinstance(target, CGColumnNode):
+                continue
+            sim = self.sim_fn(target.label, props[outedge.predicate].label)
+
+            if inedge.predicate == outedge.predicate:
+                output.append(
+                    (
+                        self.idmap.m(inedge.source),
+                        self.idmap.m(inedge.target),
+                        self.idmap.m(inedge.predicate),
+                        sim,
+                    )
+                )
+            output.append(
+                (
+                    self.idmap.m(outedge.source),
+                    self.idmap.m(outedge.target),
+                    self.idmap.m(outedge.predicate),
+                    sim,
+                )
+            )
         return output
 
     def REL_NOT_FUNC_DEPENDENCY(
@@ -554,3 +586,9 @@ class RelFeatures:
                 key = col.values[ri].strip()
             map[key].append(ri)
         return dict(map)
+
+    @CacheMethod.cache(CacheMethod.as_is_posargs)
+    def get_props(self) -> Dict[str, WDProperty]:
+        """Get properties used in the candidate graph"""
+        prop_ids = {edge.predicate for edge in self.cg.iter_edges()}
+        return {prop_id: self.wdprops[prop_id] for prop_id in prop_ids}

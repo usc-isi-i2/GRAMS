@@ -1,12 +1,14 @@
 import os
 from dataclasses import dataclass
 from operator import itemgetter
+from functools import partial
 from pathlib import Path
 from typing import Dict, MutableMapping, Set, Tuple, Union
 from grams.algorithm.candidate_graph.cg_factory import CGFactory
 from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.psl_gram_model import PSLGramModel
+from grams.algorithm.inferences.psl_gram_model_exp import PSLGramModelExp
 from grams.algorithm.inferences.psl_lib import PSLModel
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
 from grams.algorithm.postprocessing import (
@@ -27,6 +29,8 @@ from kgdata.wikidata.db import (
     get_entity_label_db,
     get_wdclass_db,
     get_wdprop_db,
+    get_wdprop_domain_db,
+    get_wdprop_range_db,
     query_wikidata_entities,
 )
 from kgdata.wikidata.models import (
@@ -104,6 +108,22 @@ class GRAMS:
                 read_only=read_only,
                 proxy=proxy,
             )
+            if os.path.exists(os.path.join(data_dir, "wdprop_domains.db")):
+                self.wdprop_domains = get_wdprop_domain_db(
+                    os.path.join(data_dir, "wdprop_domains.db"),
+                    read_only=True,
+                )
+            else:
+                self.wdprop_domains = None
+
+            if os.path.exists(os.path.join(data_dir, "wdprop_ranges.db")):
+                self.wdprop_ranges = get_wdprop_range_db(
+                    os.path.join(data_dir, "wdprop_ranges.db"),
+                    read_only=True,
+                )
+            else:
+                self.wdprop_ranges = None
+
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(
                 os.path.join(data_dir, "quantity_prop_stats")
             )
@@ -187,7 +207,13 @@ class GRAMS:
             cg = cg_factory.create_cg(table, dg)
 
         with self.timer.watch("run inference"):
-            edge_probs, cta_probs = PSLGramModel(
+            cls = PSLGramModel
+            cls = partial(
+                PSLGramModelExp,
+                wdprop_domains=self.wdprop_domains,
+                wdprop_ranges=self.wdprop_ranges,
+            )
+            edge_probs, cta_probs = cls(
                 wdentities=wdentities,
                 wdentity_labels=self.wdentity_labels,
                 wdclasses=wdclasses,

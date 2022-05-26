@@ -20,14 +20,10 @@ literal_matcher:
 psl:
   enable_logging: false
   threshold: 0.5
-  # eps: 0.001 # for normalizing the probs
-  eps: 0.0
+  eps: 0.001 # for normalizing the probs
+  # eps: 0.0
   # steiner_tree, arborescence, simplepath, pairwise
   postprocessing: steiner_tree
-  disable_rules:
-    []
-    # - HeaderSimimilarity
-    # - DataTypeMismatch
-    # # - FrequencyOfLinkOverPossibleLink
+  disable_rules: []
 hydra.run.dir: .
 hydra.output_subdir: null

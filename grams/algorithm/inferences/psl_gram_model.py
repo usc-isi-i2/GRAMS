@@ -349,17 +349,19 @@ class PSLGramModel:
             candidate_types[uid].append(idmap.im(t))
 
         struct_feats = StructureFeature(
-            idmap,
-            table,
-            cg,
-            dg,
-            self.wdentities,
-            self.wdentity_labels,
-            self.wdclasses,
-            self.wdprops,
-            self.wd_numprop_stats,
-            self.sim_fn,
-            candidate_types,
+            idmap=idmap,
+            table=table,
+            cg=cg,
+            dg=dg,
+            wdentities=self.wdentities,
+            wdentity_labels=self.wdentity_labels,
+            wdclasses=self.wdclasses,
+            wdprops=self.wdprops,
+            wdprop_domains=None,
+            wdprop_ranges=None,
+            wd_num_prop_stats=self.wd_numprop_stats,
+            sim_fn=self.sim_fn,
+            candidate_types=candidate_types,
         ).extract_features(
             [
                 P.Rel.name(),

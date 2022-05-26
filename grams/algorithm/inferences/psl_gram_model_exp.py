@@ -19,6 +19,7 @@ from grams.algorithm.inferences.features.type_feature import (
     TypeFeatures,
 )
 from grams.inputs.linked_table import Link, LinkedTable
+from kgdata.wikidata.db import get_wdprop_domain_db
 from kgdata.wikidata.models import (
     WDEntity,
     WDEntityLabel,
@@ -26,6 +27,8 @@ from kgdata.wikidata.models import (
     WDProperty,
     WDQuantityPropertyStats,
 )
+from grams.algorithm.inferences.features.string_similarity import StringSimilarity
+from kgdata.wikidata.models.wdproperty import WDPropertyDomains, WDPropertyRanges
 from pslpython.predicate import Predicate
 from pslpython.model import Model
 from dataclasses import dataclass
@@ -47,14 +50,16 @@ class P:
     Rel = Predicate("REL", closed=True, size=3)
     Type = Predicate("TYPE", closed=True, size=2)
     Statement = Predicate("STATEMENT", closed=True, size=1)
+    Column = Predicate("COLUMN", closed=True, size=1)
 
     # ontology
     SubProp = Predicate("SUB_PROP", closed=True, size=2)
-    SubType = Predicate("SUB_TYPE", closed=True, size=2)
-    HasSubType = Predicate("HAS_SUB_TYPE", closed=True, size=2)
+    # SubType = Predicate("SUB_TYPE", closed=True, size=2)
+    # HasSubType = Predicate("HAS_SUB_TYPE", closed=True, size=2)
     TypeDistance = Predicate("TYPE_DISTANCE", closed=True, size=2)
-    NotRange = Predicate("NOT_RANGE", closed=True, size=2)
     DataProperty = Predicate("DATA_PROPERTY", closed=True, size=1)
+    PropertyDomain = Predicate("PROPERTY_DOMAIN", closed=True, size=2)  # (prop, domain)
+    PropertyRange = Predicate("PROPERTY_RANGE", closed=True, size=2)
 
     # features
     RelFreqOverRow = Predicate("REL_FREQ_OVER_ROW", closed=True, size=3)
@@ -67,7 +72,6 @@ class P:
         "REL_FREQ_UNMATCH_OVER_POS_REL", closed=True, size=3
     )
     RelNotFuncDependency = Predicate("REL_NOT_FUNC_DEPENDENCY", closed=True, size=3)
-    # RelIncorrectDataType = Predicate("REL_INCORRECT_DATA_TYPE", closed=True, size=3)
     RelHeaderSimilarity = Predicate("REL_HEADER_SIMILARITY", closed=True, size=3)
 
     TypeFreqOverRow = Predicate("TYPE_FREQ_OVER_ROW", closed=True, size=2)
@@ -88,8 +92,9 @@ class PSLGramModelExp:
         wdentity_labels: Mapping[str, WDEntityLabel],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
+        wdprop_domains: Optional[Mapping[str, WDPropertyDomains]],
+        wdprop_ranges: Optional[Mapping[str, WDPropertyRanges]],
         wd_numprop_stats: Mapping[str, WDQuantityPropertyStats],
-        sim_fn: Optional[Callable[[str, str], float]] = None,
         disable_rules: Optional[Iterable[str]] = None,
         example_id: Optional[str] = None,
     ):
@@ -97,39 +102,43 @@ class PSLGramModelExp:
         self.wdentity_labels = wdentity_labels
         self.wdclasses = wdclasses
         self.wdprops = wdprops
+        self.wdprop_domains = wdprop_domains
+        self.wdprop_ranges = wdprop_ranges
         self.wd_numprop_stats = wd_numprop_stats
-        self.sim_fn = sim_fn
+        self.sim_fn = StringSimilarity.hybrid_jaccard_similarity
         self.disable_rules = set(disable_rules or [])
         self.example_id = example_id
-
         self.model = self.get_model()
         self.model.set_parameters(
             {
                 P.Rel.name() + "_PRIOR_NEG": 1,
                 "REL_PRIOR_NEG_PARENT_PROP_1": 0.1,
                 "REL_PRIOR_NEG_PARENT_PROP_2": 0.1,
-                "REL_PRIOR_NEG_PARENT_QUALIFIER": 0.1,
+                # "REL_PRIOR_NEG_PARENT_QUALIFIER": 0.1,
                 P.RelFreqOverRow.name(): 2,
                 P.RelFreqOverEntRow.name(): 2,
                 P.RelFreqOverPosRel.name(): 2,
                 P.RelFreqUnmatchOverEntRow.name(): 2,
                 P.RelFreqUnmatchOverPosRel.name(): 2,
-                P.RelHeaderSimilarity.name(): 2,
+                P.RelHeaderSimilarity.name(): 0.0,
                 P.RelNotFuncDependency.name(): 100,
                 P.Type.name() + "_PRIOR_NEG": 1,
                 P.HasType.name() + "_PRIOR_NEG": 0.1,
                 "TYPE_PRIOR_NEG_PARENT": 0.1,
-                "TYPE_PROP_RANGE": 2,
-                P.ExtendedTypeFreqOverRow.name(): 4,
-                P.ExtendedTypeFreqOverEntRow.name(): 6,
-                P.TypeHeaderSimilarity.name(): 0.1,
+                P.TypeFreqOverRow.name(): 2,
+                P.TypeFreqOverEntRow.name(): 0,
+                P.ExtendedTypeFreqOverRow.name(): 2,
+                P.ExtendedTypeFreqOverEntRow.name(): 0,
+                P.TypeHeaderSimilarity.name(): 0.0,
                 "CASCADING_ERROR_1": 2,
                 "CASCADING_ERROR_2": 2,
                 "CASCADING_ERROR_3": 2,
                 P.DataProperty.name() + "_1": 2,
                 P.DataProperty.name() + "_2": 2,
                 "HAS_TYPE_HAS_OUT_EDGE": 2,
-                "CORRECT_TYPE_IMPLY_HAS_TYPE": 4,
+                P.PropertyDomain.name(): 2,
+                P.PropertyRange.name(): 2,
+                "CORRECT_TYPE_IMPLY_HAS_TYPE": 6,
             }
         )
 
@@ -140,6 +149,7 @@ class PSLGramModelExp:
             P.RelFreqOverRow,
             P.RelFreqOverEntRow,
             P.RelFreqOverPosRel,
+            P.RelHeaderSimilarity,
         ]:
             rules[feat.name()] = Rule(
                 f"{P.Rel.name()}(N1, N2, P) & {feat.name()}(N1, N2, P) -> {P.CorrectRel.name()}(N1, N2, P)",
@@ -196,6 +206,24 @@ class PSLGramModelExp:
             f"""
             {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & 
             ~{P.HasType.name()}(U) -> ~{P.CorrectRel.name()}(U, S, P)
+            """,
+            weighted=True,
+            squared=True,
+            weight=0.0,
+        )
+        rules[P.PropertyDomain.name()] = Rule(
+            f"""
+            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Column.name()}(U) &
+            {P.CorrectType.name()}(U, T) & ~{P.PropertyDomain.name()}(P, T) -> ~{P.CorrectRel.name()}(U, V, P)
+            """,
+            weighted=True,
+            squared=True,
+            weight=0.0,
+        )
+        rules[P.PropertyRange.name()] = Rule(
+            f"""
+            {P.Rel.name()}(S, V, P) & {P.Statement.name()}(S) & {P.Column.name()}(V) &
+            ~{P.DataProperty.name()}(P) & {P.CorrectType.name()}(V, T) & ~{P.PropertyRange.name()}(P, T) -> ~{P.CorrectRel.name()}(S, V, P)
             """,
             weighted=True,
             squared=True,
@@ -292,7 +320,9 @@ class PSLGramModelExp:
         )
 
         for feat in [
-            # P.ExtendedTypeFreqOverRow,
+            P.TypeFreqOverRow,
+            P.TypeFreqOverEntRow,
+            P.ExtendedTypeFreqOverRow,
             P.ExtendedTypeFreqOverEntRow,
             P.TypeHeaderSimilarity,
         ]:
@@ -360,7 +390,7 @@ class PSLGramModelExp:
 
     def extract_data(self, table: LinkedTable, cg: CGGraph, dg: DGGraph):
         """Extract data for our PSL model"""
-        idmap = ReadableIDMap()
+        idmap = IDMap()
 
         rel_feats = RelFeatures(
             idmap,
@@ -381,6 +411,7 @@ class PSLGramModelExp:
                 P.RelFreqUnmatchOverEntRow.name(),
                 P.RelFreqUnmatchOverPosRel.name(),
                 P.RelNotFuncDependency.name(),
+                P.RelHeaderSimilarity.name(),
             ]
         )
 
@@ -397,10 +428,11 @@ class PSLGramModelExp:
         ).extract_features(
             [
                 P.TypeFreqOverRow.name(),
+                P.TypeFreqOverEntRow.name(),
                 P.ExtendedTypeFreqOverRow.name(),
                 P.ExtendedTypeFreqOverEntRow.name(),
                 P.TypeDistance.name(),
-                P.HasSubType.name(),
+                P.TypeHeaderSimilarity.name(),
             ]
         )
 
@@ -412,25 +444,30 @@ class PSLGramModelExp:
             candidate_types[uid].append(idmap.im(t))
 
         struct_feats = StructureFeature(
-            idmap,
-            table,
-            cg,
-            dg,
-            self.wdentities,
-            self.wdentity_labels,
-            self.wdclasses,
-            self.wdprops,
-            self.wd_numprop_stats,
-            self.sim_fn,
-            candidate_types,
+            idmap=idmap,
+            table=table,
+            cg=cg,
+            dg=dg,
+            wdentities=self.wdentities,
+            wdentity_labels=self.wdentity_labels,
+            wdclasses=self.wdclasses,
+            wdprops=self.wdprops,
+            wdprop_domains=self.wdprop_domains,
+            wdprop_ranges=self.wdprop_ranges,
+            wd_num_prop_stats=self.wd_numprop_stats,
+            sim_fn=self.sim_fn,
+            candidate_types=candidate_types,
         ).extract_features(
             [
                 P.Rel.name(),
                 P.Type.name(),
                 P.HasType.name(),
                 P.Statement.name(),
+                P.Column.name(),
                 P.SubProp.name(),
                 P.DataProperty.name(),
+                P.PropertyDomain.name(),
+                P.PropertyRange.name(),
             ]
         )
 
@@ -445,9 +482,6 @@ class PSLGramModelExp:
                 observations[p.name()] = type_feats[p.name()]
             if p.name() in struct_feats:
                 observations[p.name()] = struct_feats[p.name()]
-
-        # observations[P.RelHeaderSimilarity.name()] = []
-        observations[P.TypeHeaderSimilarity.name()] = []
 
         targets[P.CorrectRel.name()] = observations[P.Rel.name()].copy()
         targets[P.CorrectType.name()] = observations[P.Type.name()].copy()

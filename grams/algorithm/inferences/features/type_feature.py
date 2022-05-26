@@ -57,6 +57,7 @@ class TypeFeatures:
         self.wdclasses = wdclasses
         self.wdprops = wdprops
         self.wd_num_prop_stats = wd_num_prop_stats
+        self.sim_fn = sim_fn
 
     def extract_features(self, features: List[str]) -> Dict[str, list]:
         # gather the list of entity columns (columns will be tagged with type)
@@ -212,6 +213,21 @@ class TypeFeatures:
                 (self.idmap.m(u.id), self.idmap.m(c), distance / longest_distance)
             )
         return list(output)
+
+    def TYPE_HEADER_SIMILARITY(self, u: CGColumnNode):
+        if self.sim_fn is None:
+            return []
+
+        extended_type_freq = self.get_extended_type_freq(u)
+        output = []
+
+        for c, freq in extended_type_freq.items():
+            sim = self.sim_fn(
+                u.label,
+                self.wdclasses[c].label,
+            )
+            output.append((self.idmap.m(u.id), self.idmap.m(c), sim))
+        return output
 
     @CacheMethod.cache(CacheMethod.single_object_arg)
     def get_type_freq(self, u: CGColumnNode) -> Dict[str, float]:
