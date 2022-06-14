@@ -26,7 +26,6 @@ from grams.algorithm.data_graph import (
     ContextSpan,
     FlowProvenance,
 )
-from sand.models.entity import Entity
 import sm.outputs as O
 import sm.misc as M
 
