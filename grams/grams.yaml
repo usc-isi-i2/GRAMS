@@ -20,10 +20,11 @@ literal_matcher:
 psl:
   enable_logging: false
   threshold: 0.5
-  eps: 0.001 # for normalizing the probs
+  eps: 0.000 # for normalizing the probs
   # eps: 0.0
   # steiner_tree, arborescence, simplepath, pairwise
   postprocessing: steiner_tree
   disable_rules: []
+  experiment_model: true
 hydra.run.dir: .
 hydra.output_subdir: null

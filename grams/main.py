@@ -207,12 +207,16 @@ class GRAMS:
             cg = cg_factory.create_cg(table, dg)
 
         with self.timer.watch("run inference"):
-            cls = PSLGramModel
-            cls = partial(
-                PSLGramModelExp,
-                wdprop_domains=self.wdprop_domains,
-                wdprop_ranges=self.wdprop_ranges,
-            )
+            if self.cfg.psl.experiment_model:
+                logger.debug("Using experiment PSL model")
+                cls = partial(
+                    PSLGramModelExp,
+                    wdprop_domains=self.wdprop_domains,
+                    wdprop_ranges=self.wdprop_ranges,
+                )
+            else:
+                cls = PSLGramModel
+
             edge_probs, cta_probs = cls(
                 wdentities=wdentities,
                 wdentity_labels=self.wdentity_labels,

@@ -38,10 +38,12 @@ class PSLModel:
         self.model = Model("psl-model")
         self.rules = rules
         self.name2predicate: Dict[str, Predicate] = {}
-        self.temp_dir = (
-            temp_dir
-            or f"/tmp/psl-python-{datetime.now().strftime('%y%m%d-%H%M%S')}-{str(uuid.uuid4()).replace('-', '')}"
-        )
+
+        if temp_dir is not None:
+            self.temp_dir = temp_dir
+        else:
+            Path("/tmp/pslpython").mkdir(exist_ok=True, parents=True)
+            self.temp_dir = f"/tmp/pslpython/r{datetime.now().strftime('%y%m%d-%H%M%S')}-{str(uuid.uuid4()).replace('-', '')}"
         assert not Path(self.temp_dir).exists(), f"{self.temp_dir} already exists"
 
         if ignore_predicates_not_in_rules:
@@ -154,18 +156,28 @@ class PSLModel:
         truth: Optional[Dict[str, list]] = None,
         force_setall: bool = True,
         cleanup_tempdir: bool = True,
+        retry: bool = True,
     ):
-        try:
-            self.set_data(observations, targets, truth or {}, force_setall)
-            resp = self.model.infer(
-                logger=self.logger,
-                additional_cli_optons=["--h2path", os.path.join(self.temp_dir, "h2")],
-                temp_dir=self.temp_dir,
-                cleanup_temp=False,
-            )
-        except ModelError as e:
-            self.log_errors(e)
-            raise
+        self.set_data(observations, targets, truth or {}, force_setall)
+
+        for _ in range(3):
+            try:
+                resp = self.model.infer(
+                    logger=self.logger,
+                    additional_cli_optons=[
+                        "--h2path",
+                        os.path.join(self.temp_dir, "h2"),
+                    ],
+                    temp_dir=self.temp_dir,
+                    cleanup_temp=False,
+                )
+                break
+            except ModelError as e:
+                self.log_errors(e)
+                if not retry:
+                    raise
+
+            logger.info("Retry PSL inference...")
 
         if cleanup_tempdir:
             shutil.rmtree(self.temp_dir)

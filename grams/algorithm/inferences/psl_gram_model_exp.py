@@ -125,9 +125,9 @@ class PSLGramModelExp:
                 P.Type.name() + "_PRIOR_NEG": 1,
                 P.HasType.name() + "_PRIOR_NEG": 0.1,
                 "TYPE_PRIOR_NEG_PARENT": 0.1,
-                P.TypeFreqOverRow.name(): 2,
+                P.TypeFreqOverRow.name(): 0,
                 P.TypeFreqOverEntRow.name(): 0,
-                P.ExtendedTypeFreqOverRow.name(): 2,
+                P.ExtendedTypeFreqOverRow.name(): 6,
                 P.ExtendedTypeFreqOverEntRow.name(): 0,
                 P.TypeHeaderSimilarity.name(): 0.0,
                 "CASCADING_ERROR_1": 2,
@@ -303,7 +303,7 @@ class PSLGramModelExp:
         )
         rules["CASCADING_ERROR_2"] = Rule(
             f"""
-            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, P) & 
+            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, P) &
             ~{P.CorrectRel.name()}(S, V, P) -> ~{P.CorrectRel.name()}(U, S, P)""",
             weighted=True,
             weight=0.0,
@@ -311,7 +311,7 @@ class PSLGramModelExp:
         )
         rules["CASCADING_ERROR_3"] = Rule(
             f"""
-            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, P) & 
+            {P.Rel.name()}(U, S, P) & {P.Statement.name()}(S) & {P.Rel.name()}(S, V, P) &
             ~{P.CorrectRel.name()}(U, S, P) -> ~{P.CorrectRel.name()}(S, V, P)
             """,
             weighted=True,
