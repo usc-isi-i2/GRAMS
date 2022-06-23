@@ -17,7 +17,7 @@ from grams.algorithm.postprocessing import (
     PostProcessingSimplePath,
     SteinerTree,
 )
-from hugedict.parallel.parallel import Parallel
+from hugedict.prelude import CacheDict, Parallel
 from kgdata.wikidata.models import WDEntityLabel
 from loguru import logger
 from tqdm import tqdm
@@ -97,12 +97,13 @@ class GRAMS:
                 proxy=proxy,
             )
             if os.path.exists(os.path.join(data_dir, "wdclasses.fixed.jl")):
-                self.wdclasses = self.wdclasses.cache_dict()
+                self.wdclasses = self.wdclasses.cache()
+                assert isinstance(self.wdclasses, CacheDict)
                 for record in M.deserialize_jl(
                     os.path.join(data_dir, "wdclasses.fixed.jl")
                 ):
                     cls = WDClass.from_dict(record)
-                    self.wdclasses.cache[cls.id] = cls
+                    self.wdclasses._cache[cls.id] = cls
             self.wdprops = get_wdprop_db(
                 os.path.join(data_dir, "wdprops.db"),
                 read_only=read_only,
@@ -176,8 +177,8 @@ class GRAMS:
             wdentities = self.get_entities(
                 wdentity_ids, n_hop=self.cfg.data_graph.max_n_hop, verbose=verbose
             )
-        wdclasses = self.wdclasses.cache_dict()
-        wdprops = self.wdprops.cache_dict()
+        wdclasses = self.wdclasses.cache()
+        wdprops = self.wdprops.cache()
 
         nonexistent_wdentity_ids = wdentity_ids.difference(wdentities.keys())
         if len(nonexistent_wdentity_ids) > 0:
