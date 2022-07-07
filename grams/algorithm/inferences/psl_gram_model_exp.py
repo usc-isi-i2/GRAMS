@@ -125,9 +125,9 @@ class PSLGramModelExp:
                 P.Type.name() + "_PRIOR_NEG": 1,
                 P.HasType.name() + "_PRIOR_NEG": 0.1,
                 "TYPE_PRIOR_NEG_PARENT": 0.1,
-                P.TypeFreqOverRow.name(): 0,
+                P.TypeFreqOverRow.name(): 2,
                 P.TypeFreqOverEntRow.name(): 0,
-                P.ExtendedTypeFreqOverRow.name(): 6,
+                P.ExtendedTypeFreqOverRow.name(): 2,
                 P.ExtendedTypeFreqOverEntRow.name(): 0,
                 P.TypeHeaderSimilarity.name(): 0.0,
                 "CASCADING_ERROR_1": 2,
@@ -386,11 +386,14 @@ class PSLGramModelExp:
         if debug:
             self.model.debug(idmap)
 
+        # dict([x for x in rel_probs.items() if "".join(x[0]).find("column-4") != -1])
+
         return rel_probs, type_probs
 
     def extract_data(self, table: LinkedTable, cg: CGGraph, dg: DGGraph):
         """Extract data for our PSL model"""
         idmap = IDMap()
+        # idmap = ReadableIDMap()
 
         rel_feats = RelFeatures(
             idmap,
