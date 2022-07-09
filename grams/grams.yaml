@@ -25,6 +25,6 @@ psl:
   # steiner_tree, arborescence, simplepath, pairwise
   postprocessing: steiner_tree
   disable_rules: []
-  experiment_model: true
+  experiment_model: "exp2"
 hydra.run.dir: .
 hydra.output_subdir: null

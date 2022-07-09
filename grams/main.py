@@ -9,6 +9,7 @@ from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.psl_gram_model import PSLGramModel
 from grams.algorithm.inferences.psl_gram_model_exp import PSLGramModelExp
+from grams.algorithm.inferences.psl_gram_model_exp2 import PSLGramModelExp2
 from grams.algorithm.inferences.psl_lib import PSLModel
 from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
 from grams.algorithm.postprocessing import (
@@ -211,7 +212,10 @@ class GRAMS:
             if self.cfg.psl.experiment_model:
                 logger.debug("Using experiment PSL model")
                 cls = partial(
-                    PSLGramModelExp,
+                    {
+                        "exp": PSLGramModelExp,
+                        "exp2": PSLGramModelExp2,
+                    }[self.cfg.psl.experiment_model],
                     wdprop_domains=self.wdprop_domains,
                     wdprop_ranges=self.wdprop_ranges,
                 )

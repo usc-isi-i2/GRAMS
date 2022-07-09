@@ -173,11 +173,22 @@ class PSLModel:
                 )
                 break
             except ModelError as e:
+                # error related to parser (not jvm), no retry
+                non_recoverable_error = any(
+                    line.find(k) != -1
+                    for line in self.logs
+                    for k in [
+                        "org.linqs.psl.parser.antlr.PSLParser",
+                        "Unique index or primary key violation",
+                    ]
+                )
                 self.log_errors(e)
-                if not retry:
+                if not retry or non_recoverable_error:
                     raise
 
             logger.info("Retry PSL inference...")
+        else:
+            raise Exception("PSL inference failed")
 
         if cleanup_tempdir:
             shutil.rmtree(self.temp_dir)
@@ -214,9 +225,11 @@ class PSLModel:
                     )
                 df.to_csv(outdir / f"{pname}.{partition}.csv", index=False)
 
-    def log_errors(self, error: Exception):
+    def log_errors(self, error: Exception, clear: bool = True):
         logger.error(str(error))
         print("\n".join(self.logs))
+        if clear:
+            self.logs = []
 
     @staticmethod
     def normalize_probs(
@@ -357,7 +370,7 @@ class RuleContainer(MutableMapping[str, Rule]):
         return key in self.rules
 
     def __setitem__(self, key: str, value: Rule):
-        assert key not in self.rules
+        assert key not in self.rules, key
         self.rules[key] = value
 
     def __getitem__(self, key: str) -> Rule:
