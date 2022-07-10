@@ -46,7 +46,7 @@ class P:
     CorrectRelQual = Predicate("CORRECT_REL_QUAL", closed=False, size=4)
     CorrectType = Predicate("CORRECT_TYPE", closed=False, size=2)
     # surrogated target predicates
-    HasType = Predicate("HAS_TYPE", closed=False, size=1)
+    # HasType = Predicate("HAS_TYPE", closed=False, size=1)
 
     # graph structure
     # Rel = Predicate("REL", closed=True, size=3)
@@ -120,10 +120,10 @@ class PSLGramModelExp2:
                 P.RelQual.name() + "_PRIOR_NEG": 1,
                 P.RelProp.name() + "_PRIOR_NEG_PARENT": 0.1,
                 P.RelQual.name() + "_PRIOR_NEG_PARENT": 0.1,
-                P.RelFreqOverRow.name() + "_PROP": 3,
-                P.RelFreqOverRow.name() + "_QUAL": 3,
-                P.RelFreqOverEntRow.name() + "_PROP": 3,
-                P.RelFreqOverEntRow.name() + "_QUAL": 3,
+                P.RelFreqOverRow.name() + "_PROP": 2,
+                P.RelFreqOverRow.name() + "_QUAL": 2,
+                P.RelFreqOverEntRow.name() + "_PROP": 2,
+                P.RelFreqOverEntRow.name() + "_QUAL": 2,
                 P.RelFreqOverPosRel.name() + "_PROP": 2,
                 P.RelFreqOverPosRel.name() + "_QUAL": 2,
                 P.RelFreqUnmatchOverEntRow.name() + "_PROP": 2,
@@ -134,20 +134,19 @@ class PSLGramModelExp2:
                 P.RelHeaderSimilarity.name() + "_QUAL": 0.0,
                 P.RelNotFuncDependency.name(): 100,
                 P.Type.name() + "_PRIOR_NEG": 1,
-                P.HasType.name() + "_PRIOR_NEG": 0.1,
+                # P.HasType.name() + "_PRIOR_NEG": 0.1,
                 "TYPE_PRIOR_NEG_PARENT": 0.1,
                 P.TypeFreqOverRow.name(): 2,
                 P.TypeFreqOverEntRow.name(): 0,
                 P.ExtendedTypeFreqOverRow.name(): 2,
                 P.ExtendedTypeFreqOverEntRow.name(): 0,
                 P.TypeHeaderSimilarity.name(): 0.0,
-                "CASCADING_ERROR": 2,
                 P.DataProperty.name(): 2,
-                "HAS_TYPE_HAS_OUT_EDGE": 2,
+                # "HAS_TYPE_HAS_OUT_EDGE": 2,
                 P.PropertyDomain.name(): 2,
                 P.PropertyRange.name() + "_PROP": 2,
                 P.PropertyRange.name() + "_QUAL": 2,
-                "CORRECT_TYPE_IMPLY_HAS_TYPE": 6,
+                # "CORRECT_TYPE_IMPLY_HAS_TYPE": 6,
             }
         )
 
@@ -212,14 +211,16 @@ class PSLGramModelExp2:
             squared=True,
             weight=0.0,
         )
-        rules["HAS_TYPE_HAS_OUT_EDGE"] = Rule(
-            f"""
-            {P.RelProp.name()}(U, V, S, P) & ~{P.HasType.name()}(U) -> ~{P.CorrectRelProp.name()}(U, V, S, P)
-            """,
-            weighted=True,
-            squared=True,
-            weight=0.0,
-        )
+        # the problem with this rule in the new setting (no statement node) is that the result of HasType
+        # affects the prob. of the edge.
+        # rules["HAS_TYPE_HAS_OUT_EDGE"] = Rule(
+        #     f"""
+        #     {P.RelProp.name()}(U, V, S, P) & ~{P.HasType.name()}(U) -> ~{P.CorrectRelProp.name()}(U, V, S, P)
+        #     """,
+        #     weighted=True,
+        #     squared=True,
+        #     weight=0.0,
+        # )
         rules[P.PropertyDomain.name()] = Rule(
             f"""
             {P.RelProp.name()}(U, V, S, P) & {P.Column.name()}(U) &
@@ -290,27 +291,18 @@ class PSLGramModelExp2:
         rules["TYPE_PRIOR_NEG"] = Rule(
             f"~{P.CorrectType.name()}(N, T)", weight=0.0, weighted=True, squared=True
         )
-        rules[P.HasType.name() + "_PRIOR_NEG"] = Rule(
-            f"~{P.HasType.name()}(N)", weight=0.0, weighted=True, squared=True
-        )
-        rules["CORRECT_TYPE_IMPLY_HAS_TYPE"] = Rule(
-            f"{P.CorrectType.name()}(N, T) -> {P.HasType.name()}(N)",
-            weight=0.0,
-            weighted=True,
-            squared=True,
-        )
+        # disable as we do not need hastype
+        # rules[P.HasType.name() + "_PRIOR_NEG"] = Rule(
+        #     f"~{P.HasType.name()}(N)", weight=0.0, weighted=True, squared=True
+        # )
+        # rules["CORRECT_TYPE_IMPLY_HAS_TYPE"] = Rule(
+        #     f"{P.CorrectType.name()}(N, T) -> {P.HasType.name()}(N)",
+        #     weight=0.0,
+        #     weighted=True,
+        #     squared=True,
+        # )
         # don't use this rule as the more candidate types we have, the more likely that they all have low probabilities.
         # Rule(f"{P.CorrectType.name()}(N, +T) <= 1", weighted=False)
-
-        rules["CASCADING_ERROR"] = Rule(
-            f"""
-            {P.RelProp.name()}(U, V1, S, P) & {P.RelQual.name()}(U, V2, S, Q) &
-            ~{P.CorrectRelProp.name()}(U, V1, S, P) & (V1 != V2) -> ~{P.CorrectRelQual.name()}(U, V2, S, Q)
-            """,
-            weighted=True,
-            weight=0.0,
-            squared=True,
-        )
 
         for feat in [
             P.TypeFreqOverRow,
@@ -462,7 +454,7 @@ class PSLGramModelExp2:
                 P.RelProp.name(),
                 P.RelQual.name(),
                 P.Type.name(),
-                P.HasType.name(),
+                # P.HasType.name(),
                 P.Column.name(),
                 P.SubProp.name(),
                 P.DataProperty.name(),
@@ -487,12 +479,12 @@ class PSLGramModelExp2:
         targets[P.CorrectRelQual.name()] = observations[P.RelQual.name()].copy()
         targets[P.CorrectType.name()] = observations[P.Type.name()].copy()
 
-        targets[P.HasType.name()] = [
-            obs for obs in observations[P.HasType.name()] if len(obs) == 1
-        ]
-        observations[P.HasType.name()] = [
-            obs for obs in observations[P.HasType.name()] if len(obs) == 2
-        ]
+        # targets[P.HasType.name()] = [
+        #     obs for obs in observations[P.HasType.name()] if len(obs) == 1
+        # ]
+        # observations[P.HasType.name()] = [
+        #     obs for obs in observations[P.HasType.name()] if len(obs) == 2
+        # ]
 
         # fitlering predicates that are not in the model (e.g. because they are not used in any rule)
         filtered_observations = {

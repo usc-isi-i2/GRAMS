@@ -96,14 +96,19 @@ class StructureFeature:
         self.cg_edges = self.cg.edges()
         self.candidate_types = candidate_types
 
-    def extract_features(self, features: List[str]) -> Dict[str, list]:
+    @staticmethod
+    def get_relations(cg: CGGraph) -> List[Tuple[CGStatementNode, CGEdge, CGEdge]]:
         rels = []
-        for s in self.cg.iter_nodes():
+        for s in cg.iter_nodes():
             if not isinstance(s, CGStatementNode):
                 continue
-            (inedge,) = self.cg.in_edges(s.id)
-            for outedge in self.cg.out_edges(s.id):
+            (inedge,) = cg.in_edges(s.id)
+            for outedge in cg.out_edges(s.id):
                 rels.append((s, inedge, outedge))
+        return rels
+
+    def extract_features(self, features: List[str]) -> Dict[str, list]:
+        rels = self.get_relations(self.cg)
 
         need_rel_feats = {"REL_PROP", "REL_QUAL"}
         feat_data = {}

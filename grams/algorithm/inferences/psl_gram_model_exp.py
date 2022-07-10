@@ -98,6 +98,7 @@ class PSLGramModelExp:
         disable_rules: Optional[Iterable[str]] = None,
         example_id: Optional[str] = None,
     ):
+        assert False
         self.wdentities = wdentities
         self.wdentity_labels = wdentity_labels
         self.wdclasses = wdclasses
