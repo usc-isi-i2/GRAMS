@@ -41,25 +41,17 @@ class P:
     """Holding list of predicates in the model."""
 
     # target predicates
-    # CorrectRel = Predicate("CORRECT_REL", closed=False, size=3)
-    CorrectRelProp = Predicate("CORRECT_REL_PROP", closed=False, size=4)
-    CorrectRelQual = Predicate("CORRECT_REL_QUAL", closed=False, size=4)
+    CorrectRel = Predicate("CORRECT_REL", closed=False, size=4)
     CorrectType = Predicate("CORRECT_TYPE", closed=False, size=2)
-    # surrogated target predicates
-    # HasType = Predicate("HAS_TYPE", closed=False, size=1)
 
     # graph structure
-    # Rel = Predicate("REL", closed=True, size=3)
-    RelProp = Predicate("REL_PROP", closed=True, size=4)
-    RelQual = Predicate("REL_QUAL", closed=True, size=4)
+    Rel = Predicate("REL", closed=True, size=4)
     Type = Predicate("TYPE", closed=True, size=2)
-    # Statement = Predicate("STATEMENT", closed=True, size=1)
     Column = Predicate("COLUMN", closed=True, size=1)
+    StatementProperty = Predicate("STATEMENT_PROPERTY", closed=True, size=2)
 
     # ontology
     SubProp = Predicate("SUB_PROP", closed=True, size=2)
-    # SubType = Predicate("SUB_TYPE", closed=True, size=2)
-    # HasSubType = Predicate("HAS_SUB_TYPE", closed=True, size=2)
     TypeDistance = Predicate("TYPE_DISTANCE", closed=True, size=2)
     DataProperty = Predicate("DATA_PROPERTY", closed=True, size=1)
     PropertyDomain = Predicate("PROPERTY_DOMAIN", closed=True, size=2)  # (prop, domain)
@@ -116,25 +108,16 @@ class PSLGramModelExp2:
 
         self.model.set_parameters(
             {
-                P.RelProp.name() + "_PRIOR_NEG": 1,
-                P.RelQual.name() + "_PRIOR_NEG": 1,
-                P.RelProp.name() + "_PRIOR_NEG_PARENT": 0.1,
-                P.RelQual.name() + "_PRIOR_NEG_PARENT": 0.1,
-                P.RelFreqOverRow.name() + "_PROP": 2,
-                P.RelFreqOverRow.name() + "_QUAL": 2,
-                P.RelFreqOverEntRow.name() + "_PROP": 2,
-                P.RelFreqOverEntRow.name() + "_QUAL": 2,
-                P.RelFreqOverPosRel.name() + "_PROP": 2,
-                P.RelFreqOverPosRel.name() + "_QUAL": 2,
-                P.RelFreqUnmatchOverEntRow.name() + "_PROP": 2,
-                P.RelFreqUnmatchOverEntRow.name() + "_QUAL": 2,
-                P.RelFreqUnmatchOverPosRel.name() + "_PROP": 2,
-                P.RelFreqUnmatchOverPosRel.name() + "_QUAL": 2,
-                P.RelHeaderSimilarity.name() + "_PROP": 0.0,
-                P.RelHeaderSimilarity.name() + "_QUAL": 0.0,
+                P.Rel.name() + "_PRIOR_NEG": 1,
+                P.Rel.name() + "_PRIOR_NEG_PARENT": 0.1,
+                P.RelFreqOverRow.name(): 2,
+                P.RelFreqOverEntRow.name(): 2,
+                P.RelFreqOverPosRel.name(): 2,
+                P.RelFreqUnmatchOverEntRow.name(): 2,
+                P.RelFreqUnmatchOverPosRel.name(): 2,
+                P.RelHeaderSimilarity.name(): 0.0,
                 P.RelNotFuncDependency.name(): 100,
                 P.Type.name() + "_PRIOR_NEG": 1,
-                # P.HasType.name() + "_PRIOR_NEG": 0.1,
                 "TYPE_PRIOR_NEG_PARENT": 0.1,
                 P.TypeFreqOverRow.name(): 2,
                 P.TypeFreqOverEntRow.name(): 0,
@@ -142,11 +125,8 @@ class PSLGramModelExp2:
                 P.ExtendedTypeFreqOverEntRow.name(): 0,
                 P.TypeHeaderSimilarity.name(): 0.0,
                 P.DataProperty.name(): 2,
-                # "HAS_TYPE_HAS_OUT_EDGE": 2,
                 P.PropertyDomain.name(): 2,
-                P.PropertyRange.name() + "_PROP": 2,
-                P.PropertyRange.name() + "_QUAL": 2,
-                # "CORRECT_TYPE_IMPLY_HAS_TYPE": 6,
+                P.PropertyRange.name(): 2,
             }
         )
 
@@ -159,14 +139,8 @@ class PSLGramModelExp2:
             P.RelFreqOverPosRel,
             P.RelHeaderSimilarity,
         ]:
-            rules[feat.name() + "_PROP"] = Rule(
-                f"{P.RelProp.name()}(N1, N2, S, P) & {feat.name()}(N1, N2, S, P) -> {P.CorrectRelProp.name()}(N1, N2, S, P)",
-                weighted=True,
-                squared=True,
-                weight=0.0,
-            )
-            rules[feat.name() + "_QUAL"] = Rule(
-                f"{P.RelQual.name()}(N1, N2, S, P) & {feat.name()}(N1, N2, S, P) -> {P.CorrectRelQual.name()}(N1, N2, S, P)",
+            rules[feat.name()] = Rule(
+                f"{P.Rel.name()}(N1, N2, S, P) & {feat.name()}(N1, N2, S, P) -> {P.CorrectRel.name()}(N1, N2, S, P)",
                 weighted=True,
                 squared=True,
                 weight=0.0,
@@ -176,14 +150,8 @@ class PSLGramModelExp2:
             P.RelFreqUnmatchOverEntRow,
             P.RelFreqUnmatchOverPosRel,
         ]:
-            rules[feat.name() + "_PROP"] = Rule(
-                f"{P.RelProp.name()}(N1, N2, S, P) & {feat.name()}(N1, N2, S, P) -> ~{P.CorrectRelProp.name()}(N1, N2, S, P)",
-                weighted=True,
-                squared=True,
-                weight=0.0,
-            )
-            rules[feat.name() + "_QUAL"] = Rule(
-                f"{P.RelQual.name()}(N1, N2, S, P) & {feat.name()}(N1, N2, S, P) -> ~{P.CorrectRelQual.name()}(N1, N2, S, P)",
+            rules[feat.name()] = Rule(
+                f"{P.Rel.name()}(N1, N2, S, P) & {feat.name()}(N1, N2, S, P) -> ~{P.CorrectRel.name()}(N1, N2, S, P)",
                 weighted=True,
                 squared=True,
                 weight=0.0,
@@ -191,10 +159,10 @@ class PSLGramModelExp2:
 
         rules[P.RelNotFuncDependency.name()] = Rule(
             f"""
-            {P.RelProp.name()}(N1, N2, S1, P) &
-            {P.RelProp.name()}(N2, N3, S2, P2) &
-            {P.CorrectRelProp.name()}(N1, N2, S1, P) &
-            {P.RelNotFuncDependency.name()}(N2, N3) -> ~{P.CorrectRelProp.name()}(N2, N3, S2, P2)
+            {P.Rel.name()}(N1, N2, S1, P) &
+            {P.Rel.name()}(N2, N3, S2, P2) &
+            {P.CorrectRel.name()}(N1, N2, S1, P) &
+            {P.RelNotFuncDependency.name()}(N2, N3) -> ~{P.CorrectRel.name()}(N2, N3, S2, P2)
             """,
             weighted=True,
             squared=True,
@@ -205,7 +173,7 @@ class PSLGramModelExp2:
         # target of a data property can't be an entity
         rules[P.DataProperty.name()] = Rule(
             f"""
-            {P.RelProp.name()}(U, V, S, P) & {P.DataProperty.name()}(P) & {P.CorrectRelProp.name()}(U, V, S, P) -> ~{P.CorrectType.name()}(V, T)
+            {P.Rel.name()}(U, V, S, P) & {P.DataProperty.name()}(P) & {P.CorrectRel.name()}(U, V, S, P) -> ~{P.CorrectType.name()}(V, T)
             """,
             weighted=True,
             squared=True,
@@ -223,26 +191,17 @@ class PSLGramModelExp2:
         # )
         rules[P.PropertyDomain.name()] = Rule(
             f"""
-            {P.RelProp.name()}(U, V, S, P) & {P.Column.name()}(U) &
-            {P.CorrectType.name()}(U, T) & ~{P.PropertyDomain.name()}(P, T) -> ~{P.CorrectRelProp.name()}(U, V, S, P)
+            {P.Rel.name()}(U, V, S, P) & {P.Column.name()}(U) & {P.StatementProperty.name()}(S, P) &
+            {P.CorrectType.name()}(U, T) & ~{P.PropertyDomain.name()}(P, T) -> ~{P.CorrectRel.name()}(U, V, S, P)
             """,
             weighted=True,
             squared=True,
             weight=0.0,
         )
-        rules[P.PropertyRange.name() + "_PROP"] = Rule(
+        rules[P.PropertyRange.name()] = Rule(
             f"""
-            {P.RelProp.name()}(U, V, S, P) & {P.Column.name()}(V) &
-            ~{P.DataProperty.name()}(P) & {P.CorrectType.name()}(V, T) & ~{P.PropertyRange.name()}(P, T) -> ~{P.CorrectRelProp.name()}(U, V, S, P)
-            """,
-            weighted=True,
-            squared=True,
-            weight=0.0,
-        )
-        rules[P.PropertyRange.name() + "_QUAL"] = Rule(
-            f"""
-            {P.RelQual.name()}(U, V, S, Q) & {P.Column.name()}(V) &
-            ~{P.DataProperty.name()}(Q) & {P.CorrectType.name()}(V, T) & ~{P.PropertyRange.name()}(Q, T) -> ~{P.CorrectRelQual.name()}(U, V, S, Q)
+            {P.Rel.name()}(U, V, S, P) & {P.Column.name()}(V) &
+            ~{P.DataProperty.name()}(P) & {P.CorrectType.name()}(V, T) & ~{P.PropertyRange.name()}(P, T) -> ~{P.CorrectRel.name()}(U, V, S, P)
             """,
             weighted=True,
             squared=True,
@@ -250,19 +209,10 @@ class PSLGramModelExp2:
         )
 
         # prefer details prop/type
-        rules[P.RelProp.name() + "_PRIOR_NEG_PARENT"] = Rule(
+        rules[P.Rel.name() + "_PRIOR_NEG_PARENT"] = Rule(
             f"""
-            {P.RelProp.name()}(U, V, S, P) & {P.RelProp.name()}(U, V, S2, PP) & (S != S2) &
-            {P.SubProp.name()}(P, PP) -> ~{P.CorrectRelProp.name()}(U, V, S2, PP)
-            """,
-            weighted=True,
-            squared=True,
-            weight=0.0,
-        )
-        rules[P.RelQual.name() + "_PRIOR_NEG_PARENT"] = Rule(
-            f"""
-            {P.RelQual.name()}(U, V, S, P) & {P.RelQual.name()}(U, V, S2, PP) & (S != S2) &
-            {P.SubProp.name()}(P, PP) -> ~{P.CorrectRelQual.name()}(U, V, S2, PP)
+            {P.Rel.name()}(U, V, S, P) & {P.Rel.name()}(U, V, S2, PP) & (S != S2) &
+            {P.SubProp.name()}(P, PP) -> ~{P.CorrectRel.name()}(U, V, S2, PP)
             """,
             weighted=True,
             squared=True,
@@ -276,14 +226,8 @@ class PSLGramModelExp2:
         )
 
         # default negative rel/types
-        rules[P.RelProp.name() + "_PRIOR_NEG"] = Rule(
-            f"~{P.CorrectRelProp.name()}(U, V, S, P)",
-            weight=0.0,
-            weighted=True,
-            squared=True,
-        )
-        rules[P.RelQual.name() + "_PRIOR_NEG"] = Rule(
-            f"~{P.CorrectRelQual.name()}(U, V, S, P)",
+        rules[P.Rel.name() + "_PRIOR_NEG"] = Rule(
+            f"~{P.CorrectRel.name()}(U, V, S, P)",
             weight=0.0,
             weighted=True,
             squared=True,
@@ -335,6 +279,7 @@ class PSLGramModelExp2:
             temp_dir=f"/tmp/pslpython/{self.example_id}"
             if self.example_id is not None
             else None,
+            required_predicates={P.StatementProperty.name()},
         )
 
     def predict(
@@ -356,14 +301,13 @@ class PSLGramModelExp2:
         output = self.model.predict(
             observations, targets, {}, force_setall=True, cleanup_tempdir=not debug
         )
+        stmt2prop = dict(observations[P.StatementProperty.name()])
         rel_probs = {}
-        for terms, prob in output[P.CorrectRelProp.name()].items():
-            uid, vid, sid, prop = [idmap.im(t) for t in terms]
-            rel_probs[uid, sid, prop] = prob
+        for (u, v, s, p), prob in output[P.CorrectRel.name()].items():
+            uid, vid, sid, prop = idmap.im(u), idmap.im(v), idmap.im(s), idmap.im(p)
+            if stmt2prop[s] == p:
+                rel_probs[uid, sid, prop] = prob
             rel_probs[sid, vid, prop] = prob
-        for terms, prob in output[P.CorrectRelQual.name()].items():
-            uid, vid, sid, qual = [idmap.im(t) for t in terms]
-            rel_probs[sid, vid, qual] = prob
 
         type_probs = {}
         for terms, prob in output[P.CorrectType.name()].items():
@@ -451,10 +395,9 @@ class PSLGramModelExp2:
             candidate_types=candidate_types,
         ).extract_features(
             [
-                P.RelProp.name(),
-                P.RelQual.name(),
+                P.Rel.name(),
                 P.Type.name(),
-                # P.HasType.name(),
+                P.StatementProperty.name(),
                 P.Column.name(),
                 P.SubProp.name(),
                 P.DataProperty.name(),
@@ -475,8 +418,7 @@ class PSLGramModelExp2:
             if p.name() in struct_feats:
                 observations[p.name()] = struct_feats[p.name()]
 
-        targets[P.CorrectRelProp.name()] = observations[P.RelProp.name()].copy()
-        targets[P.CorrectRelQual.name()] = observations[P.RelQual.name()].copy()
+        targets[P.CorrectRel.name()] = observations[P.Rel.name()].copy()
         targets[P.CorrectType.name()] = observations[P.Type.name()].copy()
 
         # targets[P.HasType.name()] = [

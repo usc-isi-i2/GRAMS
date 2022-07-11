@@ -8,6 +8,7 @@ from typing import (
     List,
     MutableMapping,
     Optional,
+    Set,
     TypeVar,
 )
 from datetime import datetime
@@ -34,6 +35,7 @@ class PSLModel:
         rules: RuleContainer,
         temp_dir: Optional[str] = None,
         ignore_predicates_not_in_rules: bool = False,
+        required_predicates: Optional[Set[str]] = None,
     ):
         self.model = Model("psl-model")
         self.rules = rules
@@ -47,8 +49,14 @@ class PSLModel:
         assert not Path(self.temp_dir).exists(), f"{self.temp_dir} already exists"
 
         if ignore_predicates_not_in_rules:
+            if required_predicates is None:
+                required_predicates = set()
             using_predicates = []
             for p in predicates:
+                if p.name() in required_predicates:
+                    using_predicates.append(p)
+                    continue
+
                 pname = p.name() + "("
                 subrules = [
                     r

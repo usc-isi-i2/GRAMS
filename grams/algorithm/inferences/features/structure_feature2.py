@@ -110,7 +110,7 @@ class StructureFeature:
     def extract_features(self, features: List[str]) -> Dict[str, list]:
         rels = self.get_relations(self.cg)
 
-        need_rel_feats = {"REL_PROP", "REL_QUAL"}
+        need_rel_feats = {"REL_PROP", "REL_QUAL", "REL", "STATEMENT_PROPERTY"}
         feat_data = {}
         for feat in features:
             fn = getattr(self, feat)
@@ -120,13 +120,33 @@ class StructureFeature:
                 feat_data[feat] = fn()
         return feat_data
 
-    def REL(self) -> List[Tuple[str, str, str]]:
+    def REL(
+        self, rels: List[Tuple[CGStatementNode, CGEdge, CGEdge]]
+    ) -> List[Tuple[str, str, str, str]]:
         """Extract relationships in the candidate graph"""
         idmap = self.idmap
-        return [
-            (idmap.m(e.source), idmap.m(e.target), idmap.m(e.predicate))
-            for e in self.cg_edges
-        ]
+        output = []
+        for s, inedge, outedge in rels:
+            output.append(
+                (
+                    idmap.m(inedge.source),
+                    idmap.m(outedge.target),
+                    idmap.m(s.id),
+                    idmap.m(outedge.predicate),
+                )
+            )
+        return output
+
+    def STATEMENT_PROPERTY(
+        self, rels: List[Tuple[CGStatementNode, CGEdge, CGEdge]]
+    ) -> List[Tuple[str, str]]:
+        """Extract relationships in the candidate graph"""
+        idmap = self.idmap
+        output = []
+        for s, inedge, outedge in rels:
+            if inedge.predicate == outedge.predicate:
+                output.append((idmap.m(s.id), idmap.m(outedge.predicate)))
+        return output
 
     def REL_PROP(
         self, rels: List[Tuple[CGStatementNode, CGEdge, CGEdge]]
