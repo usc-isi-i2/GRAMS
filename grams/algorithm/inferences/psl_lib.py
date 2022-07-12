@@ -182,14 +182,15 @@ class PSLModel:
                 break
             except ModelError as e:
                 # error related to parser (not jvm), no retry
-                non_recoverable_error = any(
-                    line.find(k) != -1
-                    for line in self.logs
-                    for k in [
-                        "org.linqs.psl.parser.antlr.PSLParser",
-                        "Unique index or primary key violation",
-                    ]
-                )
+                # non_recoverable_error = any(
+                #     line.find(k) != -1
+                #     for line in self.logs
+                #     for k in [
+                #         "org.linqs.psl.parser.antlr.PSLParser",
+                #         "Unique index or primary key violation",
+                #     ]
+                # )
+                non_recoverable_error = False
                 self.log_errors(e)
                 if not retry or non_recoverable_error:
                     raise
