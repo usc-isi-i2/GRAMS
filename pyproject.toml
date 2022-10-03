@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sm-grams"
-version = "2.1.4"
+version = "2.1.5"
 description = ""
 authors = ["Binh Vu <binh@toan2.com>"]
 license = "MIT"
@@ -34,7 +34,6 @@ rltk = "==2.0.0-alpha.15"
 pslpython = "==2.2.2"
 fastnumbers = "^3.1.0"
 ftfy = "^6.1.1"
-python-Levenshtein = "^0.12.2"
 sem-desc = "^3.6.0"
 kgdata = "^3.0.4"
 click = ">=8.0.0,<=8.0.4"
