@@ -155,6 +155,11 @@ class LinkedTable:
 
         if link_file.exists():
             links = LinkedTable.parse_link_file(table, link_file, top_k)
+            for rlinks in links:
+                for clinks in rlinks:
+                    for link in clinks:
+                        if link.entity_id is not None:
+                            link.candidates = [CandidateEntity(link.entity_id, 1.0)]
         else:
             links = []
             for ri in range(len(rows)):
