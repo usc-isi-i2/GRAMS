@@ -1,10 +1,13 @@
 from pathlib import Path
-import tempfile
+import tempfile, pytest
 
 from grams.cli import cli
-from grams.prelude import ROOT_DIR
+from grams.prelude import ROOT_DIR, DATA_DIR
 
 
+@pytest.mark.skipif(
+    not (DATA_DIR / "wdprop_domains.db").exists(), reason="no local databases"
+)
 def test_semtab2020_novartis():
     with tempfile.TemporaryDirectory() as tempdir:
         tempdir = Path(tempdir)
