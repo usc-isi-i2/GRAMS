@@ -44,7 +44,7 @@ class SteinerTree:
         dg: DGGraph,
         edge_probs: Dict[CGEdgeTriple, float],
         threshold: float,
-        additional_terminal_nodes: Optional[list[str]] = None,
+        additional_terminal_nodes: Optional[List[str]] = None,
     ):
         self.table = table
         self.cg = cg

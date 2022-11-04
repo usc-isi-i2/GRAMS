@@ -80,7 +80,7 @@ def test_log_errors(acquaintance_model: PSLModel, mocker: MockerFixture):
                 ]
             },
         )
-    stub.assert_called_once()
+    stub.assert_called()
     assert len(m.logs) > 0
 
 

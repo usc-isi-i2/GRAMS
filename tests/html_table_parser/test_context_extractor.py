@@ -82,22 +82,22 @@ def test_optimize_flatten_tree(html_files: dict):
 
     context1 = context_extractor.optimize_flatten_tree(context, merge_empty_lines=False)
     assert context1 == [
-        Text(id="1", value="\n      ", tags={"div"}),
-        Text(id="2", value="Hello world", tags={"h3", "div"}),
+        Text(id="1", value="\n      ", tags=["div"]),
+        Text(id="2", value="Hello world", tags=["h3", "div"]),
         Linebreak(n_lines=1),
-        Text(id="3", value="\n      ", tags={"div"}),
-        Text(id="5", value="This is a paragraph. ", tags={"p", "div"}),
-        Text(id="6", value="This is bold text.", tags={"p", "b", "div"}),
+        Text(id="3", value="\n      ", tags=["div"]),
+        Text(id="5", value="This is a paragraph. ", tags=["p", "div"]),
+        Text(id="6", value="This is bold text.", tags=["b", "p", "div"]),
         Linebreak(n_lines=1),
-        Text(id="7", value="\n    ", tags={"div"}),
+        Text(id="7", value="\n    ", tags=["div"]),
     ]
 
     context2 = context_extractor.optimize_flatten_tree(context)
     assert context2 == [
         Linebreak(n_lines=1),
-        Text(id="2", value="Hello world", tags={"h3", "div"}),
+        Text(id="2", value="Hello world", tags=["h3", "div"]),
         Linebreak(n_lines=2),
-        Text(id="5", value="This is a paragraph. ", tags={"p", "div"}),
-        Text(id="6", value="This is bold text.", tags={"p", "b", "div"}),
+        Text(id="5", value="This is a paragraph. ", tags=["p", "div"]),
+        Text(id="6", value="This is bold text.", tags=["b", "p", "div"]),
         Linebreak(n_lines=2),
     ]

@@ -197,7 +197,7 @@ class PSLModel:
 
             logger.info("Retry PSL inference...")
         else:
-            raise Exception("PSL inference failed")
+            raise ModelError("PSL inference failed")
 
         if cleanup_tempdir:
             shutil.rmtree(self.temp_dir)
