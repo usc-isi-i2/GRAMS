@@ -1,34 +1,33 @@
-from grams.algorithm.literal_matchers import TextParser, LiteralMatch
-from grams.inputs.linked_table import LinkedTable
-import networkx as nx
-from typing import Dict, Mapping, Optional, Set, Union, cast
-from kgdata.wikidata.models import WDEntity, WDProperty, WDClass
+from typing import Mapping, Optional, Set, Union
+
+from tqdm import tqdm
+
+from grams.algorithm.data_graph.dg_config import DGConfigs
 from grams.algorithm.data_graph.dg_graph import (
-    DGGraph,
     CellNode,
     ContextSpan,
     DGEdge,
-    DGNode,
+    DGGraph,
     DGPath,
-    DGPathNode,
     DGPathEdge,
+    DGPathExistingNode,
+    DGPathNode,
+    DGPathNodeEntity,
+    DGPathNodeLiteralValue,
+    DGPathNodeStatement,
     EdgeFlowSource,
     EdgeFlowTarget,
     EntityValueNode,
-    DGPathNodeStatement,
-    DGPathNodeEntity,
-    DGPathNodeLiteralValue,
-    DGPathExistingNode,
     LiteralValueNode,
     Span,
     StatementNode,
 )
 from grams.algorithm.data_graph.dg_inference import KGInference
 from grams.algorithm.data_graph.dg_pruning import DGPruning
-from grams.algorithm.data_graph.dg_config import DGConfigs
 from grams.algorithm.kg_index import KGObjectIndex
-from tqdm import tqdm
-import sm.misc as M
+from grams.algorithm.literal_matchers import LiteralMatch, TextParser
+from grams.inputs.linked_table import LinkedTable
+from kgdata.wikidata.models import WDEntity, WDProperty
 
 
 class DGFactory:
@@ -235,7 +234,6 @@ class DGFactory:
         if DGConfigs.PRUNE_REDUNDANT_ENT:
             DGPruning(dg).prune_hidden_entities()
 
-        M.log("grams", data_graph=dg)
         return dg
 
     def kg_path_discovering(

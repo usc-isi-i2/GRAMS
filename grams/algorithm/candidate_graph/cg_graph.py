@@ -18,16 +18,12 @@ from typing import (
     NamedTuple,
     Any,
 )
-from uuid import uuid4
 
-import networkx as nx
 from kgdata.wikidata.models import WDValue
 from grams.algorithm.data_graph import (
     ContextSpan,
     FlowProvenance,
 )
-import sm.outputs as O
-import sm.misc as M
 
 
 @dataclass

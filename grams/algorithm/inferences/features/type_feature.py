@@ -14,7 +14,7 @@ from typing import (
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.features.tree_utils import TreeStruct
 from grams.algorithm.inferences.psl_lib import IDMap
-from sm.misc import CacheMethod
+from sm.misc.fn_cache import CacheMethod
 import numpy as np
 from grams.algorithm.data_graph import CellNode
 from grams.algorithm.literal_matchers import TextParser

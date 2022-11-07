@@ -23,7 +23,9 @@ from kgdata.wikidata.models import WDEntityLabel
 from loguru import logger
 from tqdm import tqdm
 import sm.misc as M
-import sm.outputs as O
+from sm.outputs.semantic_model import SemanticModel
+from timer import Timer
+import serde.prelude as serde
 from kgdata.wikidata.db import (
     WDProxyDB,
     get_entity_db,
@@ -50,7 +52,7 @@ from grams.config import DEFAULT_CONFIG
 
 @dataclass
 class Annotation:
-    sm: O.SemanticModel
+    sm: SemanticModel
     # data graph
     dg: DGGraph
     # candidate graph
@@ -74,7 +76,7 @@ class GRAMS:
         cfg=None,
         proxy: bool = True,
     ):
-        self.timer = M.Timer()
+        self.timer = Timer()
         self.cfg = cfg if cfg is not None else DEFAULT_CONFIG
 
         with self.timer.watch("init grams db"):
@@ -100,7 +102,7 @@ class GRAMS:
             if os.path.exists(os.path.join(data_dir, "wdclasses.fixed.jl")):
                 self.wdclasses = self.wdclasses.cache()
                 assert isinstance(self.wdclasses, CacheDict)
-                for record in M.deserialize_jl(
+                for record in serde.jl.deser(
                     os.path.join(data_dir, "wdclasses.fixed.jl")
                 ):
                     cls = WDClass.from_dict(record)

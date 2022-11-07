@@ -8,10 +8,10 @@ import click
 from omegaconf import OmegaConf
 
 import grams.inputs as I
-import sm.misc as M
 from grams.config import PKG_DIR, ROOT_DIR
 from grams.main import GRAMS
 from tqdm.auto import tqdm
+import serde.json
 
 
 @dataclass
@@ -92,7 +92,7 @@ def cli(
         if io_file.infile.name.endswith(".csv"):
             tbl = I.LinkedTable.from_csv_file(io_file.infile)
         elif io_file.infile.name.endswith(".json"):
-            tbl = I.LinkedTable.from_dict(M.deserialize_json(io_file.infile))
+            tbl = I.LinkedTable.from_dict(serde.json.deser(io_file.infile))
         else:
             raise NotImplementedError("%s" % io_file.infile.suffix)
         io_file.outfile.parent.mkdir(exist_ok=True, parents=True)
@@ -104,11 +104,11 @@ def cli(
         zip(io_files, tables), total=len(tables), disable=not verbose
     ):
         annotation = grams.annotate(tbl)
-        M.serialize_json(
-            {"semantic_models": [annotation.sm.to_dict()]}, io_file.outfile
-        )
+        serde.json.ser({"semantic_models": [annotation.sm.to_dict()]}, io_file.outfile)
         if viz:
-            annotation.sm.draw(io_file.outfile.parent / (io_file.outfile.stem + ".png"))
+            annotation.sm.draw(
+                str(io_file.outfile.parent / (io_file.outfile.stem + ".png"))
+            )
 
 
 def io_parser(infiles: str, outfiles: str) -> List[IOFile]:

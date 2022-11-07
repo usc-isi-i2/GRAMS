@@ -3,14 +3,14 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-import sm.misc as M
 from grams.config import ROOT_DIR
+import serde.csv
 
 
 def clean_table_linker(
     infile, outfile, ext_gt: Optional[Dict[Tuple[int, int], str]] = None
 ):
-    rows = M.deserialize_csv(infile)
+    rows = serde.csv.deser(infile)
     cname2idx = {v: k for k, v in enumerate(rows[0])}
 
     cells = defaultdict(dict)
@@ -38,7 +38,7 @@ def clean_table_linker(
     links = []
     for (ri, ci), o in cells.items():
         links.append([ri, ci, o["gt"]] + o["pred_ent"])
-    M.serialize_csv(links, outfile, delimiter="\t")
+    serde.csv.ser(links, outfile, delimiter="\t")
 
 
 if __name__ == "__main__":

@@ -4,10 +4,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Iterable, Mapping, Set, Union, List, NamedTuple, Optional
 
-import sm.misc as M
 from loguru import logger
 from tqdm.auto import tqdm
 from kgdata.wikidata.models import WDEntity, WDProperty
+
+import serde.pickle
 
 Relationship = NamedTuple(
     "Relationship", [("prop", str), ("quals", List[str]), ("both", bool)]
@@ -133,7 +134,7 @@ class KGObjectIndex:
     @staticmethod
     def deserialize(infile: Union[Path, str], verbose: bool = False):
         start = time.time()
-        index = M.deserialize_pkl(infile)
+        index = serde.pickle.deser(infile)
         if verbose:
             logger.info(
                 "Deserialize KG object index takes {} seconds",
@@ -143,7 +144,7 @@ class KGObjectIndex:
 
     def serialize(self, outfile: Union[Path, str]):
         Path(outfile).parent.mkdir(exist_ok=True, parents=True)
-        M.serialize_pkl(self, outfile)
+        serde.pickle.ser(self, outfile)
 
     def iter_hop1_props(
         self, source_qnode_id: str, target_qnode_id: str

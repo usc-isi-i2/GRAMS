@@ -2,27 +2,17 @@ from __future__ import annotations
 
 import copy
 import re
-from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum, Flag, auto
-from functools import cmp_to_key
-from itertools import chain
-from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Union, cast
+from enum import Enum
+from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Union
 from graph.retworkx import (
     RetworkXStrDiGraph,
     BaseEdge,
     BaseNode,
 )
 
-import networkx as nx
 import sm.misc as M
-from grams.algorithm.kg_index import KGObjectIndex
-from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import WDValue, WDEntity, WDClass, WDProperty
-from loguru import logger
-from sm.misc.graph import viz_graph
-from tqdm import tqdm
-from typing_extensions import TypedDict
+from kgdata.wikidata.models import WDValue
 
 
 @dataclass(frozen=True)

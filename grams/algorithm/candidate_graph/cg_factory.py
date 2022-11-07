@@ -168,7 +168,6 @@ class CGFactory:
                                     EdgeFlowSource(u.id, p), EdgeFlowTarget(qv.id, qp)
                                 ),
                             )
-        M.log("grams", candidate_graph=cg)
         return cg
 
     @staticmethod

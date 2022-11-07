@@ -1,19 +1,17 @@
 from __future__ import annotations
-from collections import defaultdict
-import re
 from dataclasses import dataclass, asdict, field
 from hashlib import md5
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Union, Set
+from typing import List, Optional, Union, Set
 from urllib.parse import urlparse
 
 import fastnumbers
 import orjson
 from slugify import slugify
 
-import sm.misc as M
 from sm.inputs.table import ColumnBasedTable, Column
 from grams.inputs.context import ContentHierarchy
+import serde.csv
 
 
 @dataclass
@@ -139,7 +137,7 @@ class LinkedTable:
 
         if table_id is None:
             table_id = infile.stem
-        rows = M.deserialize_csv(infile)
+        rows = serde.csv.deser(infile)
 
         assert len(rows) > 0, "Empty table"
         columns = []
@@ -187,7 +185,7 @@ class LinkedTable:
             links.append([[] for _ci in range(ncols)])
 
         rows = []
-        for row in M.deserialize_csv(infile, delimiter="\t"):
+        for row in serde.csv.deser(infile, delimiter="\t"):
             ri, ci, ents = int(row[0]), int(row[1]), row[2:]
             rows.append((ri, ci, ents))
 
