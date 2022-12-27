@@ -1,7 +1,7 @@
 from __future__ import annotations
 import re
 from numparser.fsm.parser import DEFAULT_NOT_UNITS
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, MINYEAR
 from typing import Optional
 
@@ -10,11 +10,18 @@ from dateutil.parser import parse as dt_parse, ParserError
 from numparser import ParsedNumber, FSMParser
 
 
+@dataclass
 class TextParserConfigs:
     """Configurations for the parser"""
 
-    NUM_PARSER = "grams.algorithm.literal_matchers.text_parser.BasicNumberParser"
-    DATETIME_PARSER = "grams.algorithm.literal_matchers.text_parser.BasicDatetimeParser"
+    NUM_PARSER: str = field(
+        default="grams.algorithm.literal_matchers.text_parser.BasicNumberParser",
+        metadata={"help": "number parser"},
+    )
+    DATETIME_PARSER: str = field(
+        default="grams.algorithm.literal_matchers.text_parser.BasicDatetimeParser",
+        metadata={"help": "datetime parser"},
+    )
 
 
 @dataclass
@@ -56,11 +63,12 @@ class ParsedDatetimeRepr:
 
 
 class TextParser:
-    def __init__(self):
+    def __init__(self, cfg: TextParserConfigs):
         self.cache = {}
+        self.cfg = cfg
 
         if (
-            TextParserConfigs.DATETIME_PARSER
+            cfg.DATETIME_PARSER
             == "grams.algorithm.literal_matchers.text_parser.BasicDatetimeParser"
         ):
             self.dt_parser = BasicDatetimeParser()
@@ -68,7 +76,7 @@ class TextParser:
             raise NotImplementedError()
 
         if (
-            TextParserConfigs.NUM_PARSER
+            cfg.NUM_PARSER
             == "grams.algorithm.literal_matchers.text_parser.BasicNumberParser"
         ):
             self.number_parser = BasicNumberParser()
@@ -76,6 +84,10 @@ class TextParser:
             raise NotImplementedError()
 
         self.number_chars = re.compile(r"[^0-9\.+-]")
+
+    @staticmethod
+    def default():
+        return TextParser(TextParserConfigs())
 
     def parse(self, text: str) -> ParsedTextRepr:
         if text not in self.cache:

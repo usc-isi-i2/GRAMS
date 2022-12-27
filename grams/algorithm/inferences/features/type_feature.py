@@ -1,15 +1,10 @@
-from collections import defaultdict
-from dataclasses import dataclass
 from typing import (
     Callable,
     Dict,
     List,
     Mapping,
     Optional,
-    Set,
     Tuple,
-    TYPE_CHECKING,
-    TypeVar,
 )
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.features.tree_utils import TreeStruct
@@ -17,7 +12,6 @@ from grams.algorithm.inferences.psl_lib import IDMap
 from sm.misc.fn_cache import CacheMethod
 import numpy as np
 from grams.algorithm.data_graph import CellNode
-from grams.algorithm.literal_matchers import TextParser
 from grams.algorithm.candidate_graph.cg_graph import CGColumnNode, CGGraph
 from grams.inputs.linked_table import LinkedTable
 from kgdata.wikidata.models import (

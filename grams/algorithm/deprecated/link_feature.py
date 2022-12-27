@@ -53,6 +53,7 @@ class LinkFeatureExtraction:
         qnodes: Mapping[str, WDEntity],
         wdprops: Mapping[str, WDProperty],
         wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
+        text_parser: TextParser,
         sim_fn: Optional[Callable[[str, str], float]] = None,
     ):
         self.table = table
@@ -61,7 +62,7 @@ class LinkFeatureExtraction:
         self.qnodes = qnodes
         self.wdprops = wdprops
         self.wd_num_prop_stats = wd_num_prop_stats
-        self.text_parser = TextParser()
+        self.text_parser = text_parser
         self.sim_fn = sim_fn
 
         self.cache_get_value_map = {}

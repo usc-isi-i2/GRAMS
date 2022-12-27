@@ -136,18 +136,18 @@ class GRAMS:
 
     def update_config(self):
         """Update the current configuration of the algorithm based on the current configuration stored in this object"""
-        # TODO: switch to new data graph configuration
+        # TODO: switch to new configuration
         # for name, value in self.cfg.data_graph.configs.items():
         #     if not hasattr(DGConfigs, name):
         #         raise Exception(f"Invalid configuration for data_graph: {name}")
         #     setattr(DGConfigs, name, value)
 
-        for name, value in self.cfg.literal_matcher.text_parser.items():
-            if not hasattr(TextParserConfigs, name):
-                raise Exception(
-                    f"Invalid configuration for literal_matcher.text_parser: {name}"
-                )
-            setattr(TextParserConfigs, name, value)
+        # for name, value in self.cfg.literal_matcher.text_parser.items():
+        #     if not hasattr(TextParserConfigs, name):
+        #         raise Exception(
+        #             f"Invalid configuration for literal_matcher.text_parser: {name}"
+        #         )
+        #     setattr(TextParserConfigs, name, value)
 
         for name, value in self.cfg.literal_matcher.matchers.items():
             if not hasattr(LiteralMatch, name):

@@ -1,9 +1,6 @@
-from collections import defaultdict
-from dataclasses import dataclass
 from typing import (
     Callable,
     Dict,
-    Iterable,
     List,
     Mapping,
     Optional,
@@ -11,19 +8,15 @@ from typing import (
     TypeVar,
     Union,
 )
-from operator import attrgetter
-from grams.algorithm.data_graph.dg_graph import DGGraph, DGNode, EntityValueNode
+from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.psl_lib import IDMap
 
-from grams.algorithm.data_graph import CellNode
-from grams.algorithm.literal_matchers import TextParser
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEdge,
     CGEntityValueNode,
     CGGraph,
     CGLiteralValueNode,
-    CGNode,
     CGStatementNode,
 )
 from grams.inputs.linked_table import LinkedTable

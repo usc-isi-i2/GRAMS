@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from grams.actors.db_actor import GramsDB
 from grams.actors.evaluator import Evaluator
+from grams.algorithm.literal_matchers import TextParser, TextParserConfigs
 from grams.inputs.linked_table import LinkedTable
 from ned.actors.evaluate_helper import EvalArgs
 import numpy as np
@@ -55,6 +56,10 @@ class GramsParams:
     data_graph: DGConfigs = field(
         default_factory=DGConfigs,
         metadata={"help": "Configuration for the data graph"},
+    )
+    text_parser: TextParserConfigs = field(
+        default_factory=TextParserConfigs,
+        metadata={"help": "Configuration for the text parser"},
     )
     psl: PslConfig = field(
         default_factory=PslConfig,
@@ -259,7 +264,8 @@ def annotate(
         )
 
     with timer.watch("build dg & sg"):
-        dg_factory = DGFactory(wdentities, wdprops, cfg.data_graph)
+        text_parser = TextParser(cfg.text_parser)
+        dg_factory = DGFactory(wdentities, wdprops, text_parser, cfg.data_graph)
         dg = dg_factory.create_dg(
             table, kg_object_index, max_n_hop=cfg.data_graph.max_n_hop
         )
