@@ -1,6 +1,11 @@
 from grams.inputs.linked_table import (
     LinkedTable,
-    Link,
-    Context,
-    CandidateEntity,
+    ExtendedLink,
+    CandidateEntityId,
 )
+
+__all__ = [
+    "LinkedTable",
+    "ExtendedLink",
+    "CandidateEntityId",
+]

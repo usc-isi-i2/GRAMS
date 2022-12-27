@@ -11,7 +11,7 @@ from graph.retworkx import (
     BaseNode,
 )
 
-import sm.misc as M
+from sm.misc.prelude import UnreachableError
 from kgdata.wikidata.models import WDValue
 
 
@@ -212,7 +212,7 @@ class FlowProvenance:
                     return self
                 return another
             return None
-        raise M.UnreachableError()
+        raise UnreachableError()
 
     @staticmethod
     def merge_lst(

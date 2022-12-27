@@ -106,18 +106,19 @@ class DGFactory:
                 )
                 dg.add_node(node)
 
-        if DGConfigs.USE_CONTEXT and table.context.page_entity_id is not None:
+        if DGConfigs.USE_CONTEXT and len(table.context.page_entities) > 0:
             assert table.context.page_title is not None
-            context_node_id = DGPathNodeEntity(table.context.page_entity_id).get_id()
-            node = EntityValueNode(
-                id=context_node_id,
-                qnode_id=table.context.page_entity_id,
-                context_span=ContextSpan(
-                    text=table.context.page_title,
-                    span=Span(0, len(table.context.page_title)),
-                ),
-            )
-            dg.add_node(node)
+            for page_entity in table.context.page_entities:
+                context_node_id = DGPathNodeEntity(page_entity).get_id()
+                node = EntityValueNode(
+                    id=context_node_id,
+                    qnode_id=page_entity,
+                    context_span=ContextSpan(
+                        text=table.context.page_title,
+                        span=Span(0, len(table.context.page_title)),
+                    ),
+                )
+                dg.add_node(node)
 
         # find all paths
         n_rows = len(table.table.columns[0].values)

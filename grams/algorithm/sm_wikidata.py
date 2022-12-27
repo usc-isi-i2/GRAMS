@@ -274,7 +274,10 @@ class WikidataSemanticModelHelper:
                         value=wdns.get_entity_abs_uri(vnode.qnode_id),
                         readable_label=self.get_qnode_label(vnode.qnode_id),
                         datatype=LiteralNodeDataType.Entity,
-                        is_in_context=vnode.qnode_id == table.context.page_entity_id,
+                        is_in_context=any(
+                            vnode.qnode_id == page_eid
+                            for page_eid in table.context.page_entities
+                        ),
                     )
                     cpa_idmap[vnode.id] = sm.add_node(target)
                 else:

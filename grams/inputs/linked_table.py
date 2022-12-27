@@ -1,29 +1,28 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict, field
-from hashlib import md5
+
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Union, Set
-from urllib.parse import urlparse
+from typing import List, Optional, Set, Union
 
 import fastnumbers
 import orjson
-from slugify import slugify
-
-from sm.inputs.table import ColumnBasedTable, Column
-from grams.inputs.context import ContentHierarchy
 import serde.csv
+
+from sm.dataset import FullTable, get_friendly_fs_id
+from sm.inputs.prelude import (
+    WIKIDATA,
+    Column,
+    ColumnBasedTable,
+    Context,
+    EntityId,
+    Link,
+)
+from sm.misc.matrix import Matrix
 
 
 @dataclass
-class LinkedTable:
-    # the table that we are working on
-    table: ColumnBasedTable
-
-    # context of the table
-    context: Context
-
-    # a mapping from (row id, column id) to the list of links attach to that cell (not include header)
-    links: List[List[List[Link]]]
+class LinkedTable(FullTable):
+    links: Matrix[List[ExtendedLink]]
 
     @property
     def id(self):
@@ -32,18 +31,17 @@ class LinkedTable:
     def shape(self):
         return self.table.shape()
 
-    def remove_nonexistent_entities(self, nonexisting_entities: Set[str]):
-        nrows, ncols = self.table.shape()
-        for ri in range(nrows):
-            for ci in range(ncols):
-                for link in self.links[ri][ci]:
-                    link.remove_nonexisting_entities(nonexisting_entities)
-
     def size(self):
         """Number of rows of the table"""
         if len(self.table.columns) == 0:
             return 0
         return len(self.table.columns[0].values)
+
+    def remove_nonexistent_entities(self, nonexisting_entities: Set[str]):
+        nrows, ncols = self.table.shape()
+        for links in self.links.flat_iter():
+            for link in links:
+                link.remove_nonexisting_entities(nonexisting_entities)
 
     def iter_cell_index(self):
         nrows, ncols = self.table.shape()
@@ -51,54 +49,25 @@ class LinkedTable:
             for ci in range(ncols):
                 yield ri, ci
 
-    def to_dict(self):
-        return {
-            "version": "1.2",
-            "table": self.table.to_dict(),
-            "context": self.context.to_dict(),
-            "links": [
-                [[link.to_dict() for link in links] for links in rlinks]
-                for rlinks in self.links
-            ],
-        }
+    @classmethod
+    def from_dict(cls, obj: dict):
+        version = obj["version"]
+        if not version == 2:
+            raise ValueError(f"Unknown version: {version}")
+
+        return cls(
+            table=ColumnBasedTable.from_dict(obj["table"]),
+            context=Context.from_dict(obj["context"]),
+            links=Matrix(
+                [
+                    [[ExtendedLink.from_dict(link) for link in cell] for cell in row]
+                    for row in obj["links"]
+                ]
+            ),
+        )
 
     def get_friendly_fs_id(self):
-        return LinkedTable._get_friendly_fs_id(self.id)
-
-    @staticmethod
-    def _get_friendly_fs_id(id: str):
-        if id.startswith("http://") or id.startswith("https://"):
-            if id.find("dbpedia.org") != -1:
-                return (
-                    slugify(
-                        urlparse(id).path.replace("/resource/", "").replace("/", "_")
-                    ).replace("-", "_")
-                    + "_"
-                    + md5(id.encode()).hexdigest()
-                )
-
-            if id.find("wikipedia.org") != -1:
-                return (
-                    slugify(
-                        urlparse(id).path.replace("/wiki/", "").replace("/", "_")
-                    ).replace("-", "_")
-                    + "_"
-                    + md5(id.encode()).hexdigest()
-                )
-
-            raise NotImplementedError()
-        return slugify(id.replace("/", "_")).replace("-", "_")
-
-    @staticmethod
-    def from_dict(odict: dict):
-        assert float(odict.get("version", "0.0")) >= 1.1
-        tbl = ColumnBasedTable.from_dict(odict["table"])
-        context = Context.from_dict(odict["context"])
-        links = [
-            [[Link.from_dict(link) for link in links] for links in rlinks]
-            for rlinks in odict["links"]
-        ]
-        return LinkedTable(tbl, context, links)
+        return get_friendly_fs_id(self.id)
 
     @staticmethod
     def from_column_based_table(tbl: ColumnBasedTable):
@@ -108,7 +77,28 @@ class LinkedTable:
                 [[] for ci in range(len(tbl.columns))]
                 for ri in range(len(tbl.columns[0].values))
             ]
-        return LinkedTable(tbl, Context(None, None, None), links)
+        return LinkedTable(tbl, Context(), Matrix(links))
+
+    @staticmethod
+    def from_full_table(tbl: FullTable):
+        return LinkedTable(
+            tbl.table,
+            tbl.context,
+            Matrix(
+                [
+                    [
+                        [
+                            ExtendedLink(
+                                link.start, link.end, link.url, link.entities, []
+                            )
+                            for link in cell
+                        ]
+                        for cell in row
+                    ]
+                    for row in tbl.links.data
+                ]
+            ),
+        )
 
     @staticmethod
     def from_csv_file(
@@ -153,22 +143,17 @@ class LinkedTable:
 
         if link_file.exists():
             links = LinkedTable.parse_link_file(table, link_file, top_k)
-            for rlinks in links:
-                for clinks in rlinks:
-                    for link in clinks:
-                        if link.entity_id is not None:
-                            link.candidates = [CandidateEntity(link.entity_id, 1.0)]
         else:
             links = []
             for ri in range(len(rows)):
                 links.append([[] for _ci in range(len(headers))])
-
+            links = Matrix(links)
         return LinkedTable(table, Context(), links)
 
     @staticmethod
     def parse_link_file(
         table: ColumnBasedTable, infile: Union[Path, str], top_k: int = 100
-    ) -> List[List[List[Link]]]:
+    ) -> Matrix[List[ExtendedLink]]:
         """
         Each row of a link file has the following format: `<row_index>\t<col_index>\t(<link>|(<entity_id>(\t<entity_id>)*))`, where:
             * `row_index` and `col_index` start from 0
@@ -212,89 +197,113 @@ class LinkedTable:
                     pents.append((qnode_id, qnode_prob))
 
                 if has_only_correct_entity:
-                    candidates = [CandidateEntity(pents[0][0], pents[0][1])]
+                    candidates = [
+                        CandidateEntityId(EntityId(pents[0][0], WIKIDATA), pents[0][1])
+                    ]
                 else:
-                    candidates = [CandidateEntity(e[0], e[1]) for e in pents[1:]]
+                    candidates = [
+                        CandidateEntityId(EntityId(e[0], WIKIDATA), e[1])
+                        for e in pents[1:]
+                    ]
 
-                link = Link(
+                link = ExtendedLink(
                     start=0,
                     end=len(table.columns[ci][ri]),
                     url=f"http://www.wikidata.org/entity/{pents[0][0]}",
-                    entity_id=pents[0][0] if pents[0][0].strip() != "" else None,
+                    entities=[EntityId(pents[0][0], WIKIDATA)]
+                    if pents[0][0].strip() != ""
+                    else [],
                     candidates=candidates,
                 )
             links[ri][ci].append(link)
 
-        return links
+        return Matrix(links)
 
 
-@dataclass
-class Context:
-    """Table's context"""
+class CandidateEntityId:
+    __slots__ = ("entity_id", "probability")
 
-    page_title: Optional[str] = None
-    page_url: Optional[str] = None
-    page_entity_id: Optional[str] = None
-
-    content_hierarchy: List[ContentHierarchy] = field(default_factory=list)
+    def __init__(self, entity_id: EntityId, probability: float):
+        self.entity_id = entity_id
+        self.probability = probability
 
     def to_dict(self):
         return {
-            "page_title": self.page_title,
-            "page_url": self.page_url,
-            "page_entity_id": self.page_entity_id,
-            "content_hierarchy": [c.to_dict() for c in self.content_hierarchy],
+            "id": self.entity_id.to_dict(),
+            "prob": self.probability,
         }
 
-    @staticmethod
-    def from_dict(odict: dict):
-        return Context(
-            page_title=odict.get("page_title"),
-            page_url=odict.get("page_url"),
-            page_entity_id=odict.get("page_entity_id"),
-            content_hierarchy=[
-                ContentHierarchy.from_dict(c)
-                for c in odict.get("content_hierarchy", [])
-            ],
+    @classmethod
+    def from_dict(cls, obj: dict) -> CandidateEntityId:
+        return CandidateEntityId(
+            entity_id=EntityId.from_dict(obj["id"]),
+            probability=obj["prob"],
         )
 
 
-@dataclass
-class CandidateEntity:
-    entity_id: str
-    probability: float
+class ExtendedLink(Link):
+    __slots__ = ("candidates",)
 
+    def __init__(
+        self,
+        start: int,
+        end: int,
+        url: Optional[str],
+        entities: List[EntityId],
+        candidates: List[CandidateEntityId],
+    ):
+        super().__init__(start, end, url, entities)
+        self.candidates = candidates
 
-@dataclass
-class Link:
-    start: int
-    end: int  # exclusive
-    url: Optional[str]  # none when there is no link, and the entity is not mapped yet
-    entity_id: Optional[str]
-    candidates: List[CandidateEntity]
-
-    @staticmethod
-    def from_dict(obj: dict) -> Link:
-        return Link(
-            start=obj["start"],
-            end=obj["end"],
-            url=obj["url"],
-            entity_id=obj["entity_id"],
-            candidates=[CandidateEntity(**c) for c in obj.get("candidates", [])],
+    def clone(self):
+        return ExtendedLink(
+            self.start,
+            self.end,
+            self.url,
+            self.entities.copy(),
+            self.candidates.copy(),
         )
 
-    def to_dict(self) -> dict:
-        return {
-            "start": self.start,
-            "end": self.end,
-            "url": self.url,
-            "entity_id": self.entity_id,
-            "candidates": [asdict(c) for c in self.candidates],
-        }
+    def to_dict(self):
+        obj = super().to_dict()
+        obj["candidates"] = [c.to_dict() for c in self.candidates]
+        return obj
+
+    @classmethod
+    def from_dict(cls, obj: dict) -> ExtendedLink:
+        version = obj.get("version")
+        if version == 2:
+            return ExtendedLink(
+                start=obj["start"],
+                end=obj["end"],
+                url=obj["url"],
+                entities=[EntityId.from_dict(e) for e in obj["entities"]],
+                candidates=[CandidateEntityId.from_dict(c) for c in obj["candidates"]],
+            )
+        if version is None:
+            return ExtendedLink(
+                start=obj["start"],
+                end=obj["end"],
+                url=obj["url"],
+                entities=[EntityId(id=eid, type="wikidata")]
+                if (eid := obj["entity_id"]) is not None
+                else [],
+                candidates=[
+                    CandidateEntityId(
+                        EntityId(id=c["entity_id"], type="wikidata"),
+                        probability=c["probability"],
+                    )
+                    for c in obj["candidates"]
+                ]
+                if "candidates" in obj
+                else [],
+            )
+        raise ValueError(f"Unknown version: {version}")
 
     def remove_nonexisting_entities(self, nonexisting_entities: Set[str]):
-        if self.entity_id in nonexisting_entities:
-            self.entity_id = None
+        self.entities = [
+            entid for entid in self.entities if entid not in nonexisting_entities
+        ]
         self.candidates = [
             c for c in self.candidates if c.entity_id not in nonexisting_entities
         ]
