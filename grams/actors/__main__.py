@@ -37,10 +37,12 @@ else:
         OsinActor._osin = Osin.remote(REMOTE_OSIN, "/tmp/osin")
 ReamWorkspace.init(HOME_DIR / "ream")
 WikidataDB.init(DATABASE_DIR)
-graph: ActorGraph = ActorGraph.auto(
-    [NEDDatasetActor, EntityRecognitionActor, CanGenActor, CanRankActor]
-    + [GramsDatasetActor, GramsELDatasetActor, GramsActor]
-)
+# fmt: off
+graph: ActorGraph = ActorGraph.auto({
+    "ed": NEDDatasetActor, "er": EntityRecognitionActor, "cg": CanGenActor, "cr": CanRankActor,
+    "gd": GramsDatasetActor, "gde": GramsELDatasetActor, "ga": GramsActor
+})
+# fmt: on
 ########################################################
 
 
