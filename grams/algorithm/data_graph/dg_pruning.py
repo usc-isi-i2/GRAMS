@@ -24,8 +24,9 @@ class DGPruning:
     NxDGEdgeAttr = TypedDict("NxDGEdgeAttr", data=DGEdge)
     NxDGEdge = Tuple[str, str, str, NxDGEdgeAttr]
 
-    def __init__(self, dg: DGGraph):
+    def __init__(self, dg: DGGraph, cfg: DGConfigs):
         self.dg = dg
+        self.cfg = cfg
 
     def prune_hidden_entities(self):
         """Prune redundant KG entities, which added to the graph via KG discovering and from the context.
@@ -158,7 +159,7 @@ class DGPruning:
         #             sum(self.dg.out_degree(uid) + self.dg.in_degree(uid) == 0 for uid in self.dg.nodes))
 
         # step 2: prune the first leg paths (temporary disable)
-        if DGConfigs.PRUNE_SINGLE_LEAF_ENT:
+        if self.cfg.PRUNE_SINGLE_LEAF_ENT:
             rm_legs: List[Tuple[str, EdgeFlowSource, EdgeFlowTarget]] = []
             for n in self.dg.iter_nodes():
                 if not isinstance(n, EntityValueNode) or self.dg.out_degree(n.id) > 0:

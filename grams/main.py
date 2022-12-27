@@ -43,7 +43,7 @@ from kgdata.wikidata.models import (
 )
 
 import grams.inputs as I
-from grams.algorithm.data_graph import DGConfigs, DGFactory
+from grams.algorithm.data_graph import DGFactory
 from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
 
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
@@ -136,10 +136,11 @@ class GRAMS:
 
     def update_config(self):
         """Update the current configuration of the algorithm based on the current configuration stored in this object"""
-        for name, value in self.cfg.data_graph.configs.items():
-            if not hasattr(DGConfigs, name):
-                raise Exception(f"Invalid configuration for data_graph: {name}")
-            setattr(DGConfigs, name, value)
+        # TODO: switch to new data graph configuration
+        # for name, value in self.cfg.data_graph.configs.items():
+        #     if not hasattr(DGConfigs, name):
+        #         raise Exception(f"Invalid configuration for data_graph: {name}")
+        #     setattr(DGConfigs, name, value)
 
         for name, value in self.cfg.literal_matcher.text_parser.items():
             if not hasattr(TextParserConfigs, name):

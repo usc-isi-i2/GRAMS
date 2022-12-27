@@ -32,7 +32,7 @@ from timer import Timer
 
 import grams.inputs as I
 from grams.algorithm.data_graph import DGFactory
-from grams.algorithm.data_graph.dg_config import DGConfigs2
+from grams.algorithm.data_graph.dg_config import DGConfigs
 from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
 
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
@@ -52,8 +52,8 @@ class GramsParams:
         default=True,
         metadata={"help": "Whether to use a proxy database for the semantic model"},
     )
-    data_graph: DGConfigs2 = field(
-        default_factory=DGConfigs2,
+    data_graph: DGConfigs = field(
+        default_factory=DGConfigs,
         metadata={"help": "Configuration for the data graph"},
     )
     psl: PslConfig = field(
@@ -259,7 +259,7 @@ def annotate(
         )
 
     with timer.watch("build dg & sg"):
-        dg_factory = DGFactory(wdentities, wdprops)
+        dg_factory = DGFactory(wdentities, wdprops, cfg.data_graph)
         dg = dg_factory.create_dg(
             table, kg_object_index, max_n_hop=cfg.data_graph.max_n_hop
         )

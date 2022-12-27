@@ -2,7 +2,6 @@ from typing import Mapping, Optional, Set, Union
 
 from tqdm import tqdm
 
-from grams.algorithm.data_graph.dg_config import DGConfigs
 from grams.algorithm.data_graph.dg_graph import (
     CellNode,
     ContextSpan,
@@ -22,6 +21,7 @@ from grams.algorithm.data_graph.dg_graph import (
     Span,
     StatementNode,
 )
+from grams.algorithm.data_graph.dg_config import DGConfigs
 from grams.algorithm.data_graph.dg_inference import KGInference
 from grams.algorithm.data_graph.dg_pruning import DGPruning
 from grams.algorithm.kg_index import KGObjectIndex
@@ -32,14 +32,18 @@ from kgdata.wikidata.models import WDEntity, WDProperty
 
 class DGFactory:
     def __init__(
-        self, wdentities: Mapping[str, WDEntity], wdprops: Mapping[str, WDProperty]
+        self,
+        wdentities: Mapping[str, WDEntity],
+        wdprops: Mapping[str, WDProperty],
+        cfg: DGConfigs,
     ):
+        self.cfg: DGConfigs = cfg
         self.wdentities = wdentities
         self.wdprops = wdprops
         self.textparser = TextParser()
         self.literal_match = LiteralMatch(wdentities)
 
-        if DGConfigs.USE_KG_INDEX:
+        if self.cfg.USE_KG_INDEX:
             self._path_object_search = self._path_object_search_v2
         else:
             self._path_object_search = self._path_object_search_v1
@@ -106,7 +110,7 @@ class DGFactory:
                 )
                 dg.add_node(node)
 
-        if DGConfigs.USE_CONTEXT and len(table.context.page_entities) > 0:
+        if self.cfg.USE_CONTEXT and len(table.context.page_entities) > 0:
             assert table.context.page_title is not None
             for page_entity in table.context.page_entities:
                 context_node_id = DGPathNodeEntity(page_entity).get_id()
@@ -232,8 +236,8 @@ class DGFactory:
         ).infer_subproperty().kg_transitive_inference()
 
         # pruning unnecessary paths
-        if DGConfigs.PRUNE_REDUNDANT_ENT:
-            DGPruning(dg).prune_hidden_entities()
+        if self.cfg.PRUNE_REDUNDANT_ENT:
+            DGPruning(dg, self.cfg).prune_hidden_entities()
 
         return dg
 
@@ -411,7 +415,7 @@ class DGFactory:
         # max_n_hop = 2 mean we will find a path that go from source to target through an hidden node
         # hop start at 1 (current node)
 
-        if not DGConfigs.ALLOW_SAME_ENT_SEARCH and source.id == target.id:
+        if not self.cfg.ALLOW_SAME_ENT_SEARCH and source.id == target.id:
             return []
 
         matches = []
@@ -612,7 +616,7 @@ class DGFactory:
         # max_n_hop = 2 mean we will find a path that go from source to target through an hidden node
         # hop start at 1 (current node)
 
-        if not DGConfigs.ALLOW_SAME_ENT_SEARCH and source.id == target.id:
+        if not self.cfg.ALLOW_SAME_ENT_SEARCH and source.id == target.id:
             return []
 
         matches = []
