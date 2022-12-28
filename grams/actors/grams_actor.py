@@ -1,47 +1,50 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from pathlib import Path
-from grams.actors.db_actor import GramsDB
-from grams.actors.evaluator import Evaluator
-from grams.algorithm.literal_matchers import TextParser, TextParserConfigs
-from grams.inputs.linked_table import LinkedTable
-from ned.actors.evaluate_helper import EvalArgs
-import numpy as np
 
-from osin.integrations.ream import OsinActor
-from dataclasses import dataclass
-from operator import itemgetter
+from dataclasses import dataclass, field
 from functools import partial
+from operator import itemgetter
 from pathlib import Path
 from typing import Union
+
+import numpy as np
+import ray
+from loguru import logger
+from osin.integrations.ream import OsinActor
+from ream.dataset_helper import DatasetDict, DatasetQuery
+from timer import Timer
+
+import grams.inputs as I
+from grams.actors.dataset_actor import GramsELDatasetActor
+from grams.actors.db_actor import GramsDB
+from grams.actors.evaluator import Evaluator
 from grams.algorithm.candidate_graph.cg_factory import CGFactory
+from grams.algorithm.data_graph import DGFactory
+from grams.algorithm.data_graph.dg_config import DGConfigs
+from grams.algorithm.inferences.psl_config import PslConfig
 from grams.algorithm.inferences.psl_gram_model import PSLGramModel
 from grams.algorithm.inferences.psl_gram_model_exp import PSLGramModelExp
 from grams.algorithm.inferences.psl_gram_model_exp2 import PSLGramModelExp2
 from grams.algorithm.inferences.psl_lib import PSLModel
+from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
+from grams.algorithm.literal_matchers import (
+    LiteralMatch,
+    LiteralMatchConfigs,
+    TextParser,
+    TextParserConfigs,
+)
 from grams.algorithm.postprocessing import (
     MinimumArborescence,
     PairwiseSelection,
     PostProcessingSimplePath,
     SteinerTree,
 )
-from loguru import logger
-import ray
-from sm.dataset import Example
-from sm.misc.ray_helper import get_instance, ray_init, ray_map
-from timer import Timer
-
-import grams.inputs as I
-from grams.algorithm.data_graph import DGFactory
-from grams.algorithm.data_graph.dg_config import DGConfigs
-from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
-
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 from grams.config import DEFAULT_CONFIG
+from grams.inputs.linked_table import LinkedTable
 from grams.main import Annotation
-from grams.algorithm.inferences.psl_config import PslConfig
-from grams.actors.dataset_actor import GramsDatasetActor, GramsELDatasetActor
-from ream.dataset_helper import DatasetDict, DatasetQuery
+from ned.actors.evaluate_helper import EvalArgs
+from sm.dataset import Example
+from sm.misc.ray_helper import get_instance, ray_init, ray_map
 
 
 @dataclass
@@ -60,6 +63,10 @@ class GramsParams:
     text_parser: TextParserConfigs = field(
         default_factory=TextParserConfigs,
         metadata={"help": "Configuration for the text parser"},
+    )
+    literal_matchers: LiteralMatchConfigs = field(
+        default_factory=LiteralMatchConfigs,
+        metadata={"help": "Configuration for the literal matchers"},
     )
     psl: PslConfig = field(
         default_factory=PslConfig,
@@ -265,7 +272,11 @@ def annotate(
 
     with timer.watch("build dg & sg"):
         text_parser = TextParser(cfg.text_parser)
-        dg_factory = DGFactory(wdentities, wdprops, text_parser, cfg.data_graph)
+        literal_match = LiteralMatch(wdentities, cfg.literal_matchers)
+
+        dg_factory = DGFactory(
+            wdentities, wdprops, text_parser, literal_match, cfg.data_graph
+        )
         dg = dg_factory.create_dg(
             table, kg_object_index, max_n_hop=cfg.data_graph.max_n_hop
         )

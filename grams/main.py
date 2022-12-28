@@ -11,7 +11,6 @@ from grams.algorithm.inferences.psl_gram_model import PSLGramModel
 from grams.algorithm.inferences.psl_gram_model_exp import PSLGramModelExp
 from grams.algorithm.inferences.psl_gram_model_exp2 import PSLGramModelExp2
 from grams.algorithm.inferences.psl_lib import PSLModel
-from grams.algorithm.literal_matchers import TextParserConfigs, LiteralMatch
 from grams.algorithm.postprocessing import (
     MinimumArborescence,
     PairwiseSelection,
@@ -22,7 +21,6 @@ from hugedict.prelude import CacheDict, Parallel
 from kgdata.wikidata.models import WDEntityLabel
 from loguru import logger
 from tqdm import tqdm
-import sm.misc as M
 from sm.outputs.semantic_model import SemanticModel
 from timer import Timer
 import serde.prelude as serde
@@ -149,12 +147,12 @@ class GRAMS:
         #         )
         #     setattr(TextParserConfigs, name, value)
 
-        for name, value in self.cfg.literal_matcher.matchers.items():
-            if not hasattr(LiteralMatch, name):
-                raise Exception(
-                    f"Invalid configuration for literal_matcher.matchers: {name}"
-                )
-            setattr(LiteralMatch, name, value)
+        # for name, value in self.cfg.literal_matcher.matchers.items():
+        #     if not hasattr(LiteralMatch, name):
+        #         raise Exception(
+        #             f"Invalid configuration for literal_matcher.matchers: {name}"
+        #         )
+        #     setattr(LiteralMatch, name, value)
 
     def annotate(self, table: I.LinkedTable, verbose: bool = False) -> Annotation:
         """Annotate a linked table"""

@@ -36,13 +36,14 @@ class DGFactory:
         wdentities: Mapping[str, WDEntity],
         wdprops: Mapping[str, WDProperty],
         text_parser: TextParser,
+        literal_match: LiteralMatch,
         cfg: DGConfigs,
     ):
         self.cfg: DGConfigs = cfg
         self.wdentities = wdentities
         self.wdprops = wdprops
         self.textparser = text_parser
-        self.literal_match = LiteralMatch(wdentities)
+        self.literal_match = literal_match
 
         if self.cfg.USE_KG_INDEX:
             self._path_object_search = self._path_object_search_v2

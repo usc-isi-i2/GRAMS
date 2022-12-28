@@ -13,35 +13,43 @@ from grams.algorithm.literal_matchers.datetime_match import time_test
 from grams.algorithm.literal_matchers.entity_match import entity_similarity_test
 from grams.algorithm.literal_matchers.types import LiteralMatchKit
 from sm.misc.funcs import import_func
-
+from dataclasses import dataclass, field
 
 MatchFunc = Callable[[WDValue, ParsedTextRepr, LiteralMatchKit], Tuple[bool, float]]
 
 
-class LiteralMatch:
-    STRING = ".string_exact_test"
-    QUANTITY = ".quantity_test"
-    GLOBECOORDINATE = ".globecoordinate_test"
-    TIME = ".time_test"
-    MONOLINGUAL_TEXT = ".monolingual_exact_test"
-    ENTITY = ""
+@dataclass
+class LiteralMatchConfigs:
+    """Configuration for literal matcher functions"""
 
-    def __init__(self, wdentities: Mapping[str, WDEntity]):
+    STRING: str = field(
+        default=".string_exact_test", metadata={"help": "list of functions "}
+    )
+    QUANTITY: str = field(default=".quantity_test", metadata={"help": ""})
+    GLOBECOORDINATE: str = field(default=".globecoordinate_test", metadata={"help": ""})
+    TIME: str = field(default=".time_test", metadata={"help": ""})
+    MONOLINGUAL_TEXT: str = field(
+        default=".monolingual_exact_test", metadata={"help": ""}
+    )
+    ENTITY: str = field(default="", metadata={"help": ""})
+
+
+class LiteralMatch:
+    def __init__(self, wdentities: Mapping[str, WDEntity], cfg: LiteralMatchConfigs):
         self.match_kit = LiteralMatchKit(wdentities)
+        self.cfg = cfg
 
         self.type2func: Dict[
             WDValueType,
             List[MatchFunc],
         ] = {}
 
-        self.type2func["string"] = self.cfg2funcs(LiteralMatch.STRING)
-        self.type2func["quantity"] = self.cfg2funcs(LiteralMatch.QUANTITY)
-        self.type2func["globecoordinate"] = self.cfg2funcs(LiteralMatch.GLOBECOORDINATE)
-        self.type2func["time"] = self.cfg2funcs(LiteralMatch.TIME)
-        self.type2func["monolingualtext"] = self.cfg2funcs(
-            LiteralMatch.MONOLINGUAL_TEXT
-        )
-        self.type2func["wikibase-entityid"] = self.cfg2funcs(LiteralMatch.ENTITY)
+        self.type2func["string"] = self.cfg2funcs(cfg.STRING)
+        self.type2func["quantity"] = self.cfg2funcs(cfg.QUANTITY)
+        self.type2func["globecoordinate"] = self.cfg2funcs(cfg.GLOBECOORDINATE)
+        self.type2func["time"] = self.cfg2funcs(cfg.TIME)
+        self.type2func["monolingualtext"] = self.cfg2funcs(cfg.MONOLINGUAL_TEXT)
+        self.type2func["wikibase-entityid"] = self.cfg2funcs(cfg.ENTITY)
 
     def match(
         self, pval: WDValue, val: ParsedTextRepr, skip_unmatch: bool = True
