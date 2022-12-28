@@ -12,13 +12,14 @@ from ream.params_helper import NoParams
 import serde.json
 from slugify import slugify
 from sm.dataset import Example, FullTable
+from sm.inputs.context import Context
 from sm.inputs.link import WIKIDATA, EntityId
 from sm.namespaces.wikidata import WikidataNamespace
 from sm_datasets.datasets import Datasets
 
 
 class GramsDatasetActor(OsinActor[str, NoParams]):
-    VERSION = 101
+    VERSION = 102
 
     def __init__(self, params: NoParams):
         super().__init__(params)
@@ -163,6 +164,12 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                     # links in the cell.
                     table = example.table
                     newlinks = table.links.clone()
+                    context = Context(
+                        page_title=table.context.page_title,
+                        page_url=table.context.page_url,
+                        page_entities=[],
+                        content_hierarchy=table.context.content_hierarchy,
+                    )
 
                     for ci, (cstart, cend, cindex) in topk_cans.index[table.id][
                         2
@@ -223,7 +230,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                             sms=example.sms,
                             table=LinkedTable(
                                 table=table.table,
-                                context=table.context,
+                                context=context,
                                 links=newlinks,
                             ),
                         )

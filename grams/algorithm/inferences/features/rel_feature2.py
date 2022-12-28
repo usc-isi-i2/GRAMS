@@ -526,8 +526,10 @@ class RelFeatures:
         map = defaultdict(list)
         col = self.table.table.get_column_by_index(column_index)
         for ri in range(self.table.size()):
-            links = self.table.links[ri][column_index]
             # TODO: check why we need entity_id to determine functional dependency here
+            # the reason we may want to use entity_id is because we may have a case where
+            # two entities have the same name but different id. how rare is this case?
+            # links = self.table.links[ri][column_index]
             # ents = [link.entity_id for link in links if link.entity_id is not None]
             # if len(ents) > 0:
             #     key = tuple(ents)
