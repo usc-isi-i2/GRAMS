@@ -1,3 +1,4 @@
+from __future__ import annotations
 import copy
 from collections import defaultdict
 from operator import attrgetter
@@ -29,7 +30,7 @@ from sm.evaluation import sm_metrics
 from sm.evaluation.cpa_cta_metrics import _cpa_transformation, _get_cta, cpa, cta
 from sm.evaluation.hierarchy_scoring_fn import HierarchyScoringFn
 from sm.misc.funcs import DictProxy
-from sm.outputs.semantic_model import LiteralNode
+from sm.outputs.semantic_model import LiteralNode, SemanticModel
 from sm.prelude import M, O
 
 

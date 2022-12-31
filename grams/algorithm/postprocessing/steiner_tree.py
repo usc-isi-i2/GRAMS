@@ -95,6 +95,8 @@ class SteinerTree:
             allow_shorten_graph=False,
         )
         trees, _solutions = solver.run()
+        if len(trees) == 0:
+            return CGGraph()
 
         tree = cast(CGGraph, trees[0])
         tree.remove_dangling_statement()

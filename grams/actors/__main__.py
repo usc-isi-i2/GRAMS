@@ -22,19 +22,15 @@ from grams.actors.grams_actor import GramsActor
 # CONFIG REAM AND DEFINE ACTOR GRAPH
 HOME_DIR = Path(os.environ["HOME_DIR"]).absolute()
 REMOTE_OSIN = os.environ.get("REMOTE_OSIN", None)
+ENABLE_OSIN = os.environ.get("ENABLE_OSIN", None)
 DATABASE_DIR = HOME_DIR / "databases"
 
 configure_loguru()
-if os.environ.get("REAM_ENV", "") == "prod":
-    if REMOTE_OSIN is None:
-        OsinActor._osin = Osin.local(HOME_DIR / "osin")
-    else:
-        OsinActor._osin = Osin.remote(REMOTE_OSIN, "/tmp/osin")
-else:
-    if REMOTE_OSIN is None:
-        OsinActor._osin = Osin.local(HOME_DIR / "osin-dev")
-    else:
-        OsinActor._osin = Osin.remote(REMOTE_OSIN, "/tmp/osin")
+if REMOTE_OSIN is not None:
+    OsinActor._osin = Osin.remote(REMOTE_OSIN, "/tmp/osin")
+elif ENABLE_OSIN in {"1", "true"}:
+    OsinActor._osin = Osin.local(HOME_DIR / "osin")
+
 ReamWorkspace.init(HOME_DIR / "ream")
 WikidataDB.init(DATABASE_DIR)
 # fmt: off

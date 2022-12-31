@@ -1,16 +1,25 @@
 from __future__ import annotations
+from collections.abc import Mapping
 
 from dataclasses import dataclass, field
 from functools import partial
 from operator import itemgetter
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
+from hugedict.prelude import HugeMutableMapping
+from kgdata.wikidata.models import WDProperty
+from kgdata.wikidata.models.wdclass import WDClass
+from kgdata.wikidata.models.wdentity import WDEntity
+from kgdata.wikidata.models.wdentitylabel import WDEntityLabel
 
 import numpy as np
+from osin.apis.remote_exp import RemoteExpRun
 import ray
 from loguru import logger
 from osin.integrations.ream import OsinActor
 from ream.dataset_helper import DatasetDict, DatasetQuery
+from ream.helper import orjson_dumps
+from sm.outputs.semantic_model import SemanticModel
 from timer import Timer
 
 import grams.inputs as I
@@ -104,110 +113,103 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
             args = []
             for example in ds:
                 args.append((dbref, cfgref, example.table, False))
+                # args.append((self.db.data_dir, self.params, example.table, False))
             output[name] = ray_map(
                 ray_annotate.remote, args, desc="Annotating tables", verbose=True
             )
+            # output[name] = []
+            # for i, arg in enumerate(args[6:7]):
+            #     output[name].append(annotate(*arg))
+            #     # try:
+            #     #     output[name].append(annotate(*arg))
+            #     # except Exception as e:
+            #     #     logger.error(i)
+            #     #     raise
 
         return output
 
     def evaluate(self, eval_args: EvalArgs):
-        evaluator = Evaluator(
-            self.db.wdentities,
-            self.db.wdentity_labels,
-            self.db.wdclasses,
-            self.db.wdprops,
-        )
-        sms = []
-
-        predictions: list[
-            tuple[
-                DatasetDict[list[Example[LinkedTable]]], DatasetDict[list[Annotation]]
-            ]
-        ] = []
         for dsquery in eval_args.dsqueries:
+            dsquery_p = DatasetQuery.from_string(dsquery)
             dsdict = self.dataset_actor.run_dataset(dsquery)
             ann_dsdict = self.run_dataset(dsquery)
-            predictions.append((dsdict, ann_dsdict))
 
             for name, examples in dsdict.items():
-                for e in examples:
-                    sms.extend(evaluator.get_equiv_sms(e))
-                sms.extend([ann.sm for ann in ann_dsdict[name]])
-        evaluator.update_score_fns(sms)
-
-        for di, dsquery in enumerate(eval_args.dsqueries):
-            dsquery_p = DatasetQuery.from_string(dsquery)
-            dsdict, ann_dsdict = predictions[di]
-            for name, examples in dsdict.items():
-                eval_outputs = []
-
-                for i, (example, ann) in enumerate(zip(examples, ann_dsdict[name])):
-                    try:
-                        evalout = evaluator.cpa_cta(example, ann.sm)
-                    except:
-                        logger.error(
-                            "Failed to evaluate example: {} - {}", i, example.table.id
-                        )
-                        raise
-
-                    eval_outputs.append(
-                        (example.table.id, evalout["cpa"], evalout["cta"])
-                    )
-
+                primitive_output = eval_dataset(
+                    self.db.wdentities,
+                    self.db.wdentity_labels,
+                    self.db.wdclasses,
+                    self.db.wdprops,
+                    examples,
+                    [ann.sm for ann in ann_dsdict[name]],
+                )
+                primitive_output["workdir"] = str(self.get_working_fs().root)
                 with self.new_exp_run(
                     dataset=dsquery_p.get_query(name),
                 ) as exprun:
+                    self.logger.info(
+                        "Dataset: {}\n{}",
+                        dsquery_p.get_query(name),
+                        orjson_dumps(primitive_output).decode(),
+                    )
                     if exprun is not None:
-                        cpa_precision, cpa_recall = np.mean(
-                            [y.precision for x, y, z in eval_outputs]
-                        ), np.mean([y.recall for x, y, z in eval_outputs])
-                        cpa_f1 = (
-                            2
-                            * cpa_precision
-                            * cpa_recall
-                            / max(cpa_precision + cpa_recall, 1e-9)  # type: ignore
-                        )
+                        exprun.update_output(primitive=primitive_output)
 
-                        cta_precision, cta_recall = np.mean(
-                            [z.precision for x, y, z in eval_outputs]
-                        ), np.mean([z.recall for x, y, z in eval_outputs])
-                        cta_f1 = (
-                            2
-                            * cta_precision
-                            * cta_recall
-                            / max(cta_precision + cta_recall, 1e-9)  # type: ignore
-                        )
 
-                        exprun.update_output(
-                            primitive={
-                                "workdir": str(self.get_working_fs().root),
-                                "cpa": {
-                                    "precision": float(cpa_precision),
-                                    "recall": float(cpa_recall),
-                                    "f1": float(cpa_f1),
-                                },
-                                "cta": {
-                                    "precision": float(cta_precision),
-                                    "recall": float(cta_recall),
-                                    "f1": float(cta_f1),
-                                },
-                            }
-                        )
-                        print(
-                            {
-                                "workdir": str(self.get_working_fs().root),
-                                "cpa": {
-                                    "precision": float(cpa_precision),
-                                    "recall": float(cpa_recall),
-                                    "f1": float(cpa_f1),
-                                },
-                                "cta": {
-                                    "precision": float(cta_precision),
-                                    "recall": float(cta_recall),
-                                    "f1": float(cta_f1),
-                                },
-                            }
-                        )
+def eval_dataset(
+    qnodes: HugeMutableMapping[str, WDEntity],
+    qnode_labels: Mapping[str, WDEntityLabel],
+    wdclasses: Mapping[str, WDClass],
+    wdprops: Mapping[str, WDProperty],
+    examples: list[Example[LinkedTable]],
+    pred_sms: list[SemanticModel],
+    exprun: Optional[RemoteExpRun] = None,
+):
+    evaluator = Evaluator(qnodes, qnode_labels, wdclasses, wdprops)
+    sms = []
+    for e in examples:
+        sms.extend(evaluator.get_equiv_sms(e))
+    sms.extend(pred_sms)
+    evaluator.update_score_fns(sms)
+
+    eval_outputs = []
+    for i, (example, sm) in enumerate(zip(examples, pred_sms)):
+        try:
+            evalout = evaluator.cpa_cta(example, sm)
+        except:
+            logger.error("Failed to evaluate example: {} - {}", i, example.table.id)
+            raise
+
+        eval_outputs.append((example.table.id, evalout["cpa"], evalout["cta"]))
+
+    cpa_precision, cpa_recall, cpa_f1 = (
+        np.mean([y.precision for x, y, z in eval_outputs]),
+        np.mean([y.recall for x, y, z in eval_outputs]),
+        np.mean([y.f1 for x, y, z in eval_outputs]),
+    )
+
+    cta_precision, cta_recall, cta_f1 = (
+        np.mean([z.precision for x, y, z in eval_outputs]),
+        np.mean([z.recall for x, y, z in eval_outputs]),
+        np.mean([z.f1 for x, y, z in eval_outputs]),
+    )
+
+    if exprun is not None:
+        # log the results of each example
+        pass
+
+    return {
+        "cpa": {
+            "precision": float(cpa_precision),
+            "recall": float(cpa_recall),
+            "f1": float(cpa_f1),
+        },
+        "cta": {
+            "precision": float(cta_precision),
+            "recall": float(cta_recall),
+            "f1": float(cta_f1),
+        },
+    }
 
 
 @ray.remote

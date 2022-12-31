@@ -6,7 +6,7 @@ from loguru import logger
 from ned.actors.candidate_generation import CanGenActor
 from ned.actors.candidate_ranking import CanRankActor
 from osin.integrations.ream import OsinActor
-from ream.cache_helper import Cache
+from ream.cache_helper import Cache, CacheArgsHelper
 from ream.dataset_helper import DatasetDict, DatasetQuery
 from ream.params_helper import NoParams
 import serde.json
@@ -31,7 +31,7 @@ class GramsDatasetActor(OsinActor[str, NoParams]):
         compression="lz4",
         log_serde_time=True,
     )
-    def query(self, dsquery: str) -> DatasetDict[list[Example[LinkedTable]]]:
+    def run(self, dsquery: str) -> DatasetDict[list[Example[LinkedTable]]]:
         parsed_dsquery = DatasetQuery.from_string(dsquery)
         sm_examples = self.load_dataset(parsed_dsquery.dataset)
 
@@ -105,138 +105,264 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
         self.canrank_actor = canrank_actor
         self.dataset_actor = dataset_actor
 
-    def run_dataset(self, dsquery: str) -> DatasetDict[list[Example[LinkedTable]]]:
+    def get_provenance(self):
         if self.params.use_oracle:
-            cg_dsdict = {}
-            cr_dsdict = {}
-            cr_provenance = "oracle"
-        else:
-            cg_dsdict = self.cangen_actor.run_dataset(dsquery)
-            cr_dsdict = self.canrank_actor.run_dataset(dsquery)
-            cr_provenance = cr_dsdict.provenance
+            return "oracle"
+        return self.canrank_actor.get_provenance()
 
-        @Cache.cls.file(
-            cls=DatasetDict,
-            mem_persist=True,
-            compression="lz4",
-            log_serde_time=True,
+    @Cache.cls.file(
+        cls=DatasetDict,
+        cache_self_args=CacheArgsHelper.gen_cache_self_args(get_provenance),
+        mem_persist=True,
+        compression="lz4",
+        log_serde_time=True,
+    )
+    def run_dataset(self, dsquery: str) -> DatasetDict[list[Example[LinkedTable]]]:
+        dsdict = self.dataset_actor.run(dsquery)
+        output: DatasetDict[list[Example[LinkedTable]]] = DatasetDict(
+            dsdict.name, {}, self.get_provenance()
         )
-        def exec(self: GramsELDatasetActor, dsquery: str, cr_provenance: str):
-            dsdict = self.dataset_actor.query(dsquery)
-            output: DatasetDict[list[Example[LinkedTable]]] = DatasetDict(
-                dsdict.name, {}, cr_provenance
-            )
 
-            if self.params.use_oracle:
-                for name, examples in dsdict.items():
-                    newexamples: list[Example[LinkedTable]] = []
-                    for ex in examples:
-                        newlinks = ex.table.links.deep_copy()
-                        for links in newlinks.flat_iter():
-                            for link in links:
-                                link.candidates = [
-                                    CandidateEntityId(eid, 1.0) for eid in link.entities
-                                ]
-                        newexamples.append(
-                            Example(
-                                sms=ex.sms,
-                                table=LinkedTable(
-                                    table=ex.table.table,
-                                    context=ex.table.context,
-                                    links=newlinks,
-                                ),
-                            )
-                        )
-                    output[name] = newexamples
-                return output
-
+        if self.params.use_oracle:
             for name, examples in dsdict.items():
-                candidates = cg_dsdict[name]
-                candidates = candidates.replace("score", cr_dsdict[name].score)
-
-                topk_cans = candidates.top_k_candidates(self.params.topk)
                 newexamples: list[Example[LinkedTable]] = []
-                for example in examples:
-                    # populate the candidates to links
-                    # because the entity linking method assumes one link per cell
-                    # if there is multiple gold links in a cell, we will reduce it to
-                    # just one link with the ground-truth containing all entities of
-                    # links in the cell.
-                    table = example.table
-                    newlinks = table.links.clone()
-                    context = Context(
-                        page_title=table.context.page_title,
-                        page_url=table.context.page_url,
-                        page_entities=[],
-                        content_hierarchy=table.context.content_hierarchy,
-                    )
-
-                    for ci, (cstart, cend, cindex) in topk_cans.index[table.id][
-                        2
-                    ].items():
-                        for ri, (rstart, rend) in cindex.items():
-                            cell = table.table[ri, ci]
-                            links = table.links[ri, ci]
-
-                            if len(links) == 1:
-                                link = ExtendedLink(
-                                    start=0,
-                                    end=len(cell),
-                                    url=links[0].url,
-                                    entities=links[0].entities.copy(),
-                                    candidates=[],
-                                )
-                            elif len(links) > 1:
-                                link = ExtendedLink(
-                                    start=0,
-                                    end=len(cell),
-                                    url=";".join(urls)
-                                    if (
-                                        urls := [
-                                            l.url for l in links if l.url is not None
-                                        ]
-                                    )
-                                    else None,
-                                    entities=[
-                                        eid for link in links for eid in link.entities
-                                    ],
-                                    candidates=[],
-                                )
-                            else:
-                                if rend > rstart:
-                                    # no gold links but we have some candidates
-                                    # so we need to create a new link
-                                    link = ExtendedLink(
-                                        start=0,
-                                        end=len(cell),
-                                        url=None,
-                                        entities=[],
-                                        candidates=[],
-                                    )
-                                else:
-                                    # no gold links and no candidates
-                                    continue
-
-                            can_ids = topk_cans.id[rstart:rend]
-                            can_scores = topk_cans.score[rstart:rend]
+                for ex in examples:
+                    newlinks = ex.table.links.deep_copy()
+                    for links in newlinks.flat_iter():
+                        for link in links:
                             link.candidates = [
-                                CandidateEntityId(EntityId(can_id, WIKIDATA), can_score)
-                                for can_id, can_score in zip(can_ids, can_scores)
+                                CandidateEntityId(eid, 1.0) for eid in link.entities
                             ]
-                            newlinks[ri, ci] = [link]
-
                     newexamples.append(
                         Example(
-                            sms=example.sms,
+                            sms=ex.sms,
                             table=LinkedTable(
-                                table=table.table,
-                                context=context,
+                                table=ex.table.table,
+                                context=ex.table.context,
                                 links=newlinks,
                             ),
                         )
                     )
-
                 output[name] = newexamples
             return output
 
-        return exec(self, dsquery, cr_provenance)
+        cg_dsdict = self.cangen_actor.run_dataset(dsquery)
+        cr_dsdict = self.canrank_actor.run_dataset(dsquery)
+
+        for name, examples in dsdict.items():
+            candidates = cg_dsdict[name]
+            candidates = candidates.replace("score", cr_dsdict[name].score)
+
+            topk_cans = candidates.top_k_candidates(self.params.topk)
+            newexamples: list[Example[LinkedTable]] = []
+            for example in examples:
+                # populate the candidates to links
+                # because the entity linking method assumes one link per cell
+                # if there is multiple gold links in a cell, we will reduce it to
+                # just one link with the ground-truth containing all entities of
+                # links in the cell.
+                table = example.table
+                newlinks = table.links.clone()
+                context = Context(
+                    page_title=table.context.page_title,
+                    page_url=table.context.page_url,
+                    page_entities=[],
+                    content_hierarchy=table.context.content_hierarchy,
+                )
+
+                for ci, (cstart, cend, cindex) in topk_cans.index[table.id][2].items():
+                    for ri, (rstart, rend) in cindex.items():
+                        cell = table.table[ri, ci]
+                        links = table.links[ri, ci]
+
+                        if len(links) == 1:
+                            link = ExtendedLink(
+                                start=0,
+                                end=len(cell),
+                                url=links[0].url,
+                                entities=links[0].entities.copy(),
+                                candidates=[],
+                            )
+                        elif len(links) > 1:
+                            link = ExtendedLink(
+                                start=0,
+                                end=len(cell),
+                                url=";".join(urls)
+                                if (urls := [l.url for l in links if l.url is not None])
+                                else None,
+                                entities=[
+                                    eid for link in links for eid in link.entities
+                                ],
+                                candidates=[],
+                            )
+                        else:
+                            if rend > rstart:
+                                # no gold links but we have some candidates
+                                # so we need to create a new link
+                                link = ExtendedLink(
+                                    start=0,
+                                    end=len(cell),
+                                    url=None,
+                                    entities=[],
+                                    candidates=[],
+                                )
+                            else:
+                                # no gold links and no candidates
+                                continue
+
+                        can_ids = topk_cans.id[rstart:rend]
+                        can_scores = topk_cans.score[rstart:rend]
+                        link.candidates = [
+                            CandidateEntityId(EntityId(can_id, WIKIDATA), can_score)
+                            for can_id, can_score in zip(can_ids, can_scores)
+                        ]
+                        newlinks[ri, ci] = [link]
+
+                newexamples.append(
+                    Example(
+                        sms=example.sms,
+                        table=LinkedTable(
+                            table=table.table,
+                            context=context,
+                            links=newlinks,
+                        ),
+                    )
+                )
+
+            output[name] = newexamples
+        return output
+
+        # if self.params.use_oracle:
+        #     cg_dsdict = {}
+        #     cr_dsdict = {}
+        #     cr_provenance = "oracle"
+        # else:
+        #     cg_dsdict = self.cangen_actor.run_dataset(dsquery)
+        #     cr_dsdict = self.canrank_actor.run_dataset(dsquery)
+        #     cr_provenance = cr_dsdict.provenance
+
+        # @Cache.cls.file(
+        #     cls=DatasetDict,
+        #     mem_persist=True,
+        #     compression="lz4",
+        #     log_serde_time=True,
+        # )
+        # def exec(self: GramsELDatasetActor, dsquery: str, cr_provenance: str):
+        #     dsdict = self.dataset_actor.query(dsquery)
+        #     output: DatasetDict[list[Example[LinkedTable]]] = DatasetDict(
+        #         dsdict.name, {}, cr_provenance
+        #     )
+
+        #     if self.params.use_oracle:
+        #         for name, examples in dsdict.items():
+        #             newexamples: list[Example[LinkedTable]] = []
+        #             for ex in examples:
+        #                 newlinks = ex.table.links.deep_copy()
+        #                 for links in newlinks.flat_iter():
+        #                     for link in links:
+        #                         link.candidates = [
+        #                             CandidateEntityId(eid, 1.0) for eid in link.entities
+        #                         ]
+        #                 newexamples.append(
+        #                     Example(
+        #                         sms=ex.sms,
+        #                         table=LinkedTable(
+        #                             table=ex.table.table,
+        #                             context=ex.table.context,
+        #                             links=newlinks,
+        #                         ),
+        #                     )
+        #                 )
+        #             output[name] = newexamples
+        #         return output
+
+        #     for name, examples in dsdict.items():
+        #         candidates = cg_dsdict[name]
+        #         candidates = candidates.replace("score", cr_dsdict[name].score)
+
+        #         topk_cans = candidates.top_k_candidates(self.params.topk)
+        #         newexamples: list[Example[LinkedTable]] = []
+        #         for example in examples:
+        #             # populate the candidates to links
+        #             # because the entity linking method assumes one link per cell
+        #             # if there is multiple gold links in a cell, we will reduce it to
+        #             # just one link with the ground-truth containing all entities of
+        #             # links in the cell.
+        #             table = example.table
+        #             newlinks = table.links.clone()
+        #             context = Context(
+        #                 page_title=table.context.page_title,
+        #                 page_url=table.context.page_url,
+        #                 page_entities=[],
+        #                 content_hierarchy=table.context.content_hierarchy,
+        #             )
+
+        #             for ci, (cstart, cend, cindex) in topk_cans.index[table.id][
+        #                 2
+        #             ].items():
+        #                 for ri, (rstart, rend) in cindex.items():
+        #                     cell = table.table[ri, ci]
+        #                     links = table.links[ri, ci]
+
+        #                     if len(links) == 1:
+        #                         link = ExtendedLink(
+        #                             start=0,
+        #                             end=len(cell),
+        #                             url=links[0].url,
+        #                             entities=links[0].entities.copy(),
+        #                             candidates=[],
+        #                         )
+        #                     elif len(links) > 1:
+        #                         link = ExtendedLink(
+        #                             start=0,
+        #                             end=len(cell),
+        #                             url=";".join(urls)
+        #                             if (
+        #                                 urls := [
+        #                                     l.url for l in links if l.url is not None
+        #                                 ]
+        #                             )
+        #                             else None,
+        #                             entities=[
+        #                                 eid for link in links for eid in link.entities
+        #                             ],
+        #                             candidates=[],
+        #                         )
+        #                     else:
+        #                         if rend > rstart:
+        #                             # no gold links but we have some candidates
+        #                             # so we need to create a new link
+        #                             link = ExtendedLink(
+        #                                 start=0,
+        #                                 end=len(cell),
+        #                                 url=None,
+        #                                 entities=[],
+        #                                 candidates=[],
+        #                             )
+        #                         else:
+        #                             # no gold links and no candidates
+        #                             continue
+
+        #                     can_ids = topk_cans.id[rstart:rend]
+        #                     can_scores = topk_cans.score[rstart:rend]
+        #                     link.candidates = [
+        #                         CandidateEntityId(EntityId(can_id, WIKIDATA), can_score)
+        #                         for can_id, can_score in zip(can_ids, can_scores)
+        #                     ]
+        #                     newlinks[ri, ci] = [link]
+
+        #             newexamples.append(
+        #                 Example(
+        #                     sms=example.sms,
+        #                     table=LinkedTable(
+        #                         table=table.table,
+        #                         context=context,
+        #                         links=newlinks,
+        #                     ),
+        #                 )
+        #             )
+
+        #         output[name] = newexamples
+        #     return output
+
+        # return exec(self, dsquery, cr_provenance)
