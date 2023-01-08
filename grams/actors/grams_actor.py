@@ -6,6 +6,7 @@ from functools import partial
 from operator import itemgetter
 from pathlib import Path
 from typing import Optional, Union
+from grams.actors.osin_eval_helper import AuxComplexSmObject, AuxComplexTableObject
 from hugedict.prelude import HugeMutableMapping
 from kgdata.wikidata.models import WDProperty
 from kgdata.wikidata.models.wdclass import WDClass
@@ -14,6 +15,7 @@ from kgdata.wikidata.models.wdentitylabel import WDEntityLabel
 
 import numpy as np
 from osin.apis.remote_exp import RemoteExpRun
+from osin.types.pyobject import OTable
 import ray
 from loguru import logger
 from osin.integrations.ream import OsinActor
@@ -87,7 +89,7 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
     """GRAMS for Semantic Modeling"""
 
     NAME = "Semantic Modeling"
-    VERSION = 100
+    VERSION = 101
 
     def __init__(self, params: GramsParams, linked_dataset_actor: GramsELDatasetActor):
         super().__init__(params, [linked_dataset_actor])
@@ -110,21 +112,16 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
             dsdict.name, {}, dsdict.provenance
         )
         for name, ds in dsdict.items():
-            args = []
-            for example in ds:
-                args.append((dbref, cfgref, example.table, False))
-                # args.append((self.db.data_dir, self.params, example.table, False))
-            output[name] = ray_map(
-                ray_annotate.remote, args, desc="Annotating tables", verbose=True
-            )
-            # output[name] = []
-            # for i, arg in enumerate(args[6:7]):
-            #     output[name].append(annotate(*arg))
-            #     # try:
-            #     #     output[name].append(annotate(*arg))
-            #     # except Exception as e:
-            #     #     logger.error(i)
-            #     #     raise
+            if len(ds) > 1:
+                args = []
+                for example in ds:
+                    args.append((dbref, cfgref, example.table, False))
+                    # args.append((self.db.data_dir, self.params, example.table, False))
+                output[name] = ray_map(
+                    ray_annotate.remote, args, desc="Annotating tables", verbose=True
+                )
+            else:
+                output[name] = [annotate(self.db, self.params, ds[0].table, True)]
 
         return output
 
@@ -135,25 +132,30 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
             ann_dsdict = self.run_dataset(dsquery)
 
             for name, examples in dsdict.items():
-                primitive_output = eval_dataset(
-                    self.db.wdentities,
-                    self.db.wdentity_labels,
-                    self.db.wdclasses,
-                    self.db.wdprops,
-                    examples,
-                    [ann.sm for ann in ann_dsdict[name]],
-                )
-                primitive_output["workdir"] = str(self.get_working_fs().root)
                 with self.new_exp_run(
                     dataset=dsquery_p.get_query(name),
                 ) as exprun:
+                    primitive_output = eval_dataset(
+                        self.db.wdentities,
+                        self.db.wdentity_labels,
+                        self.db.wdclasses,
+                        self.db.wdprops,
+                        examples,
+                        [ann.sm for ann in ann_dsdict[name]],
+                        exprun=exprun,
+                    )
                     self.logger.info(
                         "Dataset: {}\n{}",
                         dsquery_p.get_query(name),
                         orjson_dumps(primitive_output).decode(),
                     )
                     if exprun is not None:
-                        exprun.update_output(primitive=primitive_output)
+                        exprun.update_output(
+                            primitive=dict(
+                                workdir=str(self.get_working_fs().root),
+                                **primitive_output,
+                            )
+                        )
 
 
 def eval_dataset(
@@ -180,23 +182,76 @@ def eval_dataset(
             logger.error("Failed to evaluate example: {} - {}", i, example.table.id)
             raise
 
-        eval_outputs.append((example.table.id, evalout["cpa"], evalout["cta"]))
+        cea = evaluator.cea(example, k=[1, 5])
+        eval_outputs.append((example.table.id, evalout["cpa"], evalout["cta"], cea))
 
     cpa_precision, cpa_recall, cpa_f1 = (
-        np.mean([y.precision for x, y, z in eval_outputs]),
-        np.mean([y.recall for x, y, z in eval_outputs]),
-        np.mean([y.f1 for x, y, z in eval_outputs]),
+        np.mean([y.precision for x, y, z, t in eval_outputs]),
+        np.mean([y.recall for x, y, z, t in eval_outputs]),
+        np.mean([y.f1 for x, y, z, t in eval_outputs]),
     )
 
     cta_precision, cta_recall, cta_f1 = (
-        np.mean([z.precision for x, y, z in eval_outputs]),
-        np.mean([z.recall for x, y, z in eval_outputs]),
-        np.mean([z.f1 for x, y, z in eval_outputs]),
+        np.mean([z.precision for x, y, z, t in eval_outputs]),
+        np.mean([z.recall for x, y, z, t in eval_outputs]),
+        np.mean([z.f1 for x, y, z, t in eval_outputs]),
     )
+
+    # calculate cea macro scores
+    cea_macro = {}
+    cea_micro = {}
+
+    for x, y, z, t in eval_outputs:
+        for name, value in t["value"].items():
+            if name not in cea_macro:
+                cea_macro[name] = {k: [v] for k, v in value.items()}
+                cea_micro[name] = t["confusion_matrix"][name]
+                continue
+
+            for k, v in value.items():
+                cea_macro[name][k].append(v)
+            cea_micro[name] = cea_micro[name] + t["confusion_matrix"][name]
+    for name, value in cea_macro.items():
+        cea_macro[name] = {k: float(np.mean(v)) for k, v in value.items()}
+        cea_micro[name] = {
+            "precision": cea_micro[name].precision(),
+            "recall": cea_micro[name].recall(),
+            "f1": cea_micro[name].f1(),
+        }
 
     if exprun is not None:
         # log the results of each example
-        pass
+        for i, e in enumerate(examples):
+            sm = pred_sms[i]
+            exprun.update_example_output(
+                example_id=str(i),
+                example_name=e.table.id,
+                primitive={
+                    "cpa": {
+                        "precision": eval_outputs[i][1].precision,
+                        "recall": eval_outputs[i][1].recall,
+                        "f1": eval_outputs[i][1].f1,
+                    },
+                    "cta": {
+                        "precision": eval_outputs[i][2].precision,
+                        "recall": eval_outputs[i][2].recall,
+                        "f1": eval_outputs[i][2].f1,
+                    },
+                    "cea": {
+                        name: {
+                            "p": value["precision"],
+                            "r": value["recall"],
+                            "f1": value["f1"],
+                        }
+                        for name, value in eval_outputs[i][3]["value"].items()
+                    },
+                },
+                complex={
+                    "table": AuxComplexTableObject(qnodes).get_table(e),
+                    "gold-sm": AuxComplexSmObject(qnodes).get_sms(e, e.sms),
+                    "pred-sm": AuxComplexSmObject(qnodes).get_sm(e, sm),
+                },
+            )
 
     return {
         "cpa": {
@@ -209,6 +264,10 @@ def eval_dataset(
             "recall": float(cta_recall),
             "f1": float(cta_f1),
         },
+        "cea": {
+            "macro": cea_macro,
+            "micro": cea_micro,
+        },
     }
 
 
@@ -216,7 +275,10 @@ def eval_dataset(
 def ray_annotate(
     db: Union[GramsDB, Path], cfg: GramsParams, table: LinkedTable, verbose: bool
 ):
-    return annotate(db, cfg, table, verbose)
+    try:
+        return annotate(db, cfg, table, verbose)
+    except Exception as e:
+        raise Exception("Failed to annotate table: " + table.id) from e
 
 
 def annotate(

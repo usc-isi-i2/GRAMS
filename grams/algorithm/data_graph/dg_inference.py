@@ -12,6 +12,7 @@ from grams.algorithm.data_graph.dg_graph import (
     DGStatementID,
     EdgeFlowSource,
     EdgeFlowTarget,
+    LinkGenMethod,
     StatementNode,
     DGPath,
     DGPathEdge,
@@ -227,11 +228,20 @@ class KGInference:
             # the same provenance too.
             first_leg_provenances = stmt.get_provenance_by_edge(us_edge, sv_edge)
             second_leg_provenances = stmt2.get_provenance_by_edge(vs2_edge, s2v2_edge)
-            assert (
+            if not (
                 len(first_leg_provenances) == 1
                 and len(second_leg_provenances) == 1
                 and first_leg_provenances[0] == second_leg_provenances[0]
-            )
+            ):
+                # I found a case where this condition does not hold, that is when
+                # the legs are from literal matching functions, but when we have literal matching
+                # functions, it should be literal and typically literal don't have outgoing edges.
+                # TODO: check this logic again
+                assert all(
+                    prov.gen_method == LinkGenMethod.FromLiteralMatchingFunc
+                    for prov in first_leg_provenances + second_leg_provenances
+                )
+                continue
 
             provenances = first_leg_provenances
             new_props.append(
@@ -384,7 +394,9 @@ class KGInference:
         """Ensure that the subkg has values of the qnode's property"""
         if (qnode_id, prop) not in self.subkg:
             lst = []
-            for stmt_i, stmt in enumerate(self.wdentities[qnode_id].props.get(prop, [])):
+            for stmt_i, stmt in enumerate(
+                self.wdentities[qnode_id].props.get(prop, [])
+            ):
                 lst.append((None, stmt.value))
             self.subkg[qnode_id, prop] = lst
 

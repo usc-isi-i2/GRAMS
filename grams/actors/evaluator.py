@@ -22,7 +22,7 @@ from grams.algorithm.candidate_graph.cg_graph import (
 )
 from grams.algorithm.helpers import IndirectDictAccess
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
-from grams.inputs.linked_table import Link, LinkedTable
+from grams.inputs.linked_table import CandidateEntityId, ExtendedLink, Link, LinkedTable
 from grams.main import GRAMS, Annotation
 from loguru import logger
 from sm.dataset import Example
@@ -32,6 +32,7 @@ from sm.evaluation.hierarchy_scoring_fn import HierarchyScoringFn
 from sm.misc.funcs import DictProxy
 from sm.outputs.semantic_model import LiteralNode, SemanticModel
 from sm.prelude import M, O
+from ned.metrics import inkb_eval_table
 
 
 class Evaluator:
@@ -114,6 +115,27 @@ class Evaluator:
             "cpa": cpa_output,
             "cta": cta_output,
         }
+
+    def cea(self, example: Example[LinkedTable], k: Optional[Sequence[int]] = None):
+        def convert_gold_ents(links: List[ExtendedLink]):
+            out: set[str] = set()
+            for link in links:
+                out.update(link.entities)
+            return out
+
+        def convert_pred_ents(links: List[ExtendedLink]):
+            out: list[CandidateEntityId] = list()
+            for link in links:
+                out.extend(link.candidates)
+            # python sort is stable
+            out = sorted(out, key=lambda x: x.probability, reverse=True)
+            return [str(c.entity_id) for c in out]
+
+        gold_ents = example.table.links.map(convert_gold_ents)
+        pred_ents = example.table.links.map(convert_pred_ents)
+
+        perf, cm = inkb_eval_table(gold_ents, pred_ents, k)
+        return {"value": perf, "confusion_matrix": cm}
 
     def get_equiv_sms(self, example: Example[LinkedTable]) -> List[O.SemanticModel]:
         if example.table.id not in self.example2equivsms:
