@@ -91,10 +91,13 @@ class GramsELParams:
             "help": "use oracle candidates",
         },
     )
-    add_gold: Literal["no", "when-not-topk"] = field(
+    add_gold: Literal["no", "when-not-topk", "always"] = field(
         default="no",
         metadata={
-            "help": "add gold entities. no: never, when-not-topk: when the gold entity is in candidate entities but not in the top k",
+            "help": "add gold entities. options:"
+            "- no: never"
+            "- when-not-topk: when the gold entity is in candidate entities but not in the top k"
+            "- always: add the gold entity when it's missing",
         },
     )
 
@@ -249,6 +252,24 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                                             for i in matches
                                         ]
                                     )
+                        elif self.params.add_gold == "always":
+                            gold_ents = set(link.entities)
+                            if all(
+                                can.entity_id not in gold_ents
+                                for can in link.candidates
+                            ):
+                                if len(link.candidates) == 0:
+                                    score = 0.5
+                                else:
+                                    score = min(c.probability for c in link.candidates)
+                                link.candidates.extend(
+                                    [
+                                        CandidateEntityId(
+                                            EntityId(eid, WIKIDATA), score
+                                        )
+                                        for eid in gold_ents
+                                    ]
+                                )
                         else:
                             assert self.params.add_gold == "no"
 

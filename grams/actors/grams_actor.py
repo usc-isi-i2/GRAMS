@@ -126,6 +126,7 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
         return output
 
     def evaluate(self, eval_args: EvalArgs):
+        evalout = {}
         for dsquery in eval_args.dsqueries:
             dsquery_p = DatasetQuery.from_string(dsquery)
             dsdict = self.dataset_actor.run_dataset(dsquery)
@@ -135,7 +136,7 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
                 with self.new_exp_run(
                     dataset=dsquery_p.get_query(name),
                 ) as exprun:
-                    primitive_output = eval_dataset(
+                    primitive_output, primitive_ex_output = eval_dataset(
                         self.db.wdentities,
                         self.db.wdentity_labels,
                         self.db.wdclasses,
@@ -156,6 +157,11 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
                                 **primitive_output,
                             )
                         )
+                    evalout[dsquery_p.get_query(name)] = (
+                        primitive_output,
+                        primitive_ex_output,
+                    )
+        return evalout
 
 
 def eval_dataset(
@@ -219,37 +225,42 @@ def eval_dataset(
             "f1": cea_micro[name].f1(),
         }
 
+    ex_details = []
+    for i, e in enumerate(examples):
+        ex_details.append(
+            {
+                "cpa": {
+                    "precision": eval_outputs[i][1].precision,
+                    "recall": eval_outputs[i][1].recall,
+                    "f1": eval_outputs[i][1].f1,
+                },
+                "cta": {
+                    "precision": eval_outputs[i][2].precision,
+                    "recall": eval_outputs[i][2].recall,
+                    "f1": eval_outputs[i][2].f1,
+                },
+                "cea": {
+                    name: {
+                        "p": value["precision"],
+                        "r": value["recall"],
+                        "f1": value["f1"],
+                    }
+                    for name, value in eval_outputs[i][3]["value"].items()
+                },
+            }
+        )
+
     if exprun is not None:
         # log the results of each example
         for i, e in enumerate(examples):
-            sm = pred_sms[i]
             exprun.update_example_output(
                 example_id=str(i),
                 example_name=e.table.id,
-                primitive={
-                    "cpa": {
-                        "precision": eval_outputs[i][1].precision,
-                        "recall": eval_outputs[i][1].recall,
-                        "f1": eval_outputs[i][1].f1,
-                    },
-                    "cta": {
-                        "precision": eval_outputs[i][2].precision,
-                        "recall": eval_outputs[i][2].recall,
-                        "f1": eval_outputs[i][2].f1,
-                    },
-                    "cea": {
-                        name: {
-                            "p": value["precision"],
-                            "r": value["recall"],
-                            "f1": value["f1"],
-                        }
-                        for name, value in eval_outputs[i][3]["value"].items()
-                    },
-                },
+                primitive=ex_details[i],
                 complex={
                     "table": AuxComplexTableObject(qnodes).get_table(e),
                     "gold-sm": AuxComplexSmObject(qnodes).get_sms(e, e.sms),
-                    "pred-sm": AuxComplexSmObject(qnodes).get_sm(e, sm),
+                    "pred-sm": AuxComplexSmObject(qnodes).get_sm(e, pred_sms[i]),
                 },
             )
 
@@ -268,7 +279,7 @@ def eval_dataset(
             "macro": cea_macro,
             "micro": cea_micro,
         },
-    }
+    }, ex_details
 
 
 @ray.remote

@@ -93,6 +93,7 @@ class PSLGramModelExp2:
         wd_numprop_stats: Mapping[str, WDQuantityPropertyStats],
         disable_rules: Optional[Iterable[str]] = None,
         example_id: Optional[str] = None,
+        use_readable_idmap: bool = False,
     ):
         self.wdentities = wdentities
         self.wdentity_labels = wdentity_labels
@@ -104,6 +105,7 @@ class PSLGramModelExp2:
         self.sim_fn = StringSimilarity.hybrid_jaccard_similarity
         self.disable_rules = set(disable_rules or [])
         self.example_id = example_id
+        self.use_readable_idmap = use_readable_idmap
         self.model = self.get_model()
 
         self.model.set_parameters(
@@ -325,8 +327,7 @@ class PSLGramModelExp2:
 
     def extract_data(self, table: LinkedTable, cg: CGGraph, dg: DGGraph):
         """Extract data for our PSL model"""
-        idmap = IDMap()
-        # idmap = ReadableIDMap()
+        idmap = ReadableIDMap() if self.use_readable_idmap else IDMap()
 
         rel_feats = RelFeatures(
             idmap,

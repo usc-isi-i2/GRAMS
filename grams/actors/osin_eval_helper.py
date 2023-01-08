@@ -174,11 +174,3 @@ class AuxComplexSmObject(AuxComplexObjectBase):
 
         if entid in self.wdentities:
             item.readable_label = self.get_ent_label(entid)
-
-
-# class AuxComplexCandidateGraph(AuxComplexObjectBase):
-#     def get_graph(self, example: Example[LinkedTable], cg: CGGraph) -> OHTML:
-#         rows = []
-#         for edge in cg.iter_edges():
-#             rows.append({"source": edge.source, "target": edge.target})
-#         return OHTML(rows)
