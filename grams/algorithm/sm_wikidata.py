@@ -236,7 +236,10 @@ class WikidataSemanticModelHelper:
                         value=wdns.get_entity_abs_uri(unode.qnode_id),
                         readable_label=self.get_qnode_label(unode.qnode_id),
                         datatype=LiteralNodeDataType.Entity,
-                        is_in_context=unode.qnode_id == table.context.page_entity_id,
+                        is_in_context=any(
+                            unode.qnode_id == page_entity_id
+                            for page_entity_id in table.context.page_entities
+                        ),
                     )
                     cpa_idmap[unode.id] = sm.add_node(source)
                 else:
@@ -617,9 +620,10 @@ class WikidataSemanticModelHelper:
                 # get entities
                 qnode_ids = sorted(
                     {
-                        e.entity_id
-                        for e in tbl.links[ri][ci]
-                        if e.entity_id is not None and e.start < e.end
+                        entity_id
+                        for link in tbl.links[ri][ci]
+                        for entity_id in link.entities
+                        if link.start < link.end
                     }
                 )
                 if len(qnode_ids) == 0:

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, MutableMapping, Set
 from grams.inputs.linked_table import LinkedTable
+from hugedict.types import HugeMutableMapping
 from kgdata.wikidata.models.wdproperty import WDProperty
 from ream.cache_helper import Cache
 from ream.helper import orjson_dumps
@@ -55,7 +56,9 @@ class GramsDB:
                     os.path.join(data_dir, "wdentity_labels.db"),
                 )
             else:
-                self.wdentity_labels: MutableMapping[str, WDEntityLabel] = {}
+                self.wdentity_labels: HugeMutableMapping[
+                    str, WDEntityLabel
+                ] = CacheDict({})
             self.wdclasses = get_wdclass_db(
                 os.path.join(data_dir, "wdclasses.db"),
                 read_only=read_only,

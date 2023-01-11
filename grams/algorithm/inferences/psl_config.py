@@ -2,6 +2,11 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
+def parse_rule_weight(s: str):
+    name, weight = s.split("=")
+    return name, float(weight)
+
+
 @dataclass
 class PslConfig:
     enable_logging: bool = field(
@@ -28,7 +33,11 @@ class PslConfig:
     disable_rules: list[str] = field(
         default_factory=list, metadata={"help": "list of PSL rules to disable"}
     )
-    experiment_model: Literal["exp", "exp2"] = field(
+    rule_weights: list[tuple[str, float]] = field(
+        default_factory=list,
+        metadata={"help": "weights of PSL rules", "parser": parse_rule_weight},
+    )
+    experiment_model: Literal["exp", "exp2", "exp3"] = field(
         default="exp2",
         metadata={"help": "PSL model to use"},
     )

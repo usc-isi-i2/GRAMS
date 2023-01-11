@@ -2,11 +2,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from dataclasses import dataclass, field
-from functools import partial
+from functools import partial, reduce
 from operator import itemgetter
 from pathlib import Path
 from typing import Optional, Union
-from grams.actors.osin_eval_helper import AuxComplexSmObject, AuxComplexTableObject
+from grams.actors.augcan_actor import AugCanActor, AugCanParams
+from grams.algorithm.context import AlgoContext
+from grams.algorithm.inferences.psl_gram_model_exp3 import PSLGramModelExp3
 from hugedict.prelude import HugeMutableMapping
 from kgdata.wikidata.models import WDProperty
 from kgdata.wikidata.models.wdclass import WDClass
@@ -19,6 +21,7 @@ from osin.types.pyobject import OTable
 import ray
 from loguru import logger
 from osin.integrations.ream import OsinActor
+from ream.actors.base import BaseActor
 from ream.dataset_helper import DatasetDict, DatasetQuery
 from ream.helper import orjson_dumps
 from sm.outputs.semantic_model import SemanticModel
@@ -27,7 +30,7 @@ from timer import Timer
 import grams.inputs as I
 from grams.actors.dataset_actor import GramsELDatasetActor
 from grams.actors.db_actor import GramsDB
-from grams.actors.evaluator import Evaluator
+from grams.evaluator import Evaluator
 from grams.algorithm.candidate_graph.cg_factory import CGFactory
 from grams.algorithm.data_graph import DGFactory
 from grams.algorithm.data_graph.dg_config import DGConfigs
@@ -55,7 +58,8 @@ from grams.inputs.linked_table import LinkedTable
 from grams.main import Annotation
 from ned.actors.evaluate_helper import EvalArgs
 from sm.dataset import Example
-from sm.misc.ray_helper import get_instance, ray_init, ray_map
+from sm.misc.ray_helper import ray_put, ray_map
+from grams.actors.actor_helpers import to_grams_db, eval_dataset
 
 
 @dataclass
@@ -66,6 +70,10 @@ class GramsParams:
     proxy_db: bool = field(
         default=True,
         metadata={"help": "Whether to use a proxy database for the semantic model"},
+    )
+    augcan: AugCanParams = field(
+        default_factory=AugCanParams,
+        metadata={"help": "Configuration for the Augmented Candidate algorithm"},
     )
     data_graph: DGConfigs = field(
         default_factory=DGConfigs,
@@ -89,39 +97,48 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
     """GRAMS for Semantic Modeling"""
 
     NAME = "Semantic Modeling"
-    VERSION = 101
+    VERSION = 103
+    EXP_VERSION = 3
 
-    def __init__(self, params: GramsParams, linked_dataset_actor: GramsELDatasetActor):
-        super().__init__(params, [linked_dataset_actor])
+    def __init__(self, params: GramsParams, dataset_actor: GramsELDatasetActor):
+        db = GramsDB(params.data_dir, params.proxy_db)
+        augcan_actor = AugCanActor(params.augcan, db, dataset_actor)
+
+        if params.augcan.threshold <= 1.0:
+            dep_actors: list[BaseActor] = [dataset_actor, augcan_actor]
+        else:
+            dep_actors: list[BaseActor] = [dataset_actor]
+        super().__init__(params, dep_actors)
+
         self.timer = Timer()
         self.cfg = DEFAULT_CONFIG
-        self.db = GramsDB(params.data_dir, params.proxy_db)
-        self.dataset_actor = linked_dataset_actor
+        self.db = db
+        self.dataset_actor = dataset_actor
+        self.augcan_actor = augcan_actor
 
     def run(self, table: LinkedTable, verbose: bool = False):
         return annotate(self.db, self.params, table, verbose)
 
     def run_dataset(self, dsquery: str):
-        ray_init(log_to_driver=False)
-
-        dbref = ray.put(self.db.data_dir)
-        cfgref = ray.put(self.params)
-
-        dsdict = self.dataset_actor.run_dataset(dsquery)
+        dsdict = self.get_dataset(dsquery)
         output: DatasetDict[list[Annotation]] = DatasetDict(
             dsdict.name, {}, dsdict.provenance
         )
         for name, ds in dsdict.items():
             if len(ds) > 1:
-                args = []
-                for example in ds:
-                    args.append((dbref, cfgref, example.table, False))
-                    # args.append((self.db.data_dir, self.params, example.table, False))
-                output[name] = ray_map(
-                    ray_annotate.remote, args, desc="Annotating tables", verbose=True
+                dbref = ray_put(self.db.data_dir)
+                cfgref = ray_put(self.params)
+                lst = ray_map(
+                    ray_annotate.remote,
+                    [(dbref, cfgref, example.table, False) for example in ds],
+                    desc="Annotating tables",
+                    verbose=True,
                 )
+                output[name] = [x[0] for x in lst]
+                for x in lst:
+                    self.timer.merge(x[1])
             else:
-                output[name] = [annotate(self.db, self.params, ds[0].table, True)]
+                output[name] = [annotate(self.db, self.params, ds[0].table, True)[0]]
 
         return output
 
@@ -129,7 +146,7 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
         evalout = {}
         for dsquery in eval_args.dsqueries:
             dsquery_p = DatasetQuery.from_string(dsquery)
-            dsdict = self.dataset_actor.run_dataset(dsquery)
+            dsdict = self.get_dataset(dsquery)
             ann_dsdict = self.run_dataset(dsquery)
 
             for name, examples in dsdict.items():
@@ -137,12 +154,10 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
                     dataset=dsquery_p.get_query(name),
                 ) as exprun:
                     primitive_output, primitive_ex_output = eval_dataset(
-                        self.db.wdentities,
-                        self.db.wdentity_labels,
-                        self.db.wdclasses,
-                        self.db.wdprops,
+                        self.db,
                         examples,
                         [ann.sm for ann in ann_dsdict[name]],
+                        anns=ann_dsdict[name],
                         exprun=exprun,
                     )
                     self.logger.info(
@@ -161,125 +176,16 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
                         primitive_output,
                         primitive_ex_output,
                     )
+
+        self.timer.report(self.logger.debug)
         return evalout
 
-
-def eval_dataset(
-    qnodes: HugeMutableMapping[str, WDEntity],
-    qnode_labels: Mapping[str, WDEntityLabel],
-    wdclasses: Mapping[str, WDClass],
-    wdprops: Mapping[str, WDProperty],
-    examples: list[Example[LinkedTable]],
-    pred_sms: list[SemanticModel],
-    exprun: Optional[RemoteExpRun] = None,
-):
-    evaluator = Evaluator(qnodes, qnode_labels, wdclasses, wdprops)
-    sms = []
-    for e in examples:
-        sms.extend(evaluator.get_equiv_sms(e))
-    sms.extend(pred_sms)
-    evaluator.update_score_fns(sms)
-
-    eval_outputs = []
-    for i, (example, sm) in enumerate(zip(examples, pred_sms)):
-        try:
-            evalout = evaluator.cpa_cta(example, sm)
-        except:
-            logger.error("Failed to evaluate example: {} - {}", i, example.table.id)
-            raise
-
-        cea = evaluator.cea(example, k=[1, 5])
-        eval_outputs.append((example.table.id, evalout["cpa"], evalout["cta"], cea))
-
-    cpa_precision, cpa_recall, cpa_f1 = (
-        np.mean([y.precision for x, y, z, t in eval_outputs]),
-        np.mean([y.recall for x, y, z, t in eval_outputs]),
-        np.mean([y.f1 for x, y, z, t in eval_outputs]),
-    )
-
-    cta_precision, cta_recall, cta_f1 = (
-        np.mean([z.precision for x, y, z, t in eval_outputs]),
-        np.mean([z.recall for x, y, z, t in eval_outputs]),
-        np.mean([z.f1 for x, y, z, t in eval_outputs]),
-    )
-
-    # calculate cea macro scores
-    cea_macro = {}
-    cea_micro = {}
-
-    for x, y, z, t in eval_outputs:
-        for name, value in t["value"].items():
-            if name not in cea_macro:
-                cea_macro[name] = {k: [v] for k, v in value.items()}
-                cea_micro[name] = t["confusion_matrix"][name]
-                continue
-
-            for k, v in value.items():
-                cea_macro[name][k].append(v)
-            cea_micro[name] = cea_micro[name] + t["confusion_matrix"][name]
-    for name, value in cea_macro.items():
-        cea_macro[name] = {k: float(np.mean(v)) for k, v in value.items()}
-        cea_micro[name] = {
-            "precision": cea_micro[name].precision(),
-            "recall": cea_micro[name].recall(),
-            "f1": cea_micro[name].f1(),
-        }
-
-    ex_details = []
-    for i, e in enumerate(examples):
-        ex_details.append(
-            {
-                "cpa": {
-                    "precision": eval_outputs[i][1].precision,
-                    "recall": eval_outputs[i][1].recall,
-                    "f1": eval_outputs[i][1].f1,
-                },
-                "cta": {
-                    "precision": eval_outputs[i][2].precision,
-                    "recall": eval_outputs[i][2].recall,
-                    "f1": eval_outputs[i][2].f1,
-                },
-                "cea": {
-                    name: {
-                        "p": value["precision"],
-                        "r": value["recall"],
-                        "f1": value["f1"],
-                    }
-                    for name, value in eval_outputs[i][3]["value"].items()
-                },
-            }
-        )
-
-    if exprun is not None:
-        # log the results of each example
-        for i, e in enumerate(examples):
-            exprun.update_example_output(
-                example_id=str(i),
-                example_name=e.table.id,
-                primitive=ex_details[i],
-                complex={
-                    "table": AuxComplexTableObject(qnodes).get_table(e),
-                    "gold-sm": AuxComplexSmObject(qnodes).get_sms(e, e.sms),
-                    "pred-sm": AuxComplexSmObject(qnodes).get_sm(e, pred_sms[i]),
-                },
-            )
-
-    return {
-        "cpa": {
-            "precision": float(cpa_precision),
-            "recall": float(cpa_recall),
-            "f1": float(cpa_f1),
-        },
-        "cta": {
-            "precision": float(cta_precision),
-            "recall": float(cta_recall),
-            "f1": float(cta_f1),
-        },
-        "cea": {
-            "macro": cea_macro,
-            "micro": cea_micro,
-        },
-    }, ex_details
+    def get_dataset(self, dsquery: str):
+        if self.params.augcan.threshold <= 1.0:
+            dsdict = self.augcan_actor.run_dataset(dsquery)
+        else:
+            dsdict = self.dataset_actor.run_dataset(dsquery)
+        return dsdict
 
 
 @ray.remote
@@ -287,21 +193,14 @@ def ray_annotate(
     db: Union[GramsDB, Path], cfg: GramsParams, table: LinkedTable, verbose: bool
 ):
     try:
-        return annotate(db, cfg, table, verbose)
+        return annotate(to_grams_db(db), cfg, table, verbose)
     except Exception as e:
         raise Exception("Failed to annotate table: " + table.id) from e
 
 
 def annotate(
-    db: Union[GramsDB, Path], cfg: GramsParams, table: LinkedTable, verbose: bool
-) -> Annotation:
-    if isinstance(db, Path):
-        datadir = db
-        db = get_instance(
-            lambda: GramsDB(datadir, False),
-            "GramsDB",
-        )
-
+    db: GramsDB, cfg: GramsParams, table: LinkedTable, verbose: bool
+) -> tuple[Annotation, Timer]:
     timer = Timer()
 
     with timer.watch("retrieving entities"):
@@ -365,26 +264,46 @@ def annotate(
 
     with timer.watch("run inference"):
         if cfg.psl.experiment_model:
-            logger.debug("Using experiment PSL model")
-            cls = partial(
-                {
-                    "exp": PSLGramModelExp,
-                    "exp2": PSLGramModelExp2,
-                }[cfg.psl.experiment_model],
-                wdprop_domains=db.wdprop_domains,
-                wdprop_ranges=db.wdprop_ranges,
-            )
+            logger.debug("Using experiment PSL model: {}", cfg.psl.experiment_model)
+            if int(cfg.psl.experiment_model[3:]) >= 3:
+                context = AlgoContext(
+                    data_dir=db.data_dir,
+                    wdprop_domains=db.wdprop_domains,
+                    wdprop_ranges=db.wdprop_ranges,
+                    wdentities=wdentities,
+                    wdentity_labels=db.wdentity_labels,
+                    wdclasses=wdclasses,
+                    wdprops=wdprops,
+                    wd_num_prop_stats=db.wd_numprop_stats,
+                )
+                pslmodel = PSLGramModelExp3(
+                    context=context, disable_rules=cfg.psl.disable_rules
+                )
+            else:
+                pslmodel = PSLGramModelExp2(
+                    wdprop_domains=db.wdprop_domains,
+                    wdprop_ranges=db.wdprop_ranges,
+                    wdentities=wdentities,
+                    wdentity_labels=db.wdentity_labels,
+                    wdclasses=wdclasses,
+                    wdprops=wdprops,
+                    wd_numprop_stats=db.wd_numprop_stats,
+                    disable_rules=cfg.psl.disable_rules,
+                    rule_weights=dict(cfg.psl.rule_weights),
+                )
         else:
-            cls = PSLGramModel
+            pslmodel = PSLGramModel(
+                wdentities=wdentities,
+                wdentity_labels=db.wdentity_labels,
+                wdclasses=wdclasses,
+                wdprops=wdprops,
+                wd_numprop_stats=db.wd_numprop_stats,
+                disable_rules=cfg.psl.disable_rules,
+            )
 
-        edge_probs, cta_probs = cls(
-            wdentities=wdentities,
-            wdentity_labels=db.wdentity_labels,
-            wdclasses=wdclasses,
-            wdprops=wdprops,
-            wd_numprop_stats=db.wd_numprop_stats,
-            disable_rules=cfg.psl.disable_rules,
-        ).predict(table, cg, dg, verbose=verbose, debug=False)
+        edge_probs, cta_probs = pslmodel.predict(
+            table, cg, dg, verbose=verbose, debug=False
+        )
 
         edge_probs = PSLModel.normalize_probs(edge_probs, eps=cfg.psl.eps)
 
@@ -410,12 +329,15 @@ def annotate(
     )
     sm = sm_helper.create_sm(table, pred_cpa, pred_cta)
     sm = sm_helper.minify_sm(sm)
-    return Annotation(
-        sm=sm,
-        dg=dg,
-        cg=cg,
-        cg_edge_probs=edge_probs,
-        cta_probs=cta_probs,
-        pred_cpa=pred_cpa,
-        pred_cta=pred_cta,
+    return (
+        Annotation(
+            sm=sm,
+            dg=dg,
+            cg=cg,
+            cg_edge_probs=edge_probs,
+            cta_probs=cta_probs,
+            pred_cpa=pred_cpa,
+            pred_cta=pred_cta,
+        ),
+        timer,
     )

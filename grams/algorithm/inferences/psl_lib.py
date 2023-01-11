@@ -356,6 +356,14 @@ class ReadableIDMap(IDMap[K]):
         return self.invert_map[new_key]
 
 
+class IdentityIDMap(IDMap[str]):
+    def m(self, key: str) -> str:
+        return key
+
+    def im(self, new_key: str) -> str:
+        return new_key
+
+
 class RuleContainer(MutableMapping[str, Rule]):
     def __init__(self, rules: Optional[Dict[str, Rule]] = None):
         self.rules: Dict[str, Rule] = rules if rules is not None else {}

@@ -65,38 +65,23 @@ class DGFactory:
         for ci, col in enumerate(table.table.columns):
             for ri, val in enumerate(col.values):
                 # =====================================================
-                # NOTE: old code
-                # cell_qnodes = set()
-                # cell_qnode_spans = {}
-                # for link in table.links[ri][ci]:
-                #     if link.entity_id is not None:
-                #         cell_qnodes.add(link.entity_id)
-                #         if link.entity_id not in cell_qnode_spans:
-                #             cell_qnode_spans[link.entity_id] = []
-                #         cell_qnode_spans[link.entity_id].append(Span(link.start, link.end))
-                # assert all(len(spans) == len(set(spans)) for spans in cell_qnode_spans.values())
-                # TODO: new code, doesn't handle the qnode_spans correctly
                 cell_qnodes = {
                     candidate.entity_id
                     for link in table.links[ri][ci]
                     for candidate in link.candidates
                 }
                 cell_qnode_spans = {}
+                cell_qnode_scores = {}
                 for link in table.links[ri][ci]:
-                    # TODO: old code
-                    # if link.entity_id is not None or len(link.candidates) > 0:
-                    #     if len(link.candidates) > 0:
-                    #         tmpid = link.candidates[0].entity_id
-                    #     else:
-                    #         tmpid = link.entity_id
-                    #     if tmpid not in cell_qnode_spans:
-                    #         cell_qnode_spans[tmpid] = []
-                    #     cell_qnode_spans[tmpid].append(Span(link.start, link.end))
                     if len(link.candidates) > 0:
-                        tmpid = link.candidates[0].entity_id
-                        if tmpid not in cell_qnode_spans:
-                            cell_qnode_spans[tmpid] = []
-                        cell_qnode_spans[tmpid].append(Span(link.start, link.end))
+                        for can in link.candidates:
+                            if can.entity_id not in cell_qnode_spans:
+                                cell_qnode_spans[can.entity_id] = []
+                            cell_qnode_spans[can.entity_id].append(
+                                Span(link.start, link.end)
+                            )
+                            cell_qnode_scores[can.entity_id] = can.probability
+
                 assert all(
                     len(spans) == len(set(spans)) for spans in cell_qnode_spans.values()
                 )
@@ -109,6 +94,7 @@ class DGFactory:
                     row=ri,
                     entity_ids=list(cell_qnodes),
                     entity_spans=cell_qnode_spans,
+                    entity_probs=cell_qnode_scores,
                 )
                 dg.add_node(node)
 
@@ -119,6 +105,7 @@ class DGFactory:
                 node = EntityValueNode(
                     id=context_node_id,
                     qnode_id=page_entity,
+                    qnode_prob=1.0,
                     context_span=ContextSpan(
                         text=table.context.page_title,
                         span=Span(0, len(table.context.page_title)),
@@ -181,6 +168,10 @@ class DGFactory:
                                 EntityValueNode(
                                     id=nodeid,
                                     qnode_id=value.qnode_id,
+                                    # the prob of this node should depend on the how it is generated, but since we won't discover
+                                    # the link between this node and other node, having the prob 1.0 is fine (we should only this prob. later
+                                    # in discovering unmatched links)
+                                    qnode_prob=1.0,
                                     context_span=None,
                                 ),
                             )

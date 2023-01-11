@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from grams.actors.augcan_actor import AugCanActor
 
 import yada
 from loguru import logger
@@ -17,6 +18,7 @@ from ned.actors.dataset import NEDDatasetActor
 from ned.actors.evaluate_helper import EvalArgs
 from grams.actors.dataset_actor import GramsDatasetActor, GramsELDatasetActor
 from grams.actors.grams_actor import GramsActor
+from sm.misc.ray_helper import set_ray_init_args
 
 ########################################################
 # CONFIG REAM AND DEFINE ACTOR GRAPH
@@ -25,6 +27,7 @@ REMOTE_OSIN = os.environ.get("REMOTE_OSIN", None)
 ENABLE_OSIN = os.environ.get("ENABLE_OSIN", None)
 DATABASE_DIR = HOME_DIR / "databases"
 
+set_ray_init_args(log_to_driver=False)
 configure_loguru()
 if REMOTE_OSIN is not None:
     OsinActor._osin = Osin.remote(REMOTE_OSIN, "/tmp/osin")
@@ -36,7 +39,7 @@ WikidataDB.init(DATABASE_DIR)
 # fmt: off
 graph: ActorGraph = ActorGraph.auto({
     "ed": NEDDatasetActor, "er": EntityRecognitionActor, "cg": CanGenActor, "cr": CanRankActor,
-    "gd": GramsDatasetActor, "gde": GramsELDatasetActor, "ga": GramsActor
+    "gd": GramsDatasetActor, "gde": GramsELDatasetActor, "gau": AugCanActor, "ga": GramsActor
 })
 # fmt: on
 ########################################################

@@ -1,37 +1,23 @@
 from __future__ import annotations
-import copy
-from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from operator import attrgetter
-from typing import *
-from typing import List
+from typing import Optional
 
 from hugedict.types import HugeMutableMapping
 from kgdata.wikidata.models import WDEntity, WDEntityLabel
 from kgdata.wikidata.models import WDProperty, WDClass
 
-import networkx as nx
 import pandas as pd
-import sm.misc as M
 from grams.algorithm.candidate_graph.cg_graph import (
-    CGColumnNode,
-    CGEntityValueNode,
     CGGraph,
-    CGLiteralValueNode,
-    CGNode,
-    CGStatementNode,
 )
 from grams.algorithm.helpers import IndirectDictAccess
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
-from grams.inputs.linked_table import CandidateEntityId, ExtendedLink, Link, LinkedTable
-from grams.main import GRAMS, Annotation
-from loguru import logger
+from grams.inputs.linked_table import CandidateEntityId, ExtendedLink, LinkedTable
 from sm.dataset import Example
-from sm.evaluation import sm_metrics
-from sm.evaluation.cpa_cta_metrics import _cpa_transformation, _get_cta, cpa, cta
+from sm.evaluation.cpa_cta_metrics import _cpa_transformation, cpa, cta
 from sm.evaluation.hierarchy_scoring_fn import HierarchyScoringFn
-from sm.misc.funcs import DictProxy
-from sm.outputs.semantic_model import LiteralNode, SemanticModel
-from sm.prelude import M, O
+from sm.prelude import O
 from ned.metrics import inkb_eval_table
 
 
@@ -117,13 +103,13 @@ class Evaluator:
         }
 
     def cea(self, example: Example[LinkedTable], k: Optional[Sequence[int]] = None):
-        def convert_gold_ents(links: List[ExtendedLink]):
+        def convert_gold_ents(links: list[ExtendedLink]):
             out: set[str] = set()
             for link in links:
                 out.update(link.entities)
             return out
 
-        def convert_pred_ents(links: List[ExtendedLink]):
+        def convert_pred_ents(links: list[ExtendedLink]):
             out: list[CandidateEntityId] = list()
             for link in links:
                 out.extend(link.candidates)
@@ -137,7 +123,7 @@ class Evaluator:
         perf, cm = inkb_eval_table(gold_ents, pred_ents, k)
         return {"value": perf, "confusion_matrix": cm}
 
-    def get_equiv_sms(self, example: Example[LinkedTable]) -> List[O.SemanticModel]:
+    def get_equiv_sms(self, example: Example[LinkedTable]) -> list[O.SemanticModel]:
         if example.table.id not in self.example2equivsms:
             equiv_sms = [
                 equiv_sm
@@ -150,7 +136,7 @@ class Evaluator:
         return self.example2equivsms[example.table.id]
 
     def update_score_fns(
-        self, sms: List[O.SemanticModel], cgs: Optional[List[CGGraph]] = None
+        self, sms: list[O.SemanticModel], cgs: Optional[list[CGGraph]] = None
     ):
         """This function is expected to be called before all other functions is called"""
         update_wdprops = False

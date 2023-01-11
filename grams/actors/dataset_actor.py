@@ -103,7 +103,11 @@ class GramsELParams:
 
 
 class GramsELDatasetActor(OsinActor[str, GramsELParams]):
-    VERSION = 101
+    """
+    CHANGELOG:
+    - 102: Each cell contains maximum one single link"""
+
+    VERSION = 102
 
     def __init__(
         self,
@@ -139,12 +143,26 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
             for name, examples in dsdict.items():
                 newexamples: list[Example[LinkedTable]] = []
                 for ex in examples:
-                    newlinks = ex.table.links.deep_copy()
-                    for links in newlinks.flat_iter():
-                        for link in links:
-                            link.candidates = [
-                                CandidateEntityId(eid, 1.0) for eid in link.entities
-                            ]
+                    newlinks = ex.table.links.shallow_copy()
+                    for ri, ci, links in ex.table.links.enumerate_flat_iter():
+                        if len(links) == 0:
+                            continue
+                        link = ExtendedLink(
+                            start=0,
+                            end=len(ex.table.table[ri, ci]),
+                            url=";".join(urls)
+                            if (urls := [l.url for l in links if l.url is not None])
+                            else None,
+                            entities=[eid for link in links for eid in link.entities],
+                            candidates=[
+                                CandidateEntityId(eid, 1.0)
+                                for eid in sorted(
+                                    {eid1 for link in links for eid1 in link.entities}
+                                )
+                            ],
+                        )
+                        newlinks[ri, ci] = [link]
+
                     newexamples.append(
                         Example(
                             sms=ex.sms,
@@ -176,7 +194,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                 table = example.table
                 # the candidates inside table.links are always empty because grams dataset actor
                 # create a linked table from a full table which does not have candidates
-                newlinks = table.links.clone()
+                newlinks = table.links.shallow_copy()
                 context = Context(
                     page_title=table.context.page_title,
                     page_url=table.context.page_url,

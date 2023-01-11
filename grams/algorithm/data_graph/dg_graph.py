@@ -4,15 +4,23 @@ import copy
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Union
-from graph.retworkx import (
-    RetworkXStrDiGraph,
-    BaseEdge,
-    BaseNode,
+from typing import (
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    TypedDict,
+    Union,
 )
 
-from sm.misc.prelude import UnreachableError
+from graph.retworkx import BaseEdge, BaseNode, RetworkXStrDiGraph
+from typing_extensions import TypeAlias
+
 from kgdata.wikidata.models import WDValue
+from kgdata.wikidata.models.wdvalue import WDValueKind
+from sm.misc.prelude import UnreachableError
 
 
 @dataclass(frozen=True)
@@ -33,6 +41,7 @@ class CellNode(BaseNode[str]):
     row: int
     entity_ids: List[str]
     entity_spans: Dict[str, List[Span]]
+    entity_probs: Dict[str, float]
 
 
 @dataclass
@@ -63,6 +72,7 @@ class EntityValueNode(BaseNode[str]):
     qnode_id: str
     # not none if it is appear in the context
     context_span: Optional[ContextSpan]
+    qnode_prob: float
 
     @property
     def is_context(self):
@@ -191,13 +201,19 @@ class LinkGenMethod(Enum):
     FromLiteralMatchingFunc = "from_literal_matching_function"
 
 
+FromLiteralMatchingFunc_GenArg = TypedDict(
+    "FromLiteralMatchingFunc_GenArg", {"func": str, "value": WDValueKind}
+)
+FromWikidataLink_GenArg: TypeAlias = None
+
+
 @dataclass
 class FlowProvenance:
     """Contain information regarding how this relationship/flow has been generated (typically coming from the matching algorithm)"""
 
     # method that
     gen_method: LinkGenMethod
-    gen_method_arg: Any
+    gen_method_arg: Union[FromLiteralMatchingFunc_GenArg, FromWikidataLink_GenArg]
     prob: float
 
     def merge(self, another: FlowProvenance) -> Union[FlowProvenance, None]:
@@ -272,7 +288,7 @@ class DGPathNodeStatement:
 
     # ############# METHODs to construct DGPathNodeStatement from provenance ##############
     @staticmethod
-    def from_FromWikidataLink(qnode_id, predicate, stmt_index):
+    def from_FromWikidataLink(qnode_id: str, predicate: str, stmt_index: int):
         return DGPathNodeStatement(
             qnode_id,
             predicate,
@@ -281,7 +297,13 @@ class DGPathNodeStatement:
         )
 
     @staticmethod
-    def from_FromLiteralMatchingFunc(qnode_id, predicate, stmt_index, fn_args, prob):
+    def from_FromLiteralMatchingFunc(
+        qnode_id: str,
+        predicate: str,
+        stmt_index: int,
+        fn_args: FromLiteralMatchingFunc_GenArg,
+        prob: float,
+    ):
         return DGPathNodeStatement(
             qnode_id,
             predicate,

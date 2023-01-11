@@ -219,7 +219,9 @@ class CGStatementNode(BaseNode[str]):
 
         return len(unique_pairs)
 
-    def get_edges_provenance(self, edges: List["CGEdge"]):
+    def get_edges_provenance(
+        self, edges: List["CGEdge"]
+    ) -> dict[CGEdgeFlowSource, dict[CGEdgeFlowTarget, List[FlowProvenance]]]:
         """Retrieve all flow provenances that connects these edges.
 
         Note that in case we have more than one statement per flow, we merge the statements (i.e., merge
@@ -247,6 +249,7 @@ class CGStatementNode(BaseNode[str]):
                         stmts[stmt_id][target_flow] = provs
                 else:
                     # do intersection because we want to find the stmt contain all edges
+                    # if you have just one edge, this should have no effect
                     stmt2provenances = self.flow[source_flow, target_flow]
                     remove_stmt_ids = set(stmts.keys()).difference(
                         stmt2provenances.keys()

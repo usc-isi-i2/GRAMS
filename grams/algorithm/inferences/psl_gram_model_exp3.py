@@ -6,6 +6,7 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGGraph,
     CGStatementNode,
 )
+from grams.algorithm.context import AlgoContext
 from grams.algorithm.data_graph.dg_graph import DGGraph
 from grams.algorithm.inferences.features.structure_feature2 import StructureFeature
 from grams.algorithm.inferences.psl_lib import (
@@ -14,7 +15,7 @@ from grams.algorithm.inferences.psl_lib import (
     ReadableIDMap,
     RuleContainer,
 )
-from grams.algorithm.inferences.features.rel_feature2 import RelFeatures
+from grams.algorithm.inferences.features.rel_feature3 import RelFeatures3
 from grams.algorithm.inferences.features.type_feature import (
     TypeFeatures,
 )
@@ -81,58 +82,51 @@ class P:
     TypeHeaderSimilarity = Predicate("TYPE_HEADER_SIMILARITY", closed=True, size=2)
 
 
-class PSLGramModelExp2:
+class PSLGramModelExp3:
     def __init__(
         self,
-        wdentities: Mapping[str, WDEntity],
-        wdentity_labels: Mapping[str, WDEntityLabel],
-        wdclasses: Mapping[str, WDClass],
-        wdprops: Mapping[str, WDProperty],
-        wdprop_domains: Optional[Mapping[str, WDPropertyDomains]],
-        wdprop_ranges: Optional[Mapping[str, WDPropertyRanges]],
-        wd_numprop_stats: Mapping[str, WDQuantityPropertyStats],
+        context: AlgoContext,
         disable_rules: Optional[Iterable[str]] = None,
-        rule_weights: Optional[Mapping[str, float]] = None,
         example_id: Optional[str] = None,
         use_readable_idmap: bool = False,
     ):
-        self.wdentities = wdentities
-        self.wdentity_labels = wdentity_labels
-        self.wdclasses = wdclasses
-        self.wdprops = wdprops
-        self.wdprop_domains = wdprop_domains
-        self.wdprop_ranges = wdprop_ranges
-        self.wd_numprop_stats = wd_numprop_stats
+        self.wdentities = context.wdentities
+        self.wdentity_labels = context.wdentity_labels
+        self.wdclasses = context.wdclasses
+        self.wdprops = context.wdprops
+        self.wdprop_domains = context.wdprop_domains
+        self.wdprop_ranges = context.wdprop_ranges
+        self.wd_numprop_stats = context.wd_num_prop_stats
+        self.context = context
         self.sim_fn = StringSimilarity.hybrid_jaccard_similarity
         self.disable_rules = set(disable_rules or [])
         self.example_id = example_id
         self.use_readable_idmap = use_readable_idmap
         self.model = self.get_model()
 
-        default_weights = {
-            P.Rel.name() + "_PRIOR_NEG": 1,
-            P.Rel.name() + "_PRIOR_NEG_PARENT": 0.1,
-            P.RelFreqOverRow.name(): 2,
-            P.RelFreqOverEntRow.name(): 2,
-            P.RelFreqOverPosRel.name(): 2,
-            P.RelFreqUnmatchOverEntRow.name(): 2,
-            P.RelFreqUnmatchOverPosRel.name(): 2,
-            P.RelHeaderSimilarity.name(): 0.0,
-            P.RelNotFuncDependency.name(): 100,
-            P.Type.name() + "_PRIOR_NEG": 1,
-            "TYPE_PRIOR_NEG_PARENT": 0.1,
-            P.TypeFreqOverRow.name(): 2,
-            P.TypeFreqOverEntRow.name(): 0,
-            P.ExtendedTypeFreqOverRow.name(): 2,
-            P.ExtendedTypeFreqOverEntRow.name(): 0,
-            P.TypeHeaderSimilarity.name(): 0.0,
-            P.DataProperty.name(): 2,
-            P.PropertyDomain.name(): 2,
-            P.PropertyRange.name(): 2,
-        }
-        if rule_weights is not None:
-            default_weights.update(rule_weights)
-        self.model.set_parameters(default_weights)
+        self.model.set_parameters(
+            {
+                P.Rel.name() + "_PRIOR_NEG": 1,
+                P.Rel.name() + "_PRIOR_NEG_PARENT": 0.1,
+                P.RelFreqOverRow.name(): 2,
+                P.RelFreqOverEntRow.name(): 2,
+                P.RelFreqOverPosRel.name(): 2,
+                P.RelFreqUnmatchOverEntRow.name(): 2,
+                P.RelFreqUnmatchOverPosRel.name(): 2,
+                P.RelHeaderSimilarity.name(): 0.0,
+                P.RelNotFuncDependency.name(): 100,
+                P.Type.name() + "_PRIOR_NEG": 1,
+                "TYPE_PRIOR_NEG_PARENT": 0.1,
+                P.TypeFreqOverRow.name(): 2,
+                P.TypeFreqOverEntRow.name(): 0,
+                P.ExtendedTypeFreqOverRow.name(): 2,
+                P.ExtendedTypeFreqOverEntRow.name(): 0,
+                P.TypeHeaderSimilarity.name(): 0.0,
+                P.DataProperty.name(): 2,
+                P.PropertyDomain.name(): 2,
+                P.PropertyRange.name(): 2,
+            }
+        )
 
     def get_model(self):
         # ** DEFINE RULES **
@@ -331,18 +325,7 @@ class PSLGramModelExp2:
         """Extract data for our PSL model"""
         idmap = ReadableIDMap() if self.use_readable_idmap else IDMap()
 
-        rel_feats = RelFeatures(
-            idmap,
-            table,
-            cg,
-            dg,
-            self.wdentities,
-            self.wdentity_labels,
-            self.wdclasses,
-            self.wdprops,
-            self.wd_numprop_stats,
-            self.sim_fn,
-        ).extract_features(
+        rel_feats = RelFeatures3(idmap, table, cg, dg, self.context).extract_features(
             [
                 P.RelFreqOverRow.name(),
                 P.RelFreqOverEntRow.name(),
