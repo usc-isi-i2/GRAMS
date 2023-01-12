@@ -11,7 +11,7 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGStatementNode,
 )
 from grams.algorithm.context import AlgoContext
-from grams.algorithm.data_graph.dg_graph import DGGraph
+from grams.algorithm.data_graph.dg_graph import CellNode, DGGraph, EntityValueNode
 from grams.algorithm.inferences.features.rel_feature3.detect_contradicted_info import (
     ContradictedInformationDetector,
 )
@@ -111,14 +111,9 @@ class RelFeatures3:
 
         for s, inedge, outedge in rels:
             freq = self.get_rel_freq(s, outedge)
-            n_unmatch_links = len(
-                self.contradicted_info_detector.get_contradicted_information(
-                    s, inedge, outedge
-                )
-            )
-            n_possible_links = n_unmatch_links + len(
-                self.traversal.get_rel_dg_pairs(s, outedge)
-            )
+            n_possible_links = self.get_unmatch_discovered_links(
+                s, inedge, outedge
+            ) + len(self.traversal.get_rel_dg_pairs(s, outedge))
 
             max_possible_links[inedge.source, outedge.target] = max(
                 n_possible_links,
@@ -182,9 +177,9 @@ class RelFeatures3:
                     s, inedge, outedge
                 )
             )
-            n_possible_links = n_unmatch_links + len(
-                self.traversal.get_rel_dg_pairs(s, outedge)
-            )
+            n_possible_links = self.get_unmatch_discovered_links(
+                s, inedge, outedge
+            ) + len(self.traversal.get_rel_dg_pairs(s, outedge))
 
             max_possible_links[inedge.source, outedge.target] = max(
                 n_possible_links,
@@ -245,7 +240,8 @@ class RelFeatures3:
 
     @CacheMethod.cache(CacheMethod.two_object_args)
     def get_rel_freq(self, s: CGStatementNode, outedge: CGEdge):
-        """Get frequency of the link, which is sum of links all rows between two nodes"""
+        """Get frequency of the link, which is sum of links all rows between two nodes.
+        This is weighted count so we should not use this for calculating the number of links"""
         # sum_prob = {}
         # for (source_flow, target_flow), dgstmt2provenances in s.flow.items():
         #     # the flow does not go through this outedge
@@ -348,29 +344,72 @@ class RelFeatures3:
 
         return n_rows - n_null_entities
 
-    # @CacheMethod.cache(CacheMethod.auto_object_args)
-    # def get_linkable_pairs(
-    #     self, source: CGNode, target: CGNode, is_data_predicate: bool
-    # ) -> list[tuple[DGNode, DGNode]]:
-    #     """Retrieve the pairs of DG nodes that can be link using the given predicate.
+    @CacheMethod.cache(CacheMethod.three_object_args)
+    def get_unmatch_discovered_links(
+        self, s: CGStatementNode, inedge: CGEdge, outedge: CGEdge
+    ):
+        """Get number of discovered links that don't match due to value differences. This function do not count if:
+        * the link between two DG nodes is impossible
+        * the property/qualifier do not exist in the WDEntity
+        """
+        u = self.cg.get_node(inedge.source)
+        v = self.cg.get_node(outedge.target)
+        uv_links = self.traversal.get_rel_dg_pairs(s, outedge)
+        is_outpred_qualifier = inedge.predicate != outedge.predicate
+        is_outpred_data_predicate = self.wdprops[outedge.predicate].is_data_property()
 
-    #     A pair is linkable if:
-    #         * the dg source node contains some entities
-    #         * this is a data predicate or this is an object predicate and the dg target node contains some entities
+        n_unmatch_links = 0
+        for dgu, dgv in self.traversal.iter_dg_pair(inedge.source, outedge.target):
+            # if has link, then we don't have to count
+            if (dgu.id, dgv.id) in uv_links:
+                continue
 
-    #     This can be used to calculate the maxmimum possible entity links
-    #     max_pos_ent_rows = len(
-    #         self.get_linkable_pairs(
-    #             self.cg.get_node(inedge.source),
-    #             self.cg.get_node(outedge.target),
-    #             self.wdprops[outedge.predicate].is_data_property(),
-    #         )
-    #     )
-    #     """
-    #     assert False
+            # ignore pairs that can't have any links
+            if not self.traversal.dg_pair_has_possible_ent_links(
+                dgu, dgv, is_outpred_data_predicate
+            ):
+                continue
 
-    # @CacheMethod.cache(CacheMethod.auto_object_args)
-    # def get_filtered_linkable_pairs(
-    #     self, source: CGNode, target: CGNode, is_data_predicate: bool
-    # ) -> list[tuple[DGNode, DGNode]]:
-    #     assert False
+            if isinstance(dgu, CellNode):
+                # the source is cell node
+                # property doesn't exist in any qnode
+                dgu_qnodes = [self.wdentities[qnode_id] for qnode_id in dgu.entity_ids]
+                if all(inedge.predicate not in qnode.props for qnode in dgu_qnodes):
+                    continue
+
+                if is_outpred_qualifier:
+                    # qualifier doesn't exist in any qnode
+                    has_qual = False
+                    for qnode in dgu_qnodes:
+                        for stmt in qnode.props.get(inedge.predicate, []):
+                            if outedge.predicate in stmt.qualifiers:
+                                has_qual = True
+                    if not has_qual:
+                        continue
+
+                # # #########################
+                # # TODO: remove me, modify on Apr 29, should have a better solution
+                # # this is to say like if that properties have multiple values, then it's more likely to miss
+                # if all(len(qnode.props.get(inpred, [])) > 2 for qnode in dgu_qnodes):
+                #     continue
+                # # #########################
+            else:
+                # the source is entity
+                assert isinstance(dgu, EntityValueNode)
+                dgu_qnode = self.wdentities[dgu.qnode_id]
+                if inedge.predicate not in dgu_qnode.props:
+                    continue
+                if is_outpred_qualifier:
+                    if all(
+                        outedge.predicate not in stmt.qualifiers
+                        for stmt in dgu_qnode.props[inedge.predicate]
+                    ):
+                        continue
+                # # #########################
+                # # TODO: remove me, modify on Apr 29, should have a better solution
+                # # this is to say like if that properties have multiple values, then it's more likely to miss
+                # if len(dgu_qnode.props.get(inpred, [])) > 2:
+                #     continue
+                # # #########################
+            n_unmatch_links += 1
+        return n_unmatch_links

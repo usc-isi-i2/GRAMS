@@ -151,7 +151,7 @@ def eval_dataset(
         "for copying...\nrun-id\tcpa-p\tcpa-r\tcpa-f1\tcta-p\tcta-r\tcta-f1\n{}",
         ",".join(
             [str(0 if exprun is None else exprun.id)] +
-            ["%.5f" % (round(float(x) * 100, 5)) for x in [cpa_precision, cpa_recall, cpa_f1, cta_precision, cta_recall, cta_f1]]
+            ["%.2f" % (round(float(x) * 100, 2)) for x in [cpa_precision, cpa_recall, cpa_f1, cta_precision, cta_recall, cta_f1]]
     ))
     # fmt: on
 
@@ -367,6 +367,7 @@ class AuxComplexFeatures(AuxComplexObjectBase):
                 "stmt": rel[2],
                 "predicate": rel[3],
                 "label": label,
+                "prob": ann.cg_edge_probs[rel[2], rel[1], rel[3]],
             }
             for rel, label in rel2label.items()
         }

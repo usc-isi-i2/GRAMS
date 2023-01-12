@@ -257,7 +257,8 @@ class RelFeatures:
 
     @CacheMethod.cache(CacheMethod.two_object_args)
     def get_rel_freq(self, s: CGStatementNode, outedge: CGEdge):
-        """Get frequency of the link, which is sum of links all rows between two nodes"""
+        """Get frequency of the link, which is sum of links all rows between two nodes. This is weighted count
+        so we should not use this for calculating the number of links"""
         dg_flows = s.get_edges_provenance([outedge])
         sum_prob = 0.0
         for source_flow, target_flows in dg_flows.items():
