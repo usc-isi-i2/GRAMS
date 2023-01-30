@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from functools import cached_property
 import random
 from typing import Literal
 from grams.inputs.linked_table import CandidateEntityId, ExtendedLink, LinkedTable
@@ -100,6 +101,12 @@ class GramsELParams:
             "- always: add the gold entity when it's missing",
         },
     )
+    skip_meta_entities: set[str] = field(
+        default_factory=set,
+        metadata={
+            "help": "skip meta entities such as disambiguation page (Q4167410)",
+        },
+    )
 
 
 class GramsELDatasetActor(OsinActor[str, GramsELParams]):
@@ -107,7 +114,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
     CHANGELOG:
     - 102: Each cell contains maximum one single link"""
 
-    VERSION = 102
+    VERSION = 104
 
     def __init__(
         self,
@@ -291,6 +298,11 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                         else:
                             assert self.params.add_gold == "no"
 
+                        link.candidates = [
+                            can
+                            for can in link.candidates
+                            if not self.is_metadata_entity(can.entity_id)
+                        ]
                         newlinks[ri, ci] = [link]
 
                 newexamples.append(
@@ -319,3 +331,17 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                     dataset=dsname, exprun_type=evalargs.exprun_type
                 ) as exprun:
                     pass
+
+    @cached_property
+    def wdentities(self):
+        return WikidataDB.get_instance().wdentities.cache()
+
+    def is_metadata_entity(self, entity_id: str):
+        """Test if an entity is a metadata entity or instance of a metadata entity."""
+        return entity_id not in self.params.skip_meta_entities and (
+            entity_id in self.wdentities
+            and any(
+                stmt.value.as_entity_id_safe() in self.params.skip_meta_entities
+                for stmt in self.wdentities[entity_id].props.get("P31", [])
+            )
+        )

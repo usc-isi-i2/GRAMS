@@ -643,7 +643,7 @@ class WikidataSemanticModelHelper:
                         {
                             "id": qnode_id,
                             "uri": wdns.get_entity_abs_uri(qnode_id),
-                            "label": self.wdentities[qnode_id].label,
+                            "label": self.get_qnode_label(qnode_id),
                             "props": {},
                         }
                         for qnode_id in qnode_ids
@@ -756,10 +756,12 @@ class WikidataSemanticModelHelper:
         """Get WDEntity label from id"""
         if qid in self.wdclasses:
             label = self.wdclasses[qid].label
+        elif qid in self.wdentity_labels:
+            label = self.wdentity_labels[qid]
         elif qid in self.wdentities:
             label = self.wdentities[qid].label
         else:
-            label = self.wdentity_labels.get(qid, qid)
+            return qid
         return f"{label} ({qid})"
 
     def get_pnode_label(self, pid: str):

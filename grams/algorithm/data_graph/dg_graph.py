@@ -23,8 +23,10 @@ from kgdata.wikidata.models.wdvalue import WDValueKind
 from sm.misc.prelude import UnreachableError
 
 
-@dataclass(frozen=True)
+# @dataclass(frozen=True)
+@dataclass
 class Span:
+    __slots__ = ("start", "end")
     start: int
     end: int
 
@@ -32,9 +34,25 @@ class Span:
     def length(self):
         return self.end - self.start
 
+    def to_tuple(self):
+        return self.start, self.end
+
+    @staticmethod
+    def from_tuple(tup):
+        return Span(tup[0], tup[1])
+
 
 @dataclass
 class CellNode(BaseNode[str]):
+    __slots__ = (
+        "id",
+        "value",
+        "column",
+        "row",
+        "entity_ids",
+        "entity_spans",
+        "entity_probs",
+    )
     id: str
     value: str
     column: int
@@ -43,9 +61,33 @@ class CellNode(BaseNode[str]):
     entity_spans: Dict[str, List[Span]]
     entity_probs: Dict[str, float]
 
+    def to_tuple(self):
+        return (
+            self.id,
+            self.value,
+            self.column,
+            self.row,
+            self.entity_ids,
+            [(k, [v.to_tuple() for v in vs]) for k, vs in self.entity_spans.items()],
+            self.entity_probs,
+        )
+
+    @staticmethod
+    def from_tuple(tup):
+        return CellNode(
+            tup[0],
+            tup[1],
+            tup[2],
+            tup[3],
+            tup[4],
+            {k: [Span.from_tuple(v) for v in vs] for k, vs in tup[5]},
+            tup[6],
+        )
+
 
 @dataclass
 class ContextSpan:
+    __slots__ = ("text", "span")
     # the text of the context
     text: str
     span: Span
@@ -53,9 +95,17 @@ class ContextSpan:
     def get_text_span(self):
         return self.text[self.span.start : self.span.end]
 
+    def to_tuple(self):
+        return self.text, self.span.to_tuple()
+
+    @staticmethod
+    def from_tuple(tup):
+        return ContextSpan(tup[0], Span.from_tuple(tup[1]))
+
 
 @dataclass
 class LiteralValueNode(BaseNode[str]):
+    __slots__ = ("id", "value", "context_span")
     id: str
     value: WDValue
     # not none if it is appear in the context
@@ -65,9 +115,26 @@ class LiteralValueNode(BaseNode[str]):
     def is_context(self):
         return self.context_span is not None
 
+    def to_tuple(self):
+        return (
+            self.id,
+            self.value.to_tuple(),
+            self.context_span.to_tuple() if self.context_span is not None else None,
+        )
+
+    @staticmethod
+    def from_tuple(tup):
+        wdvalue = tup[1]
+        return LiteralValueNode(
+            tup[0],
+            WDValue(wdvalue[0], wdvalue[1]),
+            ContextSpan.from_tuple(tup[2]) if tup[2] is not None else None,
+        )
+
 
 @dataclass
 class EntityValueNode(BaseNode[str]):
+    __slots__ = ("id", "qnode_id", "context_span", "qnode_prob")
     id: str
     qnode_id: str
     # not none if it is appear in the context
@@ -78,6 +145,23 @@ class EntityValueNode(BaseNode[str]):
     def is_context(self):
         return self.context_span is not None
 
+    def to_tuple(self):
+        return (
+            self.id,
+            self.qnode_id,
+            self.context_span.to_tuple() if self.context_span is not None else None,
+            self.qnode_prob,
+        )
+
+    @staticmethod
+    def from_tuple(tup):
+        return EntityValueNode(
+            tup[0],
+            tup[1],
+            ContextSpan.from_tuple(tup[2]) if tup[2] is not None else None,
+            tup[3],
+        )
+
 
 # edge id is actually key id
 EdgeFlowSource = NamedTuple("EdgeFlowSource", [("source_id", str), ("edge_id", str)])
@@ -86,6 +170,16 @@ EdgeFlowTarget = NamedTuple("EdgeFlowTarget", [("target_id", str), ("edge_id", s
 
 @dataclass
 class StatementNode(BaseNode[str]):
+    __slots__ = (
+        "id",
+        "qnode_id",
+        "predicate",
+        "is_in_kg",
+        "forward_flow",
+        "reversed_flow",
+        "flow",
+    )
+
     id: str
     # id of the qnode that contains the statement
     qnode_id: str
@@ -95,15 +189,9 @@ class StatementNode(BaseNode[str]):
     is_in_kg: bool
 
     # recording which link in the source is connected to the target.
-    forward_flow: Dict[EdgeFlowSource, Set[EdgeFlowTarget]] = field(
-        default_factory=dict
-    )
-    reversed_flow: Dict[EdgeFlowTarget, Set[EdgeFlowSource]] = field(
-        default_factory=dict
-    )
-    flow: Dict[Tuple[EdgeFlowSource, EdgeFlowTarget], List[FlowProvenance]] = field(
-        default_factory=dict
-    )
+    forward_flow: Dict[EdgeFlowSource, Set[EdgeFlowTarget]]
+    reversed_flow: Dict[EdgeFlowTarget, Set[EdgeFlowSource]]
+    flow: Dict[Tuple[EdgeFlowSource, EdgeFlowTarget], List[FlowProvenance]]
 
     @property
     def value(self):
@@ -189,6 +277,52 @@ class StatementNode(BaseNode[str]):
             EdgeFlowTarget(outedge.target, outedge.predicate),
         ) in self.flow
 
+    def to_tuple(self):
+        return (
+            self.id,
+            self.qnode_id,
+            self.predicate,
+            self.is_in_kg,
+            self.forward_flow,
+            self.reversed_flow,
+            {k: [v.to_tuple() for v in vs] for k, vs in self.flow.items()},
+            # [(tuple(k), [tuple(v) for v in vs]) for k, vs in self.forward_flow.items()],
+            # [
+            #     (tuple(k), [tuple(v) for v in vs])
+            #     for k, vs in self.reversed_flow.items()
+            # ],
+            # [
+            #     ((tuple(k[0]), tuple(k[1])), [v.to_tuple() for v in vs])
+            #     for k, vs in self.flow.items()
+            # ],
+        )
+
+    @staticmethod
+    def from_tuple(tup):
+        return StatementNode(
+            tup[0],
+            tup[1],
+            tup[2],
+            tup[3],
+            tup[4],
+            tup[5],
+            {k: [FlowProvenance.from_tuple(v) for v in vs] for k, vs in tup[6].items()},
+            # {
+            #     EdgeFlowSource(k[0], k[1]): {EdgeFlowTarget(v[0], v[1]) for v in vs}
+            #     for k, vs in tup[4]
+            # },
+            # {
+            #     EdgeFlowTarget(k[0], k[1]): {EdgeFlowSource(v[0], v[1]) for v in vs}
+            #     for k, vs in tup[5]
+            # },
+            # {
+            #     (EdgeFlowSource(k[0][0], k[0][1]), EdgeFlowTarget(k[1][0], k[1][1])): [
+            #         FlowProvenance.from_tuple(v) for v in vs
+            #     ]
+            #     for k, vs in tup[6]
+            # },
+        )
+
 
 DGNode = Union[CellNode, LiteralValueNode, EntityValueNode, StatementNode]
 
@@ -209,6 +343,7 @@ FromWikidataLink_GenArg: TypeAlias = None
 
 @dataclass
 class FlowProvenance:
+    __slots__ = ("gen_method", "gen_method_arg", "prob")
     """Contain information regarding how this relationship/flow has been generated (typically coming from the matching algorithm)"""
 
     # method that
@@ -254,9 +389,30 @@ class FlowProvenance:
                     break
         return lst
 
+    def to_tuple(self):
+        arg = (
+            self.gen_method_arg
+            if self.gen_method_arg is None
+            else {
+                "func": self.gen_method_arg["func"],
+                "value": self.gen_method_arg["value"].to_tuple(),
+            }
+        )
+        return self.gen_method.value, arg, self.prob
+
+    @staticmethod
+    def from_tuple(tup):
+        arg = (
+            tup[1]
+            if tup[1] is None
+            else {"func": tup[1]["func"], "value": WDValue(*tup[1]["value"])}
+        )
+        return FlowProvenance(LinkGenMethod(tup[0]), arg, tup[2])
+
 
 @dataclass
 class DGStatementID:
+    __slots__ = ("qnode_id", "predicate", "statement_index")
     qnode_id: str
     predicate: str
     statement_index: int
@@ -275,6 +431,7 @@ class DGStatementID:
 
 @dataclass
 class DGPathNodeStatement:
+    __slots__ = ("qnode_id", "predicate", "statement_index", "provenance")
     qnode_id: str
     predicate: str
     statement_index: int
@@ -314,6 +471,7 @@ class DGPathNodeStatement:
 
 @dataclass
 class DGPathNodeEntity:
+    __slots__ = ("qnode_id",)
     qnode_id: str
 
     def get_id(self):
@@ -322,6 +480,7 @@ class DGPathNodeEntity:
 
 @dataclass
 class DGPathNodeLiteralValue:
+    __slots__ = ("value",)
     value: WDValue
 
     def get_id(self):
@@ -330,6 +489,7 @@ class DGPathNodeLiteralValue:
 
 @dataclass
 class DGPathExistingNode:
+    __slots__ = ("id",)
     id: str
 
     def get_id(self):
@@ -343,6 +503,7 @@ DGPathNode = Union[
 
 @dataclass
 class DGPathEdge:
+    __slots__ = ("value", "is_qualifier")
     value: str
     is_qualifier: bool
 
@@ -357,20 +518,22 @@ class DGPathEdge:
 
 @dataclass
 class DGPath:
+    __slots__ = ("sequence",)
     # a sequence of path, is always
-    sequence: List[Union[DGPathEdge, DGPathNode]] = field(default_factory=list)
+    sequence: List[Union[DGPathEdge, DGPathNode]]
 
 
 @dataclass
 class DGEdge(BaseEdge[str, str]):
+    __slots__ = ("source", "target", "predicate", "is_qualifier", "is_inferred", "id")
     source: str
     target: str
     predicate: str
     is_qualifier: bool
-    # deprecated, will be replaced by the information stored directly in the statement edge flow
-    # paths: List[DGPath]
-    is_inferred: Optional[bool] = None
-    id: int = -1  # set automatically by the graph
+    # is_inferred means that this edge is added based on dg inference (e.g., transitivity, etc.)
+    is_inferred: bool
+    # id can be initialized to be -1, and will be set by the graph
+    id: int
 
     @property
     def key(self):
@@ -384,6 +547,20 @@ class DGEdge(BaseEdge[str, str]):
         if not isinstance(source, CellNode) or not isinstance(target, CellNode):
             return True
         return source.row == target.row
+
+    def to_tuple(self):
+        return (
+            self.source,
+            self.target,
+            self.predicate,
+            self.is_qualifier,
+            self.is_inferred,
+            self.id,
+        )
+
+    @staticmethod
+    def from_tuple(tup):
+        return DGEdge(tup[0], tup[1], tup[2], tup[3], tup[4], tup[5])
 
 
 class DGGraph(RetworkXStrDiGraph[str, DGNode, DGEdge]):

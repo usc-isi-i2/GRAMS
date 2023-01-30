@@ -83,7 +83,8 @@ class DGFactory:
                             cell_qnode_scores[can.entity_id] = can.probability
 
                 assert all(
-                    len(spans) == len(set(spans)) for spans in cell_qnode_spans.values()
+                    len(spans) == len({s.to_tuple() for s in spans})
+                    for spans in cell_qnode_spans.values()
                 )
                 # =====================================================
 
@@ -161,6 +162,9 @@ class DGFactory:
                                     qnode_id=value.qnode_id,
                                     predicate=value.predicate,
                                     is_in_kg=True,
+                                    forward_flow={},
+                                    reversed_flow={},
+                                    flow={},
                                 )
                             )
                         elif isinstance(value, DGPathNodeEntity):
@@ -186,10 +190,12 @@ class DGFactory:
                     edge = dg.get_edge_between_nodes(curr_nodeid, nodeid, prop.value)
                 else:
                     edge = DGEdge(
+                        id=-1,  # will be assigned later
                         source=curr_nodeid,
                         target=nodeid,
                         predicate=prop.value,
                         is_qualifier=prop.is_qualifier,
+                        is_inferred=False,
                     )
                     dg.add_edge(edge)
 

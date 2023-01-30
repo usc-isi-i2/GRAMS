@@ -2,25 +2,15 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Mapping, Optional, Tuple, Set
-import networkx as nx
-from kgdata.wikidata.models import WDEntity, WDValue, WDProperty, WDClass
+from kgdata.wikidata.models import WDEntity, WDValue, WDProperty
 from grams.algorithm.data_graph.dg_graph import (
-    CellNode,
     DGEdge,
     DGGraph,
-    DGNode,
     DGStatementID,
     EdgeFlowSource,
     EdgeFlowTarget,
     LinkGenMethod,
     StatementNode,
-    DGPath,
-    DGPathEdge,
-    EntityValueNode,
-    DGPathNodeStatement,
-    DGPathNodeEntity,
-    DGPathNodeLiteralValue,
-    DGPathExistingNode,
     FlowProvenance,
 )
 
@@ -311,7 +301,13 @@ class KGInference:
                             new_prop.qnode_id, prop, stmt_index
                         ).get_id()
                         sprime = StatementNode(
-                            stmt_id, new_prop.qnode_id, prop, is_in_kg=True
+                            stmt_id,
+                            new_prop.qnode_id,
+                            prop,
+                            is_in_kg=True,
+                            forward_flow={},
+                            reversed_flow={},
+                            flow={},
                         )
                         self._set_stmt_node(new_prop.qnode_id, prop, stmt_index, sprime)
                         new_nodes.append(sprime)
@@ -324,7 +320,13 @@ class KGInference:
                         new_prop.qnode_id, prop, stmt_index
                     ).get_id()
                     sprime = StatementNode(
-                        stmt_id, new_prop.qnode_id, prop, is_in_kg=False
+                        stmt_id,
+                        new_prop.qnode_id,
+                        prop,
+                        is_in_kg=False,
+                        forward_flow={},
+                        reversed_flow={},
+                        flow={},
                     )
                     self._add_stmt_value(
                         new_prop.qnode_id, prop, stmt_index, sprime, new_prop.value
@@ -336,6 +338,7 @@ class KGInference:
             ):
                 new_edges.append(
                     DGEdge(
+                        id=-1,  # will be assigned later
                         source=new_prop.source_id,
                         target=sprime.id,
                         predicate=prop,
@@ -348,6 +351,7 @@ class KGInference:
             ):
                 new_edges.append(
                     DGEdge(
+                        id=-1,  # will be assigned later
                         source=sprime.id,
                         target=new_prop.target_id,
                         predicate=prop,
@@ -372,6 +376,7 @@ class KGInference:
             assert isinstance(stmt, StatementNode)
             new_edges.append(
                 DGEdge(
+                    id=-1,  # will be assigned later
                     source=new_qual.statement_id,
                     target=new_qual.target_id,
                     predicate=new_qual.new_qualifier,

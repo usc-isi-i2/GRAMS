@@ -190,7 +190,7 @@ class PSLGramModelExp3:
         rules[P.PropertyDomain.name()] = Rule(
             f"""
             {P.Rel.name()}(U, V, S, P) & {P.Column.name()}(U) & {P.StatementProperty.name()}(S, P) &
-            {P.CorrectType.name()}(U, T) & ~{P.PropertyDomain.name()}(P, T) -> ~{P.CorrectRel.name()}(U, V, S, P)
+            {P.CorrectRel.name()}(U, V, S, P) & {P.PropertyDomain.name()}(P, T) & {P.Type.name()}(U, T) -> {P.CorrectType.name()}(U, T)
             """,
             weighted=True,
             squared=True,
@@ -199,7 +199,7 @@ class PSLGramModelExp3:
         rules[P.PropertyRange.name()] = Rule(
             f"""
             {P.Rel.name()}(U, V, S, P) & {P.Column.name()}(V) &
-            ~{P.DataProperty.name()}(P) & {P.CorrectType.name()}(V, T) & ~{P.PropertyRange.name()}(P, T) -> ~{P.CorrectRel.name()}(U, V, S, P)
+            ~{P.DataProperty.name()}(P) & {P.CorrectRel.name()}(U, V, S, P) & {P.PropertyRange.name()}(P, T) & {P.Type.name()}(V, T) -> {P.CorrectType.name()}(V, T)
             """,
             weighted=True,
             squared=True,

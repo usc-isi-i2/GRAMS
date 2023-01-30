@@ -8,6 +8,14 @@ from pathlib import Path
 from typing import Optional, Union
 from grams.actors.augcan_actor import AugCanActor, AugCanParams
 from grams.algorithm.context import AlgoContext
+from grams.algorithm.data_graph.dg_graph import (
+    CellNode,
+    DGEdge,
+    DGGraph,
+    EntityValueNode,
+    LiteralValueNode,
+    StatementNode,
+)
 from grams.algorithm.inferences.psl_gram_model_exp3 import PSLGramModelExp3
 from hugedict.prelude import HugeMutableMapping
 from kgdata.wikidata.models import WDProperty
@@ -60,6 +68,11 @@ from ned.actors.evaluate_helper import EvalArgs
 from sm.dataset import Example
 from sm.misc.ray_helper import ray_put, ray_map
 from grams.actors.actor_helpers import to_grams_db, eval_dataset
+from ream.cache_helper import (
+    Cache,
+    Cacheable,
+    unwrap_cache_decorators,
+)
 
 
 @dataclass
@@ -97,7 +110,7 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
     """GRAMS for Semantic Modeling"""
 
     NAME = "Semantic Modeling"
-    VERSION = 103
+    VERSION = 105
     EXP_VERSION = 3
 
     def __init__(self, params: GramsParams, dataset_actor: GramsELDatasetActor):
@@ -125,12 +138,17 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
             dsdict.name, {}, dsdict.provenance
         )
         for name, ds in dsdict.items():
+            cachedir = self.get_working_fs().root
             if len(ds) > 1:
                 dbref = ray_put(self.db.data_dir)
                 cfgref = ray_put(self.params)
+                cachedirref = ray_put(cachedir)
                 lst = ray_map(
                     ray_annotate.remote,
-                    [(dbref, cfgref, example.table, False) for example in ds],
+                    [
+                        (dbref, cfgref, example.table, cachedirref, False)
+                        for example in ds
+                    ],
                     desc="Annotating tables",
                     verbose=True,
                 )
@@ -138,7 +156,14 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
                 for x in lst:
                     self.timer.merge(x[1])
             else:
-                output[name] = [annotate(self.db, self.params, ds[0].table, True)[0]]
+                # output[name] = [annotate(self.db, self.params, ds[0].table, True)[0]]
+                lst = [
+                    cacheable_annotate(cachedir, self.db, self.params, ex.table, True)
+                    for ex in ds
+                ]
+                output[name] = [x[0] for x in lst]
+                for x in lst:
+                    self.timer.merge(x[1])
 
         return output
 
@@ -190,12 +215,292 @@ class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
 
 @ray.remote
 def ray_annotate(
-    db: Union[GramsDB, Path], cfg: GramsParams, table: LinkedTable, verbose: bool
+    db: Union[GramsDB, Path],
+    cfg: GramsParams,
+    table: LinkedTable,
+    cachedir: Path,
+    verbose: bool,
 ):
     try:
-        return annotate(to_grams_db(db), cfg, table, verbose)
+        # return annotate(to_grams_db(db), cfg, table, verbose)
+        return cacheable_annotate(cachedir, to_grams_db(db), cfg, table, verbose)
     except Exception as e:
         raise Exception("Failed to annotate table: " + table.id) from e
+
+
+class CacheableAnnotator(Cacheable):
+    def __init__(
+        self, workdir: Path, timer: Timer, db: GramsDB, cfg: GramsParams, verbose: bool
+    ):
+        super().__init__(workdir)
+        self.timer = timer
+        self.db = db
+        self.cfg = cfg
+        self.verbose = verbose
+
+        self.wdclasses = self.db.wdclasses.cache()
+        self.wdprops = self.db.wdprops.cache()
+
+    def dg_serialize(self, dg: DGGraph):
+        # return {"nodes": dg.nodes(), "edges": dg.edges()}
+        # return {"nodes": dg.nodes(), "edges": [e.to_tuple() for e in dg.iter_edges()]}
+        return {
+            "nodes": [n.to_tuple() for n in dg.nodes()],
+            "edges": [e.to_tuple() for e in dg.iter_edges()],
+        }
+
+    def dg_deserialize(self, obj: dict):
+        g = DGGraph()
+        for node in obj["nodes"]:
+            size = len(node)
+            if size == 3:
+                denode = LiteralValueNode.from_tuple(node)
+            elif size == 4:
+                denode = EntityValueNode.from_tuple(node)
+            elif isinstance(node[3], bool):
+                denode = StatementNode.from_tuple(node)
+            else:
+                denode = CellNode.from_tuple(node)
+
+            # g.add_node(node)
+            g.add_node(denode)
+        for edge in obj["edges"]:
+            g.add_edge(DGEdge.from_tuple(edge))
+            # g.add_edge(edge)
+        return g
+
+    def annotate(self, table: LinkedTable):
+        table = self.preprocess_table(table)
+        dg, cg = self.build_graphs(table)
+
+        import pickle, orjson
+
+        timer = Timer()
+        with timer.watch_and_report("serialize dg 2"):
+            sdg2 = pickle.dumps(self.dg_serialize(dg))
+        with timer.watch_and_report("serialize dg"):
+            sdg = pickle.dumps(dg)
+        # with timer.watch_and_report("serialize dg 3"):
+        #     sdg3 = orjson.dumps(
+        #         self.dg_serialize(dg),
+        #         option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY,
+        #     )
+
+        # with timer.watch_and_report("deserialize dg 2 (part)"):
+        #     abc = pickle.loads(sdg2)
+        with timer.watch_and_report("deserialize dg"):
+            odg = pickle.loads(sdg)
+        with timer.watch_and_report("deserialize dg 2"):
+            odg2 = self.dg_deserialize(pickle.loads(sdg2))
+        # with timer.watch_and_report("deserialize dg 3"):
+        #     odg3 = self.dg_deserialize(orjson.loads(sdg3))
+        with timer.watch_and_report("deserialize dg"):
+            odg = pickle.loads(sdg)
+
+        with timer.watch_and_report("serialize cg"):
+            scg = pickle.dumps(cg)
+        with timer.watch_and_report("deserialize cg"):
+            ocg = pickle.loads(scg)
+
+        exit(0)
+
+        edge_probs, cta_probs, pred_cpa, pred_cta = self.run_inference(table)
+        # wdentity_labels = self.get_entity_labels(table)
+        sm_helper = WikidataSemanticModelHelper(
+            self.db.wdentities,
+            # wdentity_labels,
+            {},
+            self.db.wdclasses,
+            self.db.wdprops,
+        )
+        sm = sm_helper.create_sm(table, pred_cpa, pred_cta)
+        sm = sm_helper.minify_sm(sm)
+        return Annotation(
+            sm=sm,
+            dg=dg,
+            cg=cg,
+            cg_edge_probs=edge_probs,
+            cta_probs=cta_probs,
+            pred_cpa=pred_cpa,
+            pred_cta=pred_cta,
+        )
+
+    @Cache.pickle.sqlite(
+        cache_key=lambda self, table: table.id.encode(),
+        compression="lz4",
+        log_serde_time=False,
+    )
+    def preprocess_table(self, table: LinkedTable):
+        wdentity_ids, wdentities = self.retrieving_entities(table)
+        nonexistent_wdentity_ids = wdentity_ids.difference(wdentities.keys())
+        if len(nonexistent_wdentity_ids) > 0:
+            logger.info(
+                "Removing non-existent entities: {}", list(nonexistent_wdentity_ids)
+            )
+            table.remove_nonexistent_entities(nonexistent_wdentity_ids)
+        return table
+
+    @Cache.pickle.sqlite(
+        cache_key=lambda self, table: table.id.encode(),
+        compression="lz4",
+        log_serde_time=True,
+    )
+    def build_graphs(self, table: LinkedTable):
+        wdentity_ids, wdentities = self.retrieving_entities(table)
+        wdentity_labels = self.get_entity_labels(table)
+
+        with self.timer.watch("build kg object index"):
+            kg_object_index = KGObjectIndex.from_entities(
+                list(wdentity_ids.intersection(wdentities.keys())),
+                wdentities,
+                self.wdprops,
+                n_hop=self.cfg.data_graph.max_n_hop,
+                traversal_option=TraversalOption.TransitiveOnly,
+            )
+
+        with self.timer.watch("build dg & sg"):
+            text_parser = TextParser(self.cfg.text_parser)
+            literal_match = LiteralMatch(wdentities, self.cfg.literal_matchers)
+
+            dg_factory = DGFactory(
+                wdentities,
+                self.wdprops,
+                text_parser,
+                literal_match,
+                self.cfg.data_graph,
+            )
+            dg = dg_factory.create_dg(
+                table, kg_object_index, max_n_hop=self.cfg.data_graph.max_n_hop
+            )
+            cg_factory = CGFactory(
+                wdentities,
+                wdentity_labels,
+                self.wdclasses,
+                self.wdprops,
+            )
+            cg = cg_factory.create_cg(table, dg)
+
+        return dg, cg
+
+    @Cache.pickle.sqlite(
+        cache_key=lambda self, table: table.id.encode(),
+        compression="lz4",
+        log_serde_time=False,
+    )
+    def run_inference(self, table: LinkedTable):
+        wdentity_ids, wdentities = self.retrieving_entities(table)
+        dg, cg = self.build_graphs(table)
+
+        with self.timer.watch("run inference"):
+            if self.cfg.psl.experiment_model:
+                logger.debug(
+                    "Using experiment PSL model: {}", self.cfg.psl.experiment_model
+                )
+                if int(self.cfg.psl.experiment_model[3:]) >= 3:
+                    context = AlgoContext(
+                        data_dir=self.db.data_dir,
+                        wdprop_domains=self.db.wdprop_domains,
+                        wdprop_ranges=self.db.wdprop_ranges,
+                        wdentities=wdentities,
+                        wdentity_labels=self.db.wdentity_labels,
+                        wdclasses=self.wdclasses,
+                        wdprops=self.wdprops,
+                        wd_num_prop_stats=self.db.wd_numprop_stats,
+                    )
+                    pslmodel = PSLGramModelExp3(
+                        context=context, disable_rules=self.cfg.psl.disable_rules
+                    )
+                else:
+                    pslmodel = PSLGramModelExp2(
+                        wdprop_domains=self.db.wdprop_domains,
+                        wdprop_ranges=self.db.wdprop_ranges,
+                        wdentities=wdentities,
+                        wdentity_labels=self.db.wdentity_labels,
+                        wdclasses=self.wdclasses,
+                        wdprops=self.wdprops,
+                        wd_numprop_stats=self.db.wd_numprop_stats,
+                        disable_rules=self.cfg.psl.disable_rules,
+                        rule_weights=dict(self.cfg.psl.rule_weights),
+                    )
+            else:
+                pslmodel = PSLGramModel(
+                    wdentities=wdentities,
+                    wdentity_labels=self.db.wdentity_labels,
+                    wdclasses=self.wdclasses,
+                    wdprops=self.wdprops,
+                    wd_numprop_stats=self.db.wd_numprop_stats,
+                    disable_rules=self.cfg.psl.disable_rules,
+                )
+
+            edge_probs, cta_probs = pslmodel.predict(
+                table, cg, dg, verbose=self.verbose, debug=False
+            )
+
+            edge_probs = PSLModel.normalize_probs(edge_probs, eps=self.cfg.psl.eps)
+
+            if self.cfg.psl.postprocessing == "steiner_tree":
+                pp = SteinerTree(table, cg, dg, edge_probs, self.cfg.psl.threshold)
+            elif self.cfg.psl.postprocessing == "arborescence":
+                pp = MinimumArborescence(
+                    table, cg, dg, edge_probs, self.cfg.psl.threshold
+                )
+            elif self.cfg.psl.postprocessing == "simplepath":
+                pp = PostProcessingSimplePath(
+                    table, cg, dg, edge_probs, self.cfg.psl.threshold
+                )
+            elif self.cfg.psl.postprocessing == "pairwise":
+                pp = PairwiseSelection(
+                    table, cg, dg, edge_probs, self.cfg.psl.threshold
+                )
+            else:
+                raise NotImplementedError(self.cfg.psl.postprocessing)
+
+            pred_cpa = pp.get_result()
+            pred_cta = {
+                ci: max(classes.items(), key=itemgetter(1))[0]
+                for ci, classes in cta_probs.items()
+            }
+
+        return edge_probs, cta_probs, pred_cpa, pred_cta
+
+    @Cache.mem(cache_key=lambda self, table: table.id)
+    def get_entity_labels(self, table: LinkedTable):
+        wdentity_ids, wdentities = self.retrieving_entities(table)
+        with self.timer.watch("retrieve entity labels"):
+            wdentity_labels = self.db.get_entity_labels(wdentities, self.verbose)
+        return wdentity_labels
+
+    @Cache.mem(cache_key=lambda self, table: table.id)
+    def retrieving_entities(self, table: LinkedTable):
+        with self.timer.watch("retrieve entities"):
+            wdentity_ids: set[str] = {
+                entid
+                for links in table.links.flat_iter()
+                for link in links
+                for entid in link.entities
+            }
+            wdentity_ids.update(
+                (
+                    candidate.entity_id
+                    for links in table.links.flat_iter()
+                    for link in links
+                    for candidate in link.candidates
+                )
+            )
+            wdentity_ids.update(table.context.page_entities)
+            wdentities = self.db.get_entities(
+                wdentity_ids, n_hop=self.cfg.data_graph.max_n_hop, verbose=self.verbose
+            )
+
+        return wdentity_ids, wdentities
+
+
+def cacheable_annotate(
+    cachedir: Path, db: GramsDB, cfg: GramsParams, table: LinkedTable, verbose: bool
+):
+    timer = Timer()
+    annotator = CacheableAnnotator(cachedir, timer, db, cfg, verbose)
+    return annotator.annotate(table), timer
 
 
 def annotate(
@@ -203,7 +508,7 @@ def annotate(
 ) -> tuple[Annotation, Timer]:
     timer = Timer()
 
-    with timer.watch("retrieving entities"):
+    with timer.watch("retrieve entities"):
         wdentity_ids: set[str] = {
             entid
             for links in table.links.flat_iter()
@@ -232,7 +537,7 @@ def annotate(
         )
         table.remove_nonexistent_entities(nonexistent_wdentity_ids)
 
-    with timer.watch("build kg object index"):
+    with timer.watch("retrieve entity labels"):
         wdentity_labels = db.get_entity_labels(wdentities, verbose)
 
     with timer.watch("build kg object index"):
