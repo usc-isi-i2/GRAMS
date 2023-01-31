@@ -1,54 +1,66 @@
-[tool.poetry]
+[project]
 name = "sm-grams"
 version = "2.1.7"
-description = ""
-authors = ["Binh Vu <binh@toan2.com>"]
-license = "MIT"
-packages = [
-    { include = "grams" }
+authors = [
+    { name = "Binh Vu", email = "binh@toan2.com" },
 ]
+description = "A library to build semantic descriptions of tables"
 readme = "README.md"
+license = { file = "LICENSE" }
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+requires-python = ">=3.9"
+
+dependencies = [
+    "requests >= 2.28.0, < 3.0.0",
+    "beautifulsoup4 >= 4.9.3, < 5.0.0",
+    "orjson >= 3.8.2, < 4.0.0",
+    "python-slugify >= 6.1.2, < 7.0.0",
+    "tqdm >= 4.64.0, < 5.0.0",
+    "ujson >= 5.5.0, < 6.0.0",
+    "ruamel.yaml >= 0.17.21, < 0.18.0",
+    "loguru >= 0.6.0, < 0.7.0",
+    "networkx >= 2.8.2, < 3.0.0",
+    "html5lib >= 1.1, < 2.0.0",
+    "omegaconf >= 2.0.6, < 3.0.0",
+    "rdflib >= 6.1.1, < 7.0.0",
+    "ipython >= 8.0.1, < 9.0.0",
+    "matplotlib >= 3.5.3, < 4.0.0",
+    "rltk == 2.0.0a20",
+    "pslpython == 2.2.2",
+    "fastnumbers >= 3.2.1, < 4.0.0",
+    "numparser2 >= 1.0.0, < 2.0.0",
+    "ftfy >= 6.1.1, < 7.0.0",
+    "sem-desc >= 4.1.6, < 5.0.0",
+    "kgdata >= 3.3.1, < 4.0.0",
+    "click >= 8.0.0, <= 8.0.4",
+    "steiner-tree >= 1.1.3, < 2.0.0",
+    "ned >= 1.3.0, < 2.0.0",
+    "typing_extensions >= 4.0.0, < 5.0.0",
+    "hugedict >= 2.8.0, < 3.0.0",
+    "graph-wrapper >= 1.5.0, < 2.0.0",
+    "timer4 >= 1.0.4, < 2.0.0",
+]
+
+[project.urls]
 homepage = "https://github.com/usc-isi-i2/grams"
 repository = "https://github.com/usc-isi-i2/grams"
 
-[tool.poetry.scripts]
+[project.scripts]
 grams = 'grams.cli:cli'
 
-[tool.poetry.dependencies]
-python = "^3.9"
-requests = "^2.28.0"
-beautifulsoup4 = "^4.9.3"
-orjson = "^3.8.2"
-python-slugify = "^6.1.2"
-tqdm = "^4.64.0"
-ujson = "^5.5.0"
-"ruamel.yaml" = "^0.17.21"
-loguru = "^0.6.0"
-networkx = "^2.8.2"
-html5lib = "^1.1"
-omegaconf = "^2.0.6"
-rdflib = "^6.1.1"
-ipython = "^8.0.1"
-matplotlib = "^3.5.3"
-rltk = "==2.0.0a20"
-pslpython = "==2.2.2"
-fastnumbers = "^3.2.1"
-numparser2 = "^1.0.0"
-ftfy = "^6.1.1"
-sem-desc = "^4.1.6"
-kgdata = "^3.3.1"
-click = ">=8.0.0,<=8.0.4"
-steiner-tree = "^1.1.3"
-ned = "^1.3.0"
-typing_extensions = "^4.0.0"
-hugedict = "^2.8.0"
-graph-wrapper = "^1.5.0"
-timer4 = "^1.0.4"
+[project.optional-dependencies]
+dev = [
+    "pytest >= 7.1.3, < 8.0.0",
+    "pytest-mock >= 3.6.1, < 4.0.0"
+]
 
-[tool.poetry.dev-dependencies]
-pytest-mock = "^3.6.1"
-pytest = "^7.1.3"
+[tool.maturin]
+python-source = "grams"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["maturin>=0.12,<0.13"]
+build-backend = "maturin"

@@ -83,6 +83,8 @@ class P:
 
 
 class PSLGramModelExp3:
+    VERSION = 100
+
     def __init__(
         self,
         context: AlgoContext,
@@ -122,9 +124,9 @@ class PSLGramModelExp3:
                 P.ExtendedTypeFreqOverRow.name(): 2,
                 P.ExtendedTypeFreqOverEntRow.name(): 0,
                 P.TypeHeaderSimilarity.name(): 0.0,
-                P.DataProperty.name(): 2,
-                P.PropertyDomain.name(): 2,
-                P.PropertyRange.name(): 2,
+                P.DataProperty.name(): 1,
+                P.PropertyDomain.name(): 1,
+                P.PropertyRange.name(): 1,
             }
         )
 

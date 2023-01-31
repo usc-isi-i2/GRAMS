@@ -24,6 +24,7 @@ from kgdata.wikidata.models.wdentity import WDEntity
 from kgdata.wikidata.models.wdentitylabel import WDEntityLabel
 
 import numpy as np
+import orjson
 from osin.apis.remote_exp import RemoteExpRun
 from osin.types.pyobject import OTable
 import ray
@@ -241,68 +242,15 @@ class CacheableAnnotator(Cacheable):
         self.wdclasses = self.db.wdclasses.cache()
         self.wdprops = self.db.wdprops.cache()
 
-    def dg_serialize(self, dg: DGGraph):
-        # return {"nodes": dg.nodes(), "edges": dg.edges()}
-        # return {"nodes": dg.nodes(), "edges": [e.to_tuple() for e in dg.iter_edges()]}
-        return {
-            "nodes": [n.to_tuple() for n in dg.nodes()],
-            "edges": [e.to_tuple() for e in dg.iter_edges()],
-        }
-
-    def dg_deserialize(self, obj: dict):
-        g = DGGraph()
-        for node in obj["nodes"]:
-            size = len(node)
-            if size == 3:
-                denode = LiteralValueNode.from_tuple(node)
-            elif size == 4:
-                denode = EntityValueNode.from_tuple(node)
-            elif isinstance(node[3], bool):
-                denode = StatementNode.from_tuple(node)
-            else:
-                denode = CellNode.from_tuple(node)
-
-            # g.add_node(node)
-            g.add_node(denode)
-        for edge in obj["edges"]:
-            g.add_edge(DGEdge.from_tuple(edge))
-            # g.add_edge(edge)
-        return g
+        if self.cfg.psl.experiment_model == "exp3":
+            psl_model_version = PSLGramModelExp3.VERSION
+        else:
+            raise NotImplementedError()
+        self.psl_provenance = f"{self.cfg.psl.experiment_model}_{psl_model_version}"
 
     def annotate(self, table: LinkedTable):
         table = self.preprocess_table(table)
         dg, cg = self.build_graphs(table)
-
-        import pickle, orjson
-
-        timer = Timer()
-        with timer.watch_and_report("serialize dg 2"):
-            sdg2 = pickle.dumps(self.dg_serialize(dg))
-        with timer.watch_and_report("serialize dg"):
-            sdg = pickle.dumps(dg)
-        # with timer.watch_and_report("serialize dg 3"):
-        #     sdg3 = orjson.dumps(
-        #         self.dg_serialize(dg),
-        #         option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY,
-        #     )
-
-        # with timer.watch_and_report("deserialize dg 2 (part)"):
-        #     abc = pickle.loads(sdg2)
-        with timer.watch_and_report("deserialize dg"):
-            odg = pickle.loads(sdg)
-        with timer.watch_and_report("deserialize dg 2"):
-            odg2 = self.dg_deserialize(pickle.loads(sdg2))
-        # with timer.watch_and_report("deserialize dg 3"):
-        #     odg3 = self.dg_deserialize(orjson.loads(sdg3))
-        with timer.watch_and_report("deserialize dg"):
-            odg = pickle.loads(sdg)
-
-        with timer.watch_and_report("serialize cg"):
-            scg = pickle.dumps(cg)
-        with timer.watch_and_report("deserialize cg"):
-            ocg = pickle.loads(scg)
-
-        exit(0)
 
         edge_probs, cta_probs, pred_cpa, pred_cta = self.run_inference(table)
         # wdentity_labels = self.get_entity_labels(table)
@@ -383,9 +331,9 @@ class CacheableAnnotator(Cacheable):
         return dg, cg
 
     @Cache.pickle.sqlite(
-        cache_key=lambda self, table: table.id.encode(),
+        cache_key=lambda self, table: orjson.dumps([table.id, self.psl_provenance]),
         compression="lz4",
-        log_serde_time=False,
+        log_serde_time=True,
     )
     def run_inference(self, table: LinkedTable):
         wdentity_ids, wdentities = self.retrieving_entities(table)

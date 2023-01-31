@@ -26,6 +26,7 @@ from sm.outputs.semantic_model import (
     ClassNode,
     LiteralNode,
 )
+from rdflib import RDFS
 
 
 @dataclass
@@ -72,6 +73,24 @@ class AutoLabeler:
         _cpa_transformation(cpa_sm, self.sm_helper.ID_PROPS)
 
         return WrappedSemanticModel(cpa_sm, is_normalized=True, is_cpa_transformed=True)
+
+    def label_types(
+        self,
+        type_probs: Mapping[int, Mapping[str, float]],
+        gold_sms: list[WrappedSemanticModel],
+    ) -> dict[int, dict[str, bool]]:
+        col2types: dict[int, set[str]] = {ci: set() for ci in type_probs}
+        for wsm in gold_sms:
+            for ci in type_probs:
+                col2types[ci].update(
+                    self.wdns.get_entity_id(stype.class_abs_uri)
+                    for stype in wsm.sm.get_semantic_types_of_column(ci)
+                    if stype.predicate_abs_uri == str(RDFS.label)
+                )
+        return {
+            ci: {ctype: ctype in col2types[ci] for ctype in ctypes}
+            for ci, ctypes in type_probs.items()
+        }
 
     @overload
     def label_relationships(

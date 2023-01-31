@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from grams.algorithm.candidate_graph.cg_graph import CGColumnNode
+from grams.algorithm.inferences.features.type_feature import TypeFeatures
+from rdflib import RDFS
 from typing import Literal, Mapping, Optional, Union
-from grams.algorithm.autolabeler import AutoLabeler
+from grams.algorithm.autolabeler import AutoLabeler, WrappedSemanticModel
 from grams.algorithm.context import AlgoContext
 from grams.algorithm.inferences.psl_lib import IdentityIDMap, ReadableIDMap
 from grams.main import Annotation
@@ -23,6 +26,7 @@ from kgdata.wikidata.models.wdentity import WDEntity
 from kgdata.wikidata.models.wdentitylabel import WDEntityLabel
 import ray
 from sm.dataset import Example
+from sm.misc.fn_cache import CacheMethod
 from sm.misc.ray_helper import get_instance, ray_map
 from sm.namespaces.namespace import OutOfNamespace
 from sm.namespaces.wikidata import WikidataNamespace
@@ -129,15 +133,23 @@ def eval_dataset(
 
     if exprun is not None:
         # log the results of each example
-        complex_objs = ray_map(
-            ray_extract_complex_objects.remote,
-            [
-                (db.data_dir, e, pred_sms[i], anns[i] if anns is not None else None)
+        if len(examples) > 1:
+            complex_objs = ray_map(
+                ray_extract_complex_objects.remote,
+                [
+                    (db.data_dir, e, pred_sms[i], anns[i] if anns is not None else None)
+                    for i, e in enumerate(examples)
+                ],
+                desc="creating annotation debug info.",
+                verbose=True,
+            )
+        else:
+            complex_objs = [
+                extract_complex_objects(
+                    db, e, pred_sms[i], anns[i] if anns is not None else None
+                )
                 for i, e in enumerate(examples)
-            ],
-            desc="creating annotation debug info.",
-            verbose=True,
-        )
+            ]
         for i, e in enumerate(examples):
             exprun.update_example_output(
                 example_id=str(i),
@@ -174,14 +186,21 @@ def eval_dataset(
 
 
 class AuxComplexObjectBase:
-    def __init__(self, wdentities: Mapping[str, WDEntity]) -> None:
+    def __init__(self, context: AlgoContext) -> None:
+        self.context = context
         self.wdns = WikidataNamespace.create()
-        self.wdentities = wdentities
+        self.wdentities = context.wdentities
+        self.wdprops = context.wdprops
 
     def get_ent_label(self, entid: str):
         if entid not in self.wdentities:
             return entid
         return f"{self.wdentities[entid].label} ({entid})"
+
+    def get_prop_label(self, propid: str):
+        if propid not in self.wdprops:
+            return propid
+        return f"{self.wdprops[propid].label} ({propid})"
 
     def get_ent_label_with_description(self, entid: str):
         if entid not in self.wdentities:
@@ -338,21 +357,42 @@ class AuxComplexSmObject(AuxComplexObjectBase):
 
 
 class AuxComplexFeatures(AuxComplexObjectBase):
-    def __init__(self, db: GramsDB):
-        context = AlgoContext.from_grams_db(db, cache=True)
-        super().__init__(context.wdentities)
-
-        self.db = db
-        self.context = context
+    def __init__(self, context: AlgoContext):
+        super().__init__(context)
         self.autolabeler = AutoLabeler(context)
 
-    def get_features(
+    def get_type_features(
+        self,
+        example: Example[LinkedTable],
+        ann: Annotation,
+    ) -> OTable:
+        sms = self.get_equiv_sms(example)
+        labeled_types = self.autolabeler.label_types(ann.cta_probs, sms)
+        feats = self.extract_type_features(example, ann)
+
+        records = []
+        for ci, ctypes in ann.cta_probs.items():
+            for ctype, prob in ctypes.items():
+                record = {
+                    "index": ci,
+                    "name": example.table.table.columns[ci].clean_name,
+                    "type": self.get_ent_label(ctype),
+                    "prob": prob,
+                    "label": labeled_types[ci][ctype],
+                }
+                for feat, value in feats.items():
+                    record[feat] = value.get((ci, ctype), None)
+
+                records.append(record)
+        return OTable(records)
+
+    def get_rel_features(
         self,
         example: Example[LinkedTable],
         ann: Annotation,
         version: Literal["v2", "v3"],
     ) -> OTable:
-        sms = self.autolabeler.get_equiv_sms(example.sms)
+        sms = self.get_equiv_sms(example)
         rel2label = self.autolabeler.label_relationships(ann.cg, sms, return_edge=False)
         if version == "v2":
             rel2feat = self.extract_rel_features2(example, ann)
@@ -365,7 +405,7 @@ class AuxComplexFeatures(AuxComplexObjectBase):
                 "source": rel[0],
                 "target": rel[1],
                 "stmt": rel[2],
-                "predicate": rel[3],
+                "predicate": self.get_prop_label(rel[3]),
                 "label": label,
                 "prob": ann.cg_edge_probs[rel[2], rel[1], rel[3]],
             }
@@ -377,6 +417,37 @@ class AuxComplexFeatures(AuxComplexObjectBase):
                 objects[rel][name] = feat
 
         return OTable(list(objects.values()))
+
+    @CacheMethod.cache(CacheMethod.single_object_arg)
+    def get_equiv_sms(
+        self, example: Example[LinkedTable]
+    ) -> list[WrappedSemanticModel]:
+        return self.autolabeler.get_equiv_sms(example.sms)
+
+    def extract_type_features(self, example: Example[LinkedTable], ann: Annotation):
+        # fmt: off
+        feats = {
+            "TypeFreqOverRow": P.TypeFreqOverRow.name(),
+            "TypeFreqOverEntRow": P.TypeFreqOverEntRow.name(),
+            "ExtendedTypeFreqOverRow": P.ExtendedTypeFreqOverRow.name(),
+            "ExtendedTypeFreqOverEntRow": P.ExtendedTypeFreqOverEntRow.name(),
+            "TypeDistance": P.TypeDistance.name(),
+            "TypeHeaderSimilarity": P.TypeHeaderSimilarity.name(),
+        }
+        idmap = IdentityIDMap()
+        featvalues = TypeFeatures(idmap, example.table, ann.cg, ann.dg, 
+            self.context.wdentities, self.context.wdclasses, self.context.wdprops, self.context.wd_num_prop_stats, None
+        ).extract_features(list(feats.values()))
+        def get_column_index(uid: str):
+            node = ann.cg.get_node(uid)
+            assert isinstance(node, CGColumnNode)
+            return node.column
+        # fmt: on
+
+        return {
+            k: {(get_column_index(v[0]), v[1]): float(v[2]) for v in featvalues[nk]}
+            for k, nk in feats.items()
+        }
 
     def extract_rel_features2(self, example: Example[LinkedTable], ann: Annotation):
         # fmt: off
@@ -438,16 +509,8 @@ def ray_extract_complex_objects(
     ann: Optional[Annotation],
 ):
     db = to_grams_db(db)
-    wdentities = db.wdentities.cache()
     try:
-        objs = extract_complex_objects(wdentities, example, pred_sm)
-        if ann is not None:
-            objs["rel-feat-v2"] = AuxComplexFeatures(db).get_features(
-                example, ann, "v2"
-            )
-            objs["rel-feat-v3"] = AuxComplexFeatures(db).get_features(
-                example, ann, "v3"
-            )
+        objs = extract_complex_objects(db, example, pred_sm, ann)
     except Exception as e:
         raise Exception(
             "Cannot extract complex objects for example: %s" % example.table.id
@@ -456,15 +519,25 @@ def ray_extract_complex_objects(
 
 
 def extract_complex_objects(
-    wdentities: Mapping[str, WDEntity],
+    db: GramsDB,
     example: Example[LinkedTable],
     pred_sm: SemanticModel,
+    ann: Optional[Annotation],
 ):
+    context = AlgoContext.from_grams_db(db, cache=True)
     objs = {
-        "table": AuxComplexTableObject(wdentities).get_table(example),
-        "gold-sm": AuxComplexSmObject(wdentities).get_sms(example, example.sms),
-        "pred-sm": AuxComplexSmObject(wdentities).get_sm(example, pred_sm),
+        "table": AuxComplexTableObject(context).get_table(example),
+        "gold-sm": AuxComplexSmObject(context).get_sms(example, example.sms),
+        "pred-sm": AuxComplexSmObject(context).get_sm(example, pred_sm),
     }
+    if ann is not None:
+        # objs["rel-feat-v2"] = AuxComplexFeatures(context).get_rel_features(
+        #     example, ann, "v2"
+        # )
+        objs["rel-feat-v3"] = AuxComplexFeatures(context).get_rel_features(
+            example, ann, "v3"
+        )
+        objs["type-feat"] = AuxComplexFeatures(context).get_type_features(example, ann)
     return objs
 
 
