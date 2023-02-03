@@ -6,7 +6,15 @@ from typing import (
     Optional,
     Tuple,
 )
-from grams.algorithm.data_graph.dg_graph import DGGraph
+from grams.algorithm.context import AlgoContext
+from grams.algorithm.data_graph.dg_graph import (
+    DGGraph,
+    EdgeFlowTarget,
+    EntityValueNode,
+    LinkGenMethod,
+    LiteralValueNode,
+)
+from grams.algorithm.inferences.features.graph_helper import GraphHelper
 from grams.algorithm.inferences.features.tree_utils import TreeStruct
 from grams.algorithm.inferences.psl_lib import IDMap
 from sm.misc.fn_cache import CacheMethod
@@ -37,21 +45,20 @@ class TypeFeatures2:
         table: LinkedTable,
         cg: CGGraph,
         dg: DGGraph,
-        wdentities: Mapping[str, WDEntity],
-        wdclasses: Mapping[str, WDClass],
-        wdprops: Mapping[str, WDProperty],
-        wd_num_prop_stats: Mapping[str, WDQuantityPropertyStats],
+        context: AlgoContext,
         sim_fn: Optional[Callable[[str, str], float]] = None,
+        graph_helper: Optional[GraphHelper] = None,
     ):
         self.idmap = idmap
         self.table = table
         self.cg = cg
         self.dg = dg
-        self.wdentities = wdentities
-        self.wdclasses = wdclasses
-        self.wdprops = wdprops
-        self.wd_num_prop_stats = wd_num_prop_stats
+        self.wdentities = context.wdentities
+        self.wdclasses = context.wdclasses
+        self.wdprops = context.wdprops
+        self.wd_num_prop_stats = context.wd_num_prop_stats
         self.sim_fn = sim_fn
+        self.graph_helper = graph_helper or GraphHelper(table, cg, dg, context)
 
     def extract_features(self, features: List[str]) -> Dict[str, list]:
         # gather the list of entity columns (columns will be tagged with type)
@@ -96,6 +103,88 @@ class TypeFeatures2:
             fn = getattr(self, feat)
             feat_data[feat] = [v for u in tagged_columns for v in fn(u)]
         return feat_data
+
+    def TYPE_DISCOVERED_PROP_FREQ_OVER_ROW(
+        self, u: CGColumnNode
+    ) -> List[Tuple[str, float]]:
+        """The frequency of whether an entity of a type in a row has been used to construct an edge in DGraph (connecting to other nodes)."""
+        # gather all incoming and outgoing edges
+        inedges = self.cg.in_edges(u.id)
+        outedges = self.cg.out_edges(u.id)
+
+        # list of types of the columns that we wish to find out
+        can_types = list(self.get_type_freq(u).keys())
+        # type2row[type][row] = 1 when an entity of type in a row is used, 0 otherwise
+        type2row = {type: [0] * self.graph_helper.nrows for type in can_types}
+
+        # for outgoing edges, gather the entities from the column that we discovered the relationship.
+        for outedge in outedges:
+            cg_stmt = self.cg.get_statement_node(outedge.target)
+            for (source, target), dg_stmts in cg_stmt.flow.items():
+                if (
+                    source.sg_source_id != u.id
+                    or source.sg_source_id == target.sg_target_id
+                ):
+                    continue
+                dgu = self.dg.get_cell_node(source.dg_source_id)
+                dgv = self.dg.get_node(target.dg_target_id)
+                if not (
+                    isinstance(dgv, CellNode)
+                    or (
+                        isinstance(dgv, (LiteralValueNode, EntityValueNode))
+                        and dgv.is_context
+                    )
+                ):
+                    continue
+
+                row = dgu.row
+                # for each type
+                for dgsid in dg_stmts:
+                    ent_types = self.graph_helper.get_dg_statement_source_entity_types(
+                        dgsid
+                    )
+                    for type in can_types:
+                        # check here
+                        if type2row[type][row] == 1:
+                            continue
+                        if type in ent_types:
+                            type2row[type][row] = 1
+
+        for inedge in inedges:
+            cg_stmt = self.cg.get_statement_node(inedge.source)
+            for (source, target), dg_stmts in cg_stmt.flow.items():
+                if (
+                    target.sg_target_id != u.id
+                    or source.sg_source_id == target.sg_target_id
+                ):
+                    continue
+
+                dgu = self.dg.get_cell_node(source.dg_source_id)
+                is_qualifier = source.edge_id != target.edge_id
+                for dgsid, dgsprovs in dg_stmts.items():
+                    matched_eids = self.graph_helper.get_dg_statement_target_kgentities(
+                        dgsid, EdgeFlowTarget(target.dg_target_id, target.edge_id)
+                    )
+                    if len(matched_eids) == 0:
+                        continue
+
+                    matched_ent_types = {
+                        etype
+                        for eid in matched_eids
+                        for etype in self.graph_helper.get_entity_types(eid)
+                    }
+
+                    for type in can_types:
+                        if type2row[type][dgu.row] == 1:
+                            continue
+                        if type in matched_ent_types:
+                            type2row[type][dgu.row] = 1
+
+        output = []
+        for type in can_types:
+            freq = sum(type2row[type]) / self.graph_helper.nrows
+            output.append((self.idmap.m(u.id), self.idmap.m(type), freq))
+        return output
 
     def TYPE_FREQ_OVER_ROW(self, u: CGColumnNode) -> List[Tuple[str, str, float]]:
         type_freq = self.get_type_freq(u)

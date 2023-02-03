@@ -19,6 +19,9 @@ from grams.algorithm.inferences.features.rel_feature3 import RelFeatures3
 from grams.algorithm.inferences.features.type_feature import (
     TypeFeatures,
 )
+from grams.algorithm.inferences.features.type_feature2 import (
+    TypeFeatures2,
+)
 from grams.inputs.linked_table import Link, LinkedTable
 from kgdata.wikidata.db import get_wdprop_domain_db
 from kgdata.wikidata.models import (
@@ -79,6 +82,9 @@ class P:
     ExtendedTypeFreqOverEntRow = Predicate(
         "EXTENDED_TYPE_FREQ_OVER_ENT_ROW", closed=True, size=2
     )
+    TypeDiscoveredPropFreqOverRow = Predicate(
+        "TYPE_DISCOVERED_PROP_FREQ_OVER_ROW", closed=True, size=2
+    )
     TypeHeaderSimilarity = Predicate("TYPE_HEADER_SIMILARITY", closed=True, size=2)
 
 
@@ -124,6 +130,7 @@ class PSLGramModelExp3:
                 P.ExtendedTypeFreqOverRow.name(): 2,
                 P.ExtendedTypeFreqOverEntRow.name(): 0,
                 P.TypeHeaderSimilarity.name(): 0.0,
+                P.TypeDiscoveredPropFreqOverRow.name(): 10,
                 P.DataProperty.name(): 1,
                 P.PropertyDomain.name(): 1,
                 P.PropertyRange.name(): 1,
@@ -254,6 +261,7 @@ class PSLGramModelExp3:
             P.ExtendedTypeFreqOverRow,
             P.ExtendedTypeFreqOverEntRow,
             P.TypeHeaderSimilarity,
+            P.TypeDiscoveredPropFreqOverRow,
         ]:
             rules[feat.name()] = Rule(
                 f"""
@@ -339,15 +347,16 @@ class PSLGramModelExp3:
             ]
         )
 
-        type_feats = TypeFeatures(
+        type_feats = TypeFeatures2(
             idmap,
             table,
             cg,
             dg,
-            self.wdentities,
-            self.wdclasses,
-            self.wdprops,
-            self.wd_numprop_stats,
+            self.context,
+            # self.wdentities,
+            # self.wdclasses,
+            # self.wdprops,
+            # self.wd_numprop_stats,
             self.sim_fn,
         ).extract_features(
             [
@@ -355,6 +364,7 @@ class PSLGramModelExp3:
                 P.TypeFreqOverEntRow.name(),
                 P.ExtendedTypeFreqOverRow.name(),
                 P.ExtendedTypeFreqOverEntRow.name(),
+                P.TypeDiscoveredPropFreqOverRow.name(),
                 P.TypeDistance.name(),
                 P.TypeHeaderSimilarity.name(),
             ]

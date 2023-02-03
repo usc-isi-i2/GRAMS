@@ -2,7 +2,17 @@ import enum
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, Mapping, Set, Union, List, NamedTuple, Optional
+from typing import (
+    Dict,
+    Iterable,
+    Mapping,
+    Set,
+    Union,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+)
 
 from loguru import logger
 from tqdm.auto import tqdm
@@ -11,7 +21,7 @@ from kgdata.wikidata.models import WDEntity, WDProperty
 import serde.pickle
 
 Relationship = NamedTuple(
-    "Relationship", [("prop", str), ("quals", List[str]), ("both", bool)]
+    "Relationship", [("prop", str), ("quals", List[Tuple[str, int]]), ("both", bool)]
 )
 OneHopIndexPath = NamedTuple(
     "OneHopIndexPath", [("relationship", Relationship), ("statement_index", int)]
@@ -172,10 +182,15 @@ def build_one_hop_index(qnode: WDEntity, filter_props: Optional[Set[str]] = None
                 lst[target_qnode_id].append(None)
 
             for q, qvals in stmt.qualifiers.items():
-                for target_qnode_id in {
-                    qval.as_entity_id() for qval in qvals if qval.is_entity_id(qval)
-                }:
-                    lst[target_qnode_id].append(q)
+                # TODO: in wikidata, there is a case where they use the qualifier that has the same id as the property ??? e.g., Q16099064
+                # we gate it here for now...
+                if q == p:
+                    continue
+
+                for qual_i, qval in enumerate(qvals):
+                    if qval.is_entity_id(qval):
+                        target_qnode_id = qval.as_entity_id()
+                        lst[target_qnode_id].append((q, qual_i))
 
             for target_qnode_id, rels in lst.items():
                 assert all(x is not None for x in rels[1:])

@@ -349,7 +349,8 @@ class DGFactory:
                                     source.id,
                                     p,
                                     stmt_i,
-                                    {"func": fn.__name__, "value": stmt.value},
+                                    None,
+                                    fn.__name__,
                                     confidence,
                                 ),
                                 DGPathEdge.p(p),
@@ -359,7 +360,7 @@ class DGFactory:
                     has_stmt_value = True
 
                 for q, qvals in stmt.qualifiers.items():
-                    for qval in qvals:
+                    for qual_i, qval in enumerate(qvals):
                         for fn, (match, confidence) in self.literal_match.match(
                             qval, value, skip_unmatch=True
                         ):
@@ -375,7 +376,7 @@ class DGFactory:
                                         sequence=[
                                             DGPathEdge.p(p),
                                             DGPathNodeStatement.from_FromWikidataLink(
-                                                source.id, p, stmt_i
+                                                source.id, p, stmt_i, None
                                             ),
                                             DGPathEdge.p(p),
                                             pn_stmt_value,
@@ -392,10 +393,8 @@ class DGFactory:
                                             source.id,
                                             p,
                                             stmt_i,
-                                            {
-                                                "func": fn.__name__,
-                                                "value": qval,
-                                            },
+                                            qual_i,
+                                            fn.__name__,
                                             confidence,
                                         ),
                                         DGPathEdge.q(q),
@@ -458,7 +457,7 @@ class DGFactory:
                                 sequence=[
                                     DGPathEdge.p(p),
                                     DGPathNodeStatement.from_FromWikidataLink(
-                                        source.id, p, stmt_i
+                                        source.id, p, stmt_i, None
                                     ),
                                     DGPathEdge.p(p),
                                 ]
@@ -484,7 +483,7 @@ class DGFactory:
                                     sequence=[
                                         DGPathEdge.p(p),
                                         DGPathNodeStatement.from_FromWikidataLink(
-                                            source.id, p, stmt_i
+                                            source.id, p, stmt_i, None
                                         ),
                                         DGPathEdge.p(p),
                                         DGPathNodeEntity(stmt_value_qnode_id),
@@ -495,7 +494,7 @@ class DGFactory:
                             has_stmt_value = True
 
                 for q, qvals in stmt.qualifiers.items():
-                    for qval in qvals:
+                    for qual_i, qval in enumerate(qvals):
                         if qval.is_qnode(qval):
                             if qval.as_entity_id() == target.id:
                                 if not has_stmt_value:
@@ -512,7 +511,7 @@ class DGFactory:
                                             sequence=[
                                                 DGPathEdge.p(p),
                                                 DGPathNodeStatement.from_FromWikidataLink(
-                                                    source.id, p, stmt_i
+                                                    source.id, p, stmt_i, None
                                                 ),
                                                 DGPathEdge.p(p),
                                                 pn_stmt_value,
@@ -526,7 +525,7 @@ class DGFactory:
                                         sequence=[
                                             DGPathEdge.p(p),
                                             DGPathNodeStatement.from_FromWikidataLink(
-                                                source.id, p, stmt_i
+                                                source.id, p, stmt_i, qual_i
                                             ),
                                             DGPathEdge.q(q),
                                         ]
@@ -571,7 +570,7 @@ class DGFactory:
                                             sequence=[
                                                 DGPathEdge.p(p),
                                                 DGPathNodeStatement.from_FromWikidataLink(
-                                                    source.id, p, stmt_i
+                                                    source.id, p, stmt_i, qual_i
                                                 ),
                                                 DGPathEdge.q(q),
                                                 DGPathNodeEntity(qval.as_entity_id()),
@@ -594,7 +593,7 @@ class DGFactory:
                                             sequence=[
                                                 DGPathEdge.p(p),
                                                 DGPathNodeStatement.from_FromWikidataLink(
-                                                    source.id, p, stmt_i
+                                                    source.id, p, stmt_i, None
                                                 ),
                                                 DGPathEdge.p(p),
                                                 pn_stmt_value,
@@ -635,7 +634,7 @@ class DGFactory:
                         sequence=[
                             DGPathEdge.p(rel.prop),
                             DGPathNodeStatement.from_FromWikidataLink(
-                                source.id, rel.prop, stmt_i
+                                source.id, rel.prop, stmt_i, None
                             ),
                             DGPathEdge.p(rel.prop),
                             pn_stmt_value,
@@ -649,19 +648,19 @@ class DGFactory:
                         sequence=[
                             DGPathEdge.p(rel.prop),
                             DGPathNodeStatement.from_FromWikidataLink(
-                                source.id, rel.prop, stmt_i
+                                source.id, rel.prop, stmt_i, None
                             ),
                             DGPathEdge.p(rel.prop),
                         ]
                     )
                 )
-            for qual in rel.quals:
+            for qual, qual_i in rel.quals:
                 matches.append(
                     DGPath(
                         sequence=[
                             DGPathEdge.p(rel.prop),
                             DGPathNodeStatement.from_FromWikidataLink(
-                                source.id, rel.prop, stmt_i
+                                source.id, rel.prop, stmt_i, qual_i
                             ),
                             DGPathEdge.q(qual),
                         ]
@@ -698,7 +697,7 @@ class DGFactory:
                                 sequence=[
                                     DGPathEdge.p(rel.prop),
                                     DGPathNodeStatement.from_FromWikidataLink(
-                                        source.id, rel.prop, stmt_i
+                                        source.id, rel.prop, stmt_i, None
                                     ),
                                     DGPathEdge.p(rel.prop),
                                     pn_stmt_value,
@@ -713,21 +712,21 @@ class DGFactory:
                             [
                                 DGPathEdge.p(rel.prop),
                                 DGPathNodeStatement.from_FromWikidataLink(
-                                    source.id, rel.prop, stmt_i
+                                    source.id, rel.prop, stmt_i, None
                                 ),
                                 DGPathEdge.p(rel.prop),
                                 DGPathNodeEntity(middle_qnode.id),
                             ]
                         )
 
-                    for qual in rel.quals:
+                    for qual, qual_i in rel.quals:
                         hop1_seqs.append(
                             [
                                 DGPathEdge.p(rel.prop),
                                 DGPathNodeStatement.from_FromWikidataLink(
-                                    source.id, rel.prop, stmt_i
+                                    source.id, rel.prop, stmt_i, qual_i
                                 ),
-                                DGPathEdge.p(qual),
+                                DGPathEdge.q(qual),
                                 DGPathNodeEntity(middle_qnode.id),
                             ]
                         )
@@ -746,7 +745,7 @@ class DGFactory:
                         hop2_seq = [
                             DGPathEdge.p(rel.prop),
                             DGPathNodeStatement.from_FromWikidataLink(
-                                middle_qnode.id, rel.prop, stmt_i
+                                middle_qnode.id, rel.prop, stmt_i, None
                             ),
                             DGPathEdge.p(rel.prop),
                             pn_stmt_value,
@@ -757,20 +756,20 @@ class DGFactory:
                         hop2_seq = [
                             DGPathEdge.p(rel.prop),
                             DGPathNodeStatement.from_FromWikidataLink(
-                                middle_qnode.id, rel.prop, stmt_i
+                                middle_qnode.id, rel.prop, stmt_i, None
                             ),
                             DGPathEdge.p(rel.prop),
                         ]
                         for hop1_seq in hop1_seqs:
                             matches.append(DGPath(sequence=hop1_seq + hop2_seq))
 
-                    for qual in rel.quals:
+                    for qual, qual_i in rel.quals:
                         hop2_seq = [
                             DGPathEdge.p(rel.prop),
                             DGPathNodeStatement.from_FromWikidataLink(
-                                middle_qnode.id, rel.prop, stmt_i
+                                middle_qnode.id, rel.prop, stmt_i, qual_i
                             ),
-                            DGPathEdge.p(qual),
+                            DGPathEdge.q(qual),
                         ]
                         for hop1_seq in hop1_seqs:
                             matches.append(DGPath(sequence=hop1_seq + hop2_seq))

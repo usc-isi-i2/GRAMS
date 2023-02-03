@@ -230,6 +230,9 @@ def ray_annotate(
 
 
 class CacheableAnnotator(Cacheable):
+    NoBuildGraph = True
+    NoInference = True
+
     def __init__(
         self, workdir: Path, timer: Timer, db: GramsDB, cfg: GramsParams, verbose: bool
     ):
@@ -246,7 +249,8 @@ class CacheableAnnotator(Cacheable):
             psl_model_version = PSLGramModelExp3.VERSION
         else:
             raise NotImplementedError()
-        self.psl_provenance = f"{self.cfg.psl.experiment_model}_{psl_model_version}"
+        self.graph_provenance = 101
+        self.psl_provenance = f"{self.cfg.psl.experiment_model}_{psl_model_version}_{self.graph_provenance}"
 
     def annotate(self, table: LinkedTable):
         table = self.preprocess_table(table)
@@ -289,9 +293,10 @@ class CacheableAnnotator(Cacheable):
         return table
 
     @Cache.pickle.sqlite(
-        cache_key=lambda self, table: table.id.encode(),
+        cache_key=lambda self, table: orjson.dumps([table.id, self.graph_provenance]),
         compression="lz4",
         log_serde_time=True,
+        disable=NoBuildGraph,
     )
     def build_graphs(self, table: LinkedTable):
         wdentity_ids, wdentities = self.retrieving_entities(table)
@@ -334,6 +339,7 @@ class CacheableAnnotator(Cacheable):
         cache_key=lambda self, table: orjson.dumps([table.id, self.psl_provenance]),
         compression="lz4",
         log_serde_time=True,
+        disable=NoInference,
     )
     def run_inference(self, table: LinkedTable):
         wdentity_ids, wdentities = self.retrieving_entities(table)

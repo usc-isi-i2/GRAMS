@@ -102,7 +102,21 @@ class KGInference:
                                 source_id=source_flow.source_id,
                                 target_id=vid,
                                 qualifier_edges=[],
-                                flow_provenances=flow_provenances,
+                                flow_provenances=[
+                                    FlowProvenance.from_inference(
+                                        method="subproperty",
+                                        from_path=[
+                                            source_flow.source_id,
+                                            prop,
+                                            s.id,
+                                            prop,
+                                            vid,
+                                        ],
+                                        prob=max(
+                                            prov.prob for prov in flow_provenances
+                                        ),
+                                    )
+                                ],
                             )
                             new_props.append(new_prop)
 
@@ -119,7 +133,19 @@ class KGInference:
                                     source_id=source_flow.source_id,
                                     property=source_flow.edge_id,
                                     target_id=vid,
-                                    flow_provenances=provenance,
+                                    flow_provenances=[
+                                        FlowProvenance.from_inference(
+                                            method="subproperty",
+                                            from_path=[
+                                                source_flow.source_id,
+                                                source_flow.edge_id,
+                                                s.id,
+                                                q,
+                                                vid,
+                                            ],
+                                            prob=max(prov.prob for prov in provenance),
+                                        )
+                                    ],
                                 )
                             )
 
@@ -127,7 +153,10 @@ class KGInference:
         return self
 
     def kg_transitive_inference(self):
-        """Infer new relationship based on the transitive property: a -> b -> c => a -> c"""
+        """Infer new relationship based on the transitive property: a -> b -> c => a -> c.
+
+        Note that (a), (b), and (c) are entities, not cell nodes because a cell may contain multiple candidate entities.
+        """
 
         # find the list of transitive properties in the graph
         transitive_props = set()
@@ -171,6 +200,13 @@ class KGInference:
                                 s2v2_edge = s2v2_edges[trans_prop]
                                 if not stmt2.is_same_flow(vs2_edge, s2v2_edge):
                                     # don't allow infer new link across rows
+                                    continue
+
+                                # we have to make sure that the target entity of stmt and source entity of stmt2 is the same
+                                leg1targetentid = self._get_stmt_value(
+                                    stmt.qnode_id, trans_prop, stmt.statement_index
+                                ).as_entity_id_safe()
+                                if leg1targetentid != stmt2.qnode_id:
                                     continue
 
                                 # we now record the chain
@@ -218,22 +254,27 @@ class KGInference:
             # the same provenance too.
             first_leg_provenances = stmt.get_provenance_by_edge(us_edge, sv_edge)
             second_leg_provenances = stmt2.get_provenance_by_edge(vs2_edge, s2v2_edge)
-            if not (
-                len(first_leg_provenances) == 1
-                and len(second_leg_provenances) == 1
-                and first_leg_provenances[0] == second_leg_provenances[0]
-            ):
-                # I found a case where this condition does not hold, that is when
-                # the legs are from literal matching functions, but when we have literal matching
-                # functions, it should be literal and typically literal don't have outgoing edges.
-                # TODO: check this logic again
-                assert all(
-                    prov.gen_method == LinkGenMethod.FromLiteralMatchingFunc
-                    for prov in first_leg_provenances + second_leg_provenances
-                )
-                continue
+            # if not (
+            #     len(first_leg_provenances) == 1
+            #     and len(second_leg_provenances) == 1
+            #     and first_leg_provenances[0] == second_leg_provenances[0]
+            # ):
+            #     # I found a case where this condition does not hold, that is when
+            #     # the legs are from literal matching functions, but when we have literal matching
+            #     # functions, it should be literal and typically literal don't have outgoing edges.
+            #     # TODO: check this logic again
+            #     assert all(
+            #         prov.gen_method == LinkGenMethod.FromLiteralMatchingFunc
+            #         for prov in first_leg_provenances + second_leg_provenances
+            #     )
+            #     continue
 
-            provenances = first_leg_provenances
+            # the provenance of this new prop is from the path of the first leg and second leg
+            # the probability is the minimum of the two legs
+            prob = min(
+                max(prov.prob for prov in first_leg_provenances),
+                max(prov.prob for prov in second_leg_provenances),
+            )
             new_props.append(
                 InferredNewProp(
                     qnode_id=stmt.qnode_id,
@@ -242,7 +283,23 @@ class KGInference:
                     source_id=us_edge.source,
                     target_id=s2v2_edge.target,
                     qualifier_edges=[],
-                    flow_provenances=provenances,
+                    flow_provenances=[
+                        FlowProvenance.from_inference(
+                            method="transitive",
+                            from_path=[
+                                us_edge.source,
+                                us_edge.predicate,
+                                sv_edge.source,
+                                sv_edge.predicate,
+                                vs2_edge.source,
+                                vs2_edge.predicate,
+                                s2v2_edge.source,
+                                s2v2_edge.predicate,
+                                s2v2_edge.target,
+                            ],
+                            prob=prob,
+                        )
+                    ],
                 )
             )
 

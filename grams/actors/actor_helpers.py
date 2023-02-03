@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 from grams.algorithm.candidate_graph.cg_graph import CGColumnNode
-from grams.algorithm.inferences.features.type_feature import TypeFeatures
+from grams.algorithm.inferences.features.type_feature2 import TypeFeatures2
 from rdflib import RDFS
 from typing import Literal, Mapping, Optional, Union
 from grams.algorithm.autolabeler import AutoLabeler, WrappedSemanticModel
@@ -37,9 +37,10 @@ from sm.outputs.semantic_model import (
     LiteralNodeDataType,
     SemanticModel,
 )
-from grams.algorithm.inferences.psl_gram_model_exp2 import P
+from grams.algorithm.inferences.psl_gram_model_exp3 import P
 from grams.algorithm.inferences.features.rel_feature2 import RelFeatures as RelFeatures2
 from grams.algorithm.inferences.features.rel_feature3 import RelFeatures3
+from grams.algorithm.inferences.features.structure_feature2 import StructureFeature
 
 
 def eval_dataset(
@@ -361,6 +362,48 @@ class AuxComplexFeatures(AuxComplexObjectBase):
         super().__init__(context)
         self.autolabeler = AutoLabeler(context)
 
+    def get_structure_features(
+        self,
+        example: Example[LinkedTable],
+        ann: Annotation,
+    ):
+        # fmt: off
+        idmap = IdentityIDMap()
+        type_feats = TypeFeatures2(idmap, example.table, ann.cg, ann.dg, 
+            self.context, None
+        ).extract_features([P.TypeFreqOverRow.name()])
+        candidate_types = {}
+        for c, t, p in type_feats[P.TypeFreqOverRow.name()]:
+            uid = idmap.im(c)
+            if uid not in candidate_types:
+                candidate_types[uid] = []
+            candidate_types[uid].append(idmap.im(t))
+        feats = StructureFeature(
+            idmap=idmap, table=example.table, cg=ann.cg,
+            dg=ann.dg, wdentities=self.context.wdentities, wdentity_labels=self.context.wdentity_labels,
+            wdclasses=self.context.wdclasses, wdprops=self.context.wdprops, wdprop_domains=self.context.wdprop_domains,
+            wdprop_ranges=self.context.wdprop_ranges, wd_num_prop_stats=self.context.wd_num_prop_stats,
+            sim_fn=None, candidate_types=candidate_types,
+        ).extract_features([P.PropertyDomain.name(), "MIN_20_PERCENT_ENT_FROM_TYPE"])
+        # fmt: on
+        records = {"Property-Domain": [], "Min-20-Percent": []}
+        for prop, type in feats[P.PropertyDomain.name()]:
+            records["Property-Domain"].append(
+                {
+                    "prop": self.get_prop_label(prop),
+                    "type": self.get_ent_label(type),
+                }
+            )
+        for col, prop, type in feats["MIN_20_PERCENT_ENT_FROM_TYPE"]:
+            records["Min-20-Percent"].append(
+                {
+                    "column": col,
+                    "prop": self.get_prop_label(prop),
+                    "type": self.get_ent_label(type),
+                }
+            )
+        return {k: OTable(v) for k, v in records.items()}
+
     def get_type_features(
         self,
         example: Example[LinkedTable],
@@ -433,10 +476,11 @@ class AuxComplexFeatures(AuxComplexObjectBase):
             "ExtendedTypeFreqOverEntRow": P.ExtendedTypeFreqOverEntRow.name(),
             "TypeDistance": P.TypeDistance.name(),
             "TypeHeaderSimilarity": P.TypeHeaderSimilarity.name(),
+            "TypeDiscoveredPropFreqOverRow": P.TypeDiscoveredPropFreqOverRow.name(),
         }
         idmap = IdentityIDMap()
-        featvalues = TypeFeatures(idmap, example.table, ann.cg, ann.dg, 
-            self.context.wdentities, self.context.wdclasses, self.context.wdprops, self.context.wd_num_prop_stats, None
+        featvalues = TypeFeatures2(idmap, example.table, ann.cg, ann.dg, 
+            self.context, None
         ).extract_features(list(feats.values()))
         def get_column_index(uid: str):
             node = ann.cg.get_node(uid)
@@ -525,19 +569,23 @@ def extract_complex_objects(
     ann: Optional[Annotation],
 ):
     context = AlgoContext.from_grams_db(db, cache=True)
+    aux_sm_extractor = AuxComplexSmObject(context)
     objs = {
         "table": AuxComplexTableObject(context).get_table(example),
-        "gold-sm": AuxComplexSmObject(context).get_sms(example, example.sms),
-        "pred-sm": AuxComplexSmObject(context).get_sm(example, pred_sm),
+        "gold-sm": aux_sm_extractor.get_sms(example, example.sms),
+        "pred-sm": aux_sm_extractor.get_sm(example, pred_sm),
     }
     if ann is not None:
-        # objs["rel-feat-v2"] = AuxComplexFeatures(context).get_rel_features(
+        aux_complex_extractor = AuxComplexFeatures(context)
+        # objs["rel-feat-v2"] = aux_complex_extractor.get_rel_features(
         #     example, ann, "v2"
         # )
-        objs["rel-feat-v3"] = AuxComplexFeatures(context).get_rel_features(
-            example, ann, "v3"
-        )
-        objs["type-feat"] = AuxComplexFeatures(context).get_type_features(example, ann)
+        objs["rel-feat-v3"] = aux_complex_extractor.get_rel_features(example, ann, "v3")
+        objs["type-feat"] = aux_complex_extractor.get_type_features(example, ann)
+        for name, tbl in aux_complex_extractor.get_structure_features(
+            example, ann
+        ).items():
+            objs[f"structure-feat:{name}"] = tbl
     return objs
 
 

@@ -6,7 +6,12 @@ from typing import (
     Optional,
     Tuple,
 )
-from grams.algorithm.data_graph.dg_graph import DGGraph
+from grams.algorithm.data_graph.dg_graph import (
+    DGGraph,
+    EntityValueNode,
+    LiteralValueNode,
+)
+from grams.algorithm.inferences.features.graph_helper import GraphHelper
 from grams.algorithm.inferences.features.tree_utils import TreeStruct
 from grams.algorithm.inferences.psl_lib import IDMap
 from sm.misc.fn_cache import CacheMethod

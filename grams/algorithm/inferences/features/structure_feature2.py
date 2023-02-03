@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import (
     Callable,
     Dict,
@@ -103,7 +104,13 @@ class StructureFeature:
     def extract_features(self, features: List[str]) -> Dict[str, list]:
         rels = self.get_relations(self.cg)
 
-        need_rel_feats = {"REL_PROP", "REL_QUAL", "REL", "STATEMENT_PROPERTY"}
+        need_rel_feats = {
+            "REL_PROP",
+            "REL_QUAL",
+            "REL",
+            "STATEMENT_PROPERTY",
+            "MIN_20_PERCENT_ENT_FROM_TYPE",
+        }
         feat_data = {}
         for feat in features:
             fn = getattr(self, feat)
@@ -245,6 +252,63 @@ class StructureFeature:
         props = self.get_props()
         idmap = self.idmap
         return [(idmap.m(p.id),) for p in props.values() if p.is_object_property()]
+
+    def MIN_20_PERCENT_ENT_FROM_TYPE(
+        self, rels: List[Tuple[CGStatementNode, CGEdge, CGEdge]]
+    ) -> List[Tuple[str, str, str]]:
+        return self.MIN_X_ENT_FROM_TYPE(rels, 0.2)
+
+    def MIN_X_ENT_FROM_TYPE(
+        self, rels: List[Tuple[CGStatementNode, CGEdge, CGEdge]], threshold: float
+    ) -> List[Tuple[str, str, str]]:
+        """MIN_X_ENT_FROM_TYPE(U, P, T): If an outgoing relationship P from column U has at least X percent of entities from a type T."""
+        idmap = self.idmap
+        freq: Dict[Tuple[str, str, str], int] = defaultdict(int)
+        total: Dict[Tuple[str, str], int] = defaultdict(int)
+
+        for s, inedge, outedge in rels:
+            types = self.candidate_types[inedge.source]
+            for source_flow in s.forward_flow:
+                if (
+                    source_flow.sg_source_id != inedge.source
+                    or source_flow.edge_id != inedge.predicate
+                ):
+                    continue
+
+                target_flows = s.forward_flow[source_flow]
+                for target_flow in target_flows:
+                    if (
+                        target_flow.sg_target_id != outedge.target
+                        or target_flow.edge_id != outedge.predicate
+                    ):
+                        continue
+
+                    dg_stmt_ids = target_flows[target_flow]
+                    source_ents_types = set()
+                    for sid in dg_stmt_ids:
+                        source_ent = self.wdentities[
+                            self.dg.get_statement_node(sid).qnode_id
+                        ]
+                        source_ents_types.update(
+                            stmt.value.as_entity_id_safe()
+                            for stmt in source_ent.props.get("P31", [])
+                        )
+
+                    total[inedge.source, inedge.predicate] += 1
+                    for type in types:
+                        if type in source_ents_types:
+                            freq[inedge.source, inedge.predicate, type] += 1
+
+        output = []
+        if threshold >= 1:
+            for (u, p, t), count in freq.items():
+                if count >= threshold:
+                    output.append((idmap.m(u), idmap.m(p), idmap.m(t)))
+        else:
+            for (u, p, t), count in freq.items():
+                if count / total[u, p] >= threshold:
+                    output.append((idmap.m(u), idmap.m(p), idmap.m(t)))
+        return output
 
     def DATA_PROPERTY(self) -> List[Tuple[str]]:
         "Extract data properties used in CG"
