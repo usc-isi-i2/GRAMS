@@ -1,35 +1,24 @@
 use super::statement::StatementNode;
 use hashbrown::HashMap;
-use kgdata::models::python::value::PyValueView;
 use kgdata::models::Value;
-use pyo3::{prelude::*, types::PyString};
-use std::rc::Rc;
 
-#[derive(Clone, Debug)]
-#[pyclass]
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
 }
 
-#[pymethods]
-impl Span {
-    #[new]
-    pub fn new(start: usize, end: usize) -> Self {
-        Span { start, end }
-    }
-}
-
-#[derive(Clone, Debug)]
-#[pyclass]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContextSpan {
     pub text: String,
     pub span: Span,
 }
 
-#[pyclass]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CellNode {
-    pub id: Py<PyString>,
+    pub id: String,
     pub value: String,
     pub column: usize,
     pub row: usize,
@@ -37,21 +26,22 @@ pub struct CellNode {
     pub entity_spans: HashMap<String, Span>,
 }
 
-#[pyclass]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LiteralValueNode {
-    pub id: Py<PyString>,
+    pub id: String,
     pub value: Value,
     pub context_span: Option<ContextSpan>,
 }
 
-#[pyclass]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EntityValueNode {
-    pub id: Py<PyString>,
+    pub id: String,
     pub entity_id: String,
     pub entity_prob: f64,
     pub context_span: Option<ContextSpan>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum DGNode {
     Cell(CellNode),
     LiteralValue(LiteralValueNode),
@@ -59,65 +49,13 @@ pub enum DGNode {
     Statement(StatementNode),
 }
 
-#[pyclass]
-pub struct PDGNode {
-    node: DGNode,
-}
-
-#[pymethods]
-impl PDGNode {
-    pub fn id(&self) -> &Py<PyString> {
-        match &self.node {
+impl DGNode {
+    pub fn id(&self) -> &str {
+        match self {
             DGNode::Cell(node) => &node.id,
             DGNode::LiteralValue(node) => &node.id,
             DGNode::EntityValue(node) => &node.id,
             DGNode::Statement(node) => &node.id,
-        }
-    }
-
-    #[staticmethod]
-    pub fn cell_node(id: Py<PyString>, value: String, column: usize, row: usize) -> Self {
-        PDGNode {
-            node: DGNode::Cell(CellNode {
-                id,
-                value,
-                column,
-                row,
-                entity_ids: Vec::new(),
-                entity_spans: HashMap::new(),
-            }),
-        }
-    }
-
-    #[staticmethod]
-    pub fn literal_value_node(
-        id: Py<PyString>,
-        value: PyValueView,
-        context_span: Option<ContextSpan>,
-    ) -> Self {
-        PDGNode {
-            node: DGNode::LiteralValue(LiteralValueNode {
-                id,
-                value: value.value.clone(),
-                context_span,
-            }),
-        }
-    }
-
-    #[staticmethod]
-    pub fn entity_value_node(
-        id: Py<PyString>,
-        entity_id: String,
-        entity_prob: f64,
-        context_span: Option<ContextSpan>,
-    ) -> Self {
-        PDGNode {
-            node: DGNode::EntityValue(EntityValueNode {
-                id,
-                entity_id,
-                entity_prob,
-                context_span,
-            }),
         }
     }
 }

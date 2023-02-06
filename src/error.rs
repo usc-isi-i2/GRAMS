@@ -1,3 +1,4 @@
+use postcard;
 use pyo3::PyErr;
 use serde_json;
 use thiserror::Error;
@@ -5,6 +6,13 @@ use thiserror::Error;
 /// Represent possible errors returned by this library.
 #[derive(Error, Debug)]
 pub enum GramsError {
+    #[error(transparent)]
+    PostcardError(#[from] postcard::Error),
+
+    /// Represents all other cases of `std::io::Error`.
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+
     /// serde_json error
     #[error(transparent)]
     SerdeJsonErr(#[from] serde_json::Error),

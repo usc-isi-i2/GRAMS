@@ -10,12 +10,12 @@ pub fn init_env_logger() -> PyResult<()> {
 }
 
 #[pymodule]
-fn kgdata(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn grams(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.setattr("__path__", PyList::empty(py))?;
 
     m.add_function(wrap_pyfunction!(init_env_logger, m)?)?;
-    datagraph::register(py, m)?;
+    datagraph::python::register(py, m)?;
 
     Ok(())
 }

@@ -1,22 +1,23 @@
 use kgdata::models::Value;
-use pyo3::{types::PyString, Py};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub struct EdgeFlowSource {
     pub source_id: String,
-    pub edge_id: String,
+    pub predicate: String,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub struct EdgeFlowTarget {
     pub target_id: String,
-    pub edge_id: String,
+    pub predicate: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StatementNode {
-    pub id: Py<PyString>,
-    // id of the qnode that contains the statement
+    pub id: String,
+    // id of the entity that contains the statement
     pub entity_id: String,
     // predicate of the statement
     pub predicate: String,
@@ -29,17 +30,20 @@ pub struct StatementNode {
     pub flow: HashMap<(EdgeFlowSource, EdgeFlowTarget), Vec<FlowProvenance>>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LiteralMatchingFuncArg {
     pub func: String,
     pub value: Value,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum LinkGenMethod {
     FromWikidataLink,
     FromLiteralMatchingFunc(LiteralMatchingFuncArg),
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FlowProvenance {
-    gen_method: LinkGenMethod,
-    prob: f64,
+    pub gen_method: LinkGenMethod,
+    pub prob: f64,
 }
