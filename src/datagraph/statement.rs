@@ -1,44 +1,45 @@
+use kgdata::models::Value;
+use pyo3::{types::PyString, Py};
 use std::collections::{HashMap, HashSet};
-use crate::kgvalue::KGValue;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EdgeFlowSource {
-    source_id: String,
-    edge_id: String,
+    pub source_id: String,
+    pub edge_id: String,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EdgeFlowTarget {
-    target_id: String,
-    edge_id: String,
+    pub target_id: String,
+    pub edge_id: String,
 }
 
 pub struct StatementNode {
-    id: String,
+    pub id: Py<PyString>,
     // id of the qnode that contains the statement
-    entity_id: String,
+    pub entity_id: String,
     // predicate of the statement
-    predicate: String,
+    pub predicate: String,
     // whether this statement actually exist in KG
-    is_in_kg: bool,
+    pub is_in_kg: bool,
 
     // recording which link in the source is connected to the target.
-    forward_flow: HashMap<EdgeFlowSource, HashSet<EdgeFlowTarget>>,
-    reversed_flow: HashMap<EdgeFlowTarget, HashSet<EdgeFlowSource>>,
-    flow: HashMap<(EdgeFlowSource, EdgeFlowTarget), Vec<FlowProvenance>>,
+    pub forward_flow: HashMap<EdgeFlowSource, HashSet<EdgeFlowTarget>>,
+    pub reversed_flow: HashMap<EdgeFlowTarget, HashSet<EdgeFlowSource>>,
+    pub flow: HashMap<(EdgeFlowSource, EdgeFlowTarget), Vec<FlowProvenance>>,
 }
 
 pub struct LiteralMatchingFuncArg {
-    func: String,
-    value: KGValue,
+    pub func: String,
+    pub value: Value,
 }
 
 pub enum LinkGenMethod {
     FromWikidataLink,
-    FromLiteralMatchingFunc(LiteralMatchingFuncArg)
+    FromLiteralMatchingFunc(LiteralMatchingFuncArg),
 }
 
 pub struct FlowProvenance {
     gen_method: LinkGenMethod,
-    prob: f64
+    prob: f64,
 }
