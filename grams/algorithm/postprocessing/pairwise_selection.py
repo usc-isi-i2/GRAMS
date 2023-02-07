@@ -21,13 +21,11 @@ class PairwiseSelection:
         self,
         table: LinkedTable,
         cg: CGGraph,
-        dg: DGGraph,
         edge_probs: Dict[CGEdgeTriple, float],
         threshold: float,
     ):
         self.table = table
         self.cg = cg
-        self.dg = dg
         self.edge_probs = edge_probs
         self.threshold = threshold
 

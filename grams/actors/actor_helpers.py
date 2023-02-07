@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 from grams.algorithm.candidate_graph.cg_graph import CGColumnNode
-from grams.algorithm.inferences.features.type_feature2 import TypeFeatures2
-from rdflib import RDFS
-from typing import Literal, Mapping, Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
 from grams.algorithm.autolabeler import AutoLabeler, WrappedSemanticModel
 from grams.algorithm.context import AlgoContext
-from grams.algorithm.inferences.psl_lib import IdentityIDMap, ReadableIDMap
-from grams.main import Annotation
 import numpy as np
-from hugedict.prelude import HugeMutableMapping
 from loguru import logger
 from osin.apis.remote_exp import RemoteExpRun
 from osin.types.pyobject import OHTML, OTable
@@ -20,10 +14,6 @@ from osin.types.pyobject.html import OListHTML
 from grams.actors.db_actor import GramsDB
 from grams.evaluator import Evaluator
 from grams.inputs.linked_table import LinkedTable
-from kgdata.wikidata.models import WDEntity, WDProperty
-from kgdata.wikidata.models.wdclass import WDClass
-from kgdata.wikidata.models.wdentity import WDEntity
-from kgdata.wikidata.models.wdentitylabel import WDEntityLabel
 import ray
 from sm.dataset import Example
 from sm.misc.fn_cache import CacheMethod
@@ -38,16 +28,17 @@ from sm.outputs.semantic_model import (
     SemanticModel,
 )
 from grams.algorithm.inferences.psl_gram_model_exp3 import P
-from grams.algorithm.inferences.features.rel_feature2 import RelFeatures as RelFeatures2
-from grams.algorithm.inferences.features.rel_feature3 import RelFeatures3
-from grams.algorithm.inferences.features.structure_feature2 import StructureFeature
+
+
+if TYPE_CHECKING:
+    from grams.actors.grams_actor import AnnotationV2
 
 
 def eval_dataset(
     db: GramsDB,
     examples: list[Example[LinkedTable]],
     pred_sms: list[SemanticModel],
-    anns: Optional[list[Annotation]] = None,
+    anns: Optional[list[AnnotationV2]] = None,
     exprun: Optional[RemoteExpRun] = None,
 ):
     wdentities = db.wdentities.cache()
@@ -365,27 +356,13 @@ class AuxComplexFeatures(AuxComplexObjectBase):
     def get_structure_features(
         self,
         example: Example[LinkedTable],
-        ann: Annotation,
+        ann: AnnotationV2,
     ):
-        # fmt: off
-        idmap = IdentityIDMap()
-        type_feats = TypeFeatures2(idmap, example.table, ann.cg, ann.dg, 
-            self.context, None
-        ).extract_features([P.TypeFreqOverRow.name()])
-        candidate_types = {}
-        for c, t, p in type_feats[P.TypeFreqOverRow.name()]:
-            uid = idmap.im(c)
-            if uid not in candidate_types:
-                candidate_types[uid] = []
-            candidate_types[uid].append(idmap.im(t))
-        feats = StructureFeature(
-            idmap=idmap, table=example.table, cg=ann.cg,
-            dg=ann.dg, wdentities=self.context.wdentities, wdentity_labels=self.context.wdentity_labels,
-            wdclasses=self.context.wdclasses, wdprops=self.context.wdprops, wdprop_domains=self.context.wdprop_domains,
-            wdprop_ranges=self.context.wdprop_ranges, wd_num_prop_stats=self.context.wd_num_prop_stats,
-            sim_fn=None, candidate_types=candidate_types,
-        ).extract_features([P.PropertyDomain.name(), "MIN_20_PERCENT_ENT_FROM_TYPE"])
-        # fmt: on
+        feats = {
+            feat: ann.features.observations[feat]
+            for feat in [P.PropertyDomain.name(), "MIN_20_PERCENT_ENT_FROM_TYPE"]
+        }
+
         records = {"Property-Domain": [], "Min-20-Percent": []}
         for prop, type in feats[P.PropertyDomain.name()]:
             records["Property-Domain"].append(
@@ -407,11 +384,32 @@ class AuxComplexFeatures(AuxComplexObjectBase):
     def get_type_features(
         self,
         example: Example[LinkedTable],
-        ann: Annotation,
+        ann: AnnotationV2,
     ) -> OTable:
         sms = self.get_equiv_sms(example)
         labeled_types = self.autolabeler.label_types(ann.cta_probs, sms)
-        feats = self.extract_type_features(example, ann)
+
+        def get_column_index(uid: str):
+            node = ann.cg.get_node(uid)
+            assert isinstance(node, CGColumnNode)
+            return node.column
+
+        idmap = ann.features.idmap
+        feats = {
+            k: {
+                (get_column_index(idmap.im(v[0])), idmap.im(v[1])): float(v[2])
+                for v in ann.features.observations[k]
+            }
+            for k in [
+                P.TypeFreqOverRow.name(),
+                P.TypeFreqOverEntRow.name(),
+                P.ExtendedTypeFreqOverRow.name(),
+                P.ExtendedTypeFreqOverEntRow.name(),
+                P.TypeDistance.name(),
+                P.TypeHeaderSimilarity.name(),
+                P.TypeDiscoveredPropFreqOverRow.name(),
+            ]
+        }
 
         records = []
         for ci, ctypes in ann.cta_probs.items():
@@ -432,17 +430,21 @@ class AuxComplexFeatures(AuxComplexObjectBase):
     def get_rel_features(
         self,
         example: Example[LinkedTable],
-        ann: Annotation,
-        version: Literal["v2", "v3"],
+        ann: AnnotationV2,
     ) -> OTable:
         sms = self.get_equiv_sms(example)
         rel2label = self.autolabeler.label_relationships(ann.cg, sms, return_edge=False)
-        if version == "v2":
-            rel2feat = self.extract_rel_features2(example, ann)
-        else:
-            assert version == "v3"
-            rel2feat = self.extract_rel_features3(example, ann)
-
+        rel2feat = {
+            feat: self.reformat_observation(ann, feat)
+            for feat in [
+                P.RelFreqOverRow.name(),
+                P.RelFreqOverEntRow.name(),
+                P.RelFreqOverPosRel.name(),
+                P.RelFreqUnmatchOverEntRow.name(),
+                P.RelFreqUnmatchOverPosRel.name(),
+                # P.RelNotFuncDependency.name(),
+            ]
+        }
         objects = {
             rel: {
                 "source": rel[0],
@@ -467,82 +469,12 @@ class AuxComplexFeatures(AuxComplexObjectBase):
     ) -> list[WrappedSemanticModel]:
         return self.autolabeler.get_equiv_sms(example.sms)
 
-    def extract_type_features(self, example: Example[LinkedTable], ann: Annotation):
-        # fmt: off
-        feats = {
-            "TypeFreqOverRow": P.TypeFreqOverRow.name(),
-            "TypeFreqOverEntRow": P.TypeFreqOverEntRow.name(),
-            "ExtendedTypeFreqOverRow": P.ExtendedTypeFreqOverRow.name(),
-            "ExtendedTypeFreqOverEntRow": P.ExtendedTypeFreqOverEntRow.name(),
-            "TypeDistance": P.TypeDistance.name(),
-            "TypeHeaderSimilarity": P.TypeHeaderSimilarity.name(),
-            "TypeDiscoveredPropFreqOverRow": P.TypeDiscoveredPropFreqOverRow.name(),
-        }
-        idmap = IdentityIDMap()
-        featvalues = TypeFeatures2(idmap, example.table, ann.cg, ann.dg, 
-            self.context, None
-        ).extract_features(list(feats.values()))
-        def get_column_index(uid: str):
-            node = ann.cg.get_node(uid)
-            assert isinstance(node, CGColumnNode)
-            return node.column
-        # fmt: on
-
-        return {
-            k: {(get_column_index(v[0]), v[1]): float(v[2]) for v in featvalues[nk]}
-            for k, nk in feats.items()
-        }
-
-    def extract_rel_features2(self, example: Example[LinkedTable], ann: Annotation):
-        # fmt: off
-        feats = {
-            "RelFreqOverRow": P.RelFreqOverRow.name(),
-            "RelFreqOverEntRow": P.RelFreqOverEntRow.name(),
-            "RelFreqOverPosRel": P.RelFreqOverPosRel.name(),
-            "RelFreqUnmatchOverEntRow": P.RelFreqUnmatchOverEntRow.name(),
-            "RelFreqUnmatchOverPosRel": P.RelFreqUnmatchOverPosRel.name(),
-            "RelNotFuncDependency": P.RelNotFuncDependency.name(),
-        }
-        idmap = IdentityIDMap()
-        featvalues = RelFeatures2(idmap, example.table, ann.cg, ann.dg, self.context.wdentities, self.context.wdentity_labels,
-            self.context.wdclasses, self.context.wdprops, self.context.wd_num_prop_stats, None).extract_features(list(feats.values()))
-        RelNotFuncDependency = {v[:2]: v[2] for v in featvalues[P.RelNotFuncDependency.name()]}
-        featvalues[P.RelNotFuncDependency.name()] = []
-        for v in featvalues[P.RelFreqOverRow.name()]:
-            if (v[0], v[1]) not in RelNotFuncDependency:
-                continue
-            nv = list(v[:4])
-            nv.append(RelNotFuncDependency[(v[0], v[1])])
-            featvalues[P.RelNotFuncDependency.name()].append(nv)
-        # fmt: on
-        return {
-            k: {tuple(v[:4]): v[4] for v in featvalues[nk]} for k, nk in feats.items()
-        }
-
-    def extract_rel_features3(self, example: Example[LinkedTable], ann: Annotation):
-        # fmt: off
-        feats = {
-            "RelFreqOverRow": P.RelFreqOverRow.name(),
-            "RelFreqOverEntRow": P.RelFreqOverEntRow.name(),
-            "RelFreqOverPosRel": P.RelFreqOverPosRel.name(),
-            "RelFreqUnmatchOverEntRow": P.RelFreqUnmatchOverEntRow.name(),
-            "RelFreqUnmatchOverPosRel": P.RelFreqUnmatchOverPosRel.name(),
-            "RelNotFuncDependency": P.RelNotFuncDependency.name(),
-        }
-        idmap = IdentityIDMap()
-        featvalues = RelFeatures3(idmap, example.table, ann.cg, ann.dg, self.context).extract_features(list(feats.values()))
-        RelNotFuncDependency = {v[:2]: v[2] for v in featvalues[P.RelNotFuncDependency.name()]}
-        featvalues[P.RelNotFuncDependency.name()] = []
-        for v in featvalues[P.RelFreqOverRow.name()]:
-            if (v[0], v[1]) not in RelNotFuncDependency:
-                continue
-            nv = list(v[:4])
-            nv.append(RelNotFuncDependency[(v[0], v[1])])
-            featvalues[P.RelNotFuncDependency.name()].append(nv)
-        # fmt: on
-        return {
-            k: {tuple(v[:4]): v[4] for v in featvalues[nk]} for k, nk in feats.items()
-        }
+    def reformat_observation(self, ann: AnnotationV2, pred_name: str):
+        idmap = ann.features.idmap
+        out = {}
+        for obs in ann.features.observations[pred_name]:
+            out[tuple([idmap.im(x) for x in obs[:-1]])] = obs[-1]
+        return out
 
 
 @ray.remote
@@ -550,7 +482,7 @@ def ray_extract_complex_objects(
     db: Union[GramsDB, Path],
     example: Example[LinkedTable],
     pred_sm: SemanticModel,
-    ann: Optional[Annotation],
+    ann: Optional[AnnotationV2],
 ):
     db = to_grams_db(db)
     try:
@@ -566,7 +498,7 @@ def extract_complex_objects(
     db: GramsDB,
     example: Example[LinkedTable],
     pred_sm: SemanticModel,
-    ann: Optional[Annotation],
+    ann: Optional[AnnotationV2],
 ):
     context = AlgoContext.from_grams_db(db, cache=True)
     aux_sm_extractor = AuxComplexSmObject(context)
@@ -580,7 +512,7 @@ def extract_complex_objects(
         # objs["rel-feat-v2"] = aux_complex_extractor.get_rel_features(
         #     example, ann, "v2"
         # )
-        objs["rel-feat-v3"] = aux_complex_extractor.get_rel_features(example, ann, "v3")
+        objs["rel-feat"] = aux_complex_extractor.get_rel_features(example, ann)
         objs["type-feat"] = aux_complex_extractor.get_type_features(example, ann)
         for name, tbl in aux_complex_extractor.get_structure_features(
             example, ann

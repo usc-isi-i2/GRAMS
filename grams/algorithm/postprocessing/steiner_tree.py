@@ -1,29 +1,20 @@
 from collections import defaultdict
-from typing import Dict, Optional, Callable, List, Set, Tuple, TypedDict, cast, final
+from typing import Dict, Optional, List, Set, Tuple, cast
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEdge,
     CGEdgeTriple,
-    CGEntityValueNode,
     CGGraph,
-    CGLiteralValueNode,
     CGNode,
     CGStatementNode,
 )
-from itertools import chain, combinations
-from grams.algorithm.data_graph.dg_graph import DGGraph
-from grams.algorithm.inferences.psl_lib import PSLModel
 from grams.algorithm.postprocessing.common import (
     add_context,
     ensure_valid_statements,
 )
 from grams.algorithm.postprocessing.config import PostprocessingConfig
-from grams.algorithm.postprocessing.simple_path import PostProcessingSimplePath
 from grams.inputs.linked_table import LinkedTable
-from operator import itemgetter
-from graph.interface import EdgeTriple
-from graph.retworkx.api import dag_longest_path, digraph_all_simple_paths, has_cycle
-from networkx.algorithms.planarity import top_of_stack
+from graph.retworkx.api import dag_longest_path, has_cycle
 from steiner_tree.bank.solver import BankSolver, PSEUDO_ROOT_ID
 from steiner_tree.bank.struct import (
     BankEdge,
@@ -41,14 +32,12 @@ class SteinerTree:
         self,
         table: LinkedTable,
         cg: CGGraph,
-        dg: DGGraph,
         edge_probs: Dict[CGEdgeTriple, float],
         threshold: float,
         additional_terminal_nodes: Optional[List[str]] = None,
     ):
         self.table = table
         self.cg = cg
-        self.dg = dg
         self.edge_probs = edge_probs
         self.threshold = threshold
 

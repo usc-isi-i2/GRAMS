@@ -41,3 +41,7 @@ class PslConfig:
         default="exp2",
         metadata={"help": "PSL model to use"},
     )
+    use_readable_idmap: bool = field(
+        default=False,
+        metadata={"help": "whether to use readable idmap for PSL"},
+    )

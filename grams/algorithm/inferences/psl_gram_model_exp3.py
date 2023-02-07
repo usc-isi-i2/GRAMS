@@ -1,10 +1,15 @@
 from __future__ import annotations
-from typing import Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Literal
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Mapping,
+    Optional,
+)
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEdgeTriple,
     CGGraph,
-    CGStatementNode,
 )
 from grams.algorithm.context import AlgoContext
 from grams.algorithm.data_graph.dg_graph import DGGraph
@@ -16,25 +21,12 @@ from grams.algorithm.inferences.psl_lib import (
     RuleContainer,
 )
 from grams.algorithm.inferences.features.rel_feature3 import RelFeatures3
-from grams.algorithm.inferences.features.type_feature import (
-    TypeFeatures,
-)
 from grams.algorithm.inferences.features.type_feature2 import (
     TypeFeatures2,
 )
-from grams.inputs.linked_table import Link, LinkedTable
-from kgdata.wikidata.db import get_wdprop_domain_db
-from kgdata.wikidata.models import (
-    WDEntity,
-    WDEntityLabel,
-    WDClass,
-    WDProperty,
-    WDQuantityPropertyStats,
-)
+from grams.inputs.linked_table import LinkedTable
 from grams.algorithm.inferences.features.string_similarity import StringSimilarity
-from kgdata.wikidata.models.wdproperty import WDPropertyDomains, WDPropertyRanges
 from pslpython.predicate import Predicate
-from pslpython.model import Model
 from dataclasses import dataclass
 
 from pslpython.rule import Rule
@@ -95,16 +87,10 @@ class PSLGramModelExp3:
         self,
         context: AlgoContext,
         disable_rules: Optional[Iterable[str]] = None,
+        rule_weights: Optional[Mapping[str, float]] = None,
         example_id: Optional[str] = None,
         use_readable_idmap: bool = False,
     ):
-        self.wdentities = context.wdentities
-        self.wdentity_labels = context.wdentity_labels
-        self.wdclasses = context.wdclasses
-        self.wdprops = context.wdprops
-        self.wdprop_domains = context.wdprop_domains
-        self.wdprop_ranges = context.wdprop_ranges
-        self.wd_numprop_stats = context.wd_num_prop_stats
         self.context = context
         self.sim_fn = StringSimilarity.hybrid_jaccard_similarity
         self.disable_rules = set(disable_rules or [])
@@ -112,30 +98,31 @@ class PSLGramModelExp3:
         self.use_readable_idmap = use_readable_idmap
         self.model = self.get_model()
 
-        self.model.set_parameters(
-            {
-                P.Rel.name() + "_PRIOR_NEG": 1,
-                P.Rel.name() + "_PRIOR_NEG_PARENT": 0.1,
-                P.RelFreqOverRow.name(): 2,
-                P.RelFreqOverEntRow.name(): 2,
-                P.RelFreqOverPosRel.name(): 2,
-                P.RelFreqUnmatchOverEntRow.name(): 2,
-                P.RelFreqUnmatchOverPosRel.name(): 2,
-                P.RelHeaderSimilarity.name(): 0.0,
-                P.RelNotFuncDependency.name(): 100,
-                P.Type.name() + "_PRIOR_NEG": 1,
-                "TYPE_PRIOR_NEG_PARENT": 0.1,
-                P.TypeFreqOverRow.name(): 2,
-                P.TypeFreqOverEntRow.name(): 0,
-                P.ExtendedTypeFreqOverRow.name(): 2,
-                P.ExtendedTypeFreqOverEntRow.name(): 0,
-                P.TypeHeaderSimilarity.name(): 0.0,
-                P.TypeDiscoveredPropFreqOverRow.name(): 10,
-                P.DataProperty.name(): 1,
-                P.PropertyDomain.name(): 1,
-                P.PropertyRange.name(): 1,
-            }
-        )
+        default_weights = {
+            P.Rel.name() + "_PRIOR_NEG": 1,
+            P.Rel.name() + "_PRIOR_NEG_PARENT": 0.1,
+            P.RelFreqOverRow.name(): 2,
+            P.RelFreqOverEntRow.name(): 2,
+            P.RelFreqOverPosRel.name(): 2,
+            P.RelFreqUnmatchOverEntRow.name(): 2,
+            P.RelFreqUnmatchOverPosRel.name(): 2,
+            P.RelHeaderSimilarity.name(): 0.0,
+            P.RelNotFuncDependency.name(): 100,
+            P.Type.name() + "_PRIOR_NEG": 1,
+            "TYPE_PRIOR_NEG_PARENT": 0.1,
+            P.TypeFreqOverRow.name(): 2,
+            P.TypeFreqOverEntRow.name(): 0,
+            P.ExtendedTypeFreqOverRow.name(): 2,
+            P.ExtendedTypeFreqOverEntRow.name(): 0,
+            P.TypeHeaderSimilarity.name(): 0.0,
+            P.TypeDiscoveredPropFreqOverRow.name(): 2,
+            P.DataProperty.name(): 1,
+            P.PropertyDomain.name(): 1,
+            P.PropertyRange.name(): 1,
+        }
+        if rule_weights is not None:
+            default_weights.update(rule_weights)
+        self.model.set_parameters(default_weights)
 
     def get_model(self):
         # ** DEFINE RULES **
@@ -177,15 +164,6 @@ class PSLGramModelExp3:
         )
 
         # ontology rules
-        # target of a data property can't be an entity
-        rules[P.DataProperty.name()] = Rule(
-            f"""
-            {P.Rel.name()}(U, V, S, P) & {P.DataProperty.name()}(P) & {P.CorrectRel.name()}(U, V, S, P) -> ~{P.CorrectType.name()}(V, T)
-            """,
-            weighted=True,
-            squared=True,
-            weight=0.0,
-        )
         # the problem with this rule in the new setting (no statement node) is that the result of HasType
         # affects the prob. of the edge.
         # rules["HAS_TYPE_HAS_OUT_EDGE"] = Rule(
@@ -196,19 +174,36 @@ class PSLGramModelExp3:
         #     squared=True,
         #     weight=0.0,
         # )
+        # target of a data property can't be an entity
+        rules[P.DataProperty.name()] = Rule(
+            f"""
+            {P.Rel.name()}(U, V, S, P) & {P.DataProperty.name()}(P) & {P.CorrectRel.name()}(U, V, S, P) -> ~{P.CorrectType.name()}(V, T)
+            """,
+            weighted=True,
+            squared=True,
+            weight=0.0,
+        )
         rules[P.PropertyDomain.name()] = Rule(
+            # f"""
+            # {P.Rel.name()}(U, V, S, P) & {P.Column.name()}(U) & {P.StatementProperty.name()}(S, P) &
+            # {P.CorrectRel.name()}(U, V, S, P) & {P.PropertyDomain.name()}(P, T) & {P.Type.name()}(U, T) -> {P.CorrectType.name()}(U, T)
+            # """,
             f"""
             {P.Rel.name()}(U, V, S, P) & {P.Column.name()}(U) & {P.StatementProperty.name()}(S, P) &
-            {P.CorrectRel.name()}(U, V, S, P) & {P.PropertyDomain.name()}(P, T) & {P.Type.name()}(U, T) -> {P.CorrectType.name()}(U, T)
+            {P.CorrectType.name()}(U, T) & ~{P.PropertyDomain.name()}(P, T) -> ~{P.CorrectRel.name()}(U, V, S, P)
             """,
             weighted=True,
             squared=True,
             weight=0.0,
         )
         rules[P.PropertyRange.name()] = Rule(
+            # f"""
+            # {P.Rel.name()}(U, V, S, P) & {P.Column.name()}(V) &
+            # ~{P.DataProperty.name()}(P) & {P.CorrectRel.name()}(U, V, S, P) & {P.PropertyRange.name()}(P, T) & {P.Type.name()}(V, T) -> {P.CorrectType.name()}(V, T)
+            # """,
             f"""
             {P.Rel.name()}(U, V, S, P) & {P.Column.name()}(V) &
-            ~{P.DataProperty.name()}(P) & {P.CorrectRel.name()}(U, V, S, P) & {P.PropertyRange.name()}(P, T) & {P.Type.name()}(V, T) -> {P.CorrectType.name()}(V, T)
+            ~{P.DataProperty.name()}(P) & {P.CorrectType.name()}(V, T) & ~{P.PropertyRange.name()}(P, T) -> ~{P.CorrectRel.name()}(U, V, S, P)
             """,
             weighted=True,
             squared=True,
@@ -294,12 +289,22 @@ class PSLGramModelExp3:
         self,
         table: LinkedTable,
         cg: CGGraph,
-        dg: DGGraph,
+        data: PSLData,
         verbose: bool = False,
         debug: bool = False,
-    ) -> Tuple[Dict[CGEdgeTriple, float], Dict[int, Dict[str, float]]]:
+    ) -> tuple[dict[CGEdgeTriple, float], dict[int, dict[str, float]]]:
         """Predict prob. of edges and prob. of columns' type"""
-        idmap, observations, targets = self.extract_data(table, cg, dg)
+        newdata = data.filter_observations(self.model.name2predicate)
+        idmap, observations, targets = (
+            newdata.idmap,
+            newdata.observations,
+            newdata.targets,
+        )
+        if len(newdata.observations) != len(data.observations):
+            logger.warning(
+                "The code is not efficient as it extracts more features than needed: {}",
+                set(data.observations.keys()).difference(newdata.observations),
+            )
 
         if verbose:
             for pname in observations:
@@ -331,6 +336,22 @@ class PSLGramModelExp3:
 
         return rel_probs, type_probs
 
+
+class PSLGramsModelData3:
+    VERSION = 101
+
+    def __init__(
+        self,
+        context: AlgoContext,
+        sim_fn: Callable[
+            [str, str], float
+        ] = StringSimilarity.hybrid_jaccard_similarity,
+        use_readable_idmap: bool = False,
+    ):
+        self.context = context
+        self.sim_fn = sim_fn
+        self.use_readable_idmap = use_readable_idmap
+
     def extract_data(self, table: LinkedTable, cg: CGGraph, dg: DGGraph):
         """Extract data for our PSL model"""
         idmap = ReadableIDMap() if self.use_readable_idmap else IDMap()
@@ -353,10 +374,6 @@ class PSLGramModelExp3:
             cg,
             dg,
             self.context,
-            # self.wdentities,
-            # self.wdclasses,
-            # self.wdprops,
-            # self.wd_numprop_stats,
             self.sim_fn,
         ).extract_features(
             [
@@ -382,13 +399,13 @@ class PSLGramModelExp3:
             table=table,
             cg=cg,
             dg=dg,
-            wdentities=self.wdentities,
-            wdentity_labels=self.wdentity_labels,
-            wdclasses=self.wdclasses,
-            wdprops=self.wdprops,
-            wdprop_domains=self.wdprop_domains,
-            wdprop_ranges=self.wdprop_ranges,
-            wd_num_prop_stats=self.wd_numprop_stats,
+            wdentities=self.context.wdentities,
+            wdentity_labels=self.context.wdentity_labels,
+            wdclasses=self.context.wdclasses,
+            wdprops=self.context.wdprops,
+            wdprop_domains=self.context.wdprop_domains,
+            wdprop_ranges=self.context.wdprop_ranges,
+            wd_num_prop_stats=self.context.wd_num_prop_stats,
             sim_fn=self.sim_fn,
             candidate_types=candidate_types,
         ).extract_features(
@@ -401,40 +418,53 @@ class PSLGramModelExp3:
                 P.DataProperty.name(),
                 P.PropertyDomain.name(),
                 P.PropertyRange.name(),
+                "MIN_20_PERCENT_ENT_FROM_TYPE",
             ]
         )
 
-        observations: Dict[str, list] = {}
-        targets: Dict[str, list] = {}
+        observations: dict[str, list] = {}
+        observations.update(rel_feats)
+        observations.update(type_feats)
+        observations.update(struct_feats)
 
-        for p in self.model.model.get_predicates().values():
-            p: Predicate
-            if p.name() in rel_feats:
-                observations[p.name()] = rel_feats[p.name()]
-            if p.name() in type_feats:
-                observations[p.name()] = type_feats[p.name()]
-            if p.name() in struct_feats:
-                observations[p.name()] = struct_feats[p.name()]
-
+        targets: dict[str, list] = {}
         targets[P.CorrectRel.name()] = observations[P.Rel.name()].copy()
         targets[P.CorrectType.name()] = observations[P.Type.name()].copy()
-
         # targets[P.HasType.name()] = [
         #     obs for obs in observations[P.HasType.name()] if len(obs) == 1
         # ]
         # observations[P.HasType.name()] = [
         #     obs for obs in observations[P.HasType.name()] if len(obs) == 2
         # ]
+        return PSLData(
+            idmap,
+            observations,
+            targets,
+            set(rel_feats.keys()),
+            set(type_feats.keys()),
+            set(struct_feats.keys()),
+        )
 
-        # fitlering predicates that are not in the model (e.g. because they are not used in any rule)
-        filtered_observations = {
-            k: v for k, v in observations.items() if k in self.model.name2predicate
-        }
 
-        if len(filtered_observations) != len(observations):
-            logger.warning(
-                "The code is not efficient as it extracts more features than needed: {}",
-                set(observations.keys()).difference(filtered_observations),
-            )
+@dataclass
+class PSLData:
+    idmap: IDMap
+    observations: dict[str, list]
+    targets: dict[str, list]
+    # features that are classified as relation features
+    rel_feats: set[str]
+    # features that are classified as type features
+    type_feats: set[str]
+    # features that are classified as structure features
+    struct_feats: set[str]
 
-        return idmap, filtered_observations, targets
+    def filter_observations(self, predicates: set[str] | dict[str, Any]):
+        observations = {k: v for k, v in self.observations.items() if k in predicates}
+        return PSLData(
+            self.idmap,
+            observations,
+            self.targets,
+            self.rel_feats,
+            self.type_feats,
+            self.struct_feats,
+        )

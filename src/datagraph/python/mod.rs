@@ -12,7 +12,7 @@ pub(crate) fn register(py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     py.import("sys")?
         .getattr("modules")?
-        .set_item("grams.grams.datagraph", submodule)?;
+        .set_item("grams.core.datagraph", submodule)?;
 
     Ok(())
 }
