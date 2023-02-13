@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 from grams.actors.augcan_actor import AugCanActor
+from grams.actors.db_actor import GramsDBActor
+from grams.actors.grams_infdata_actor import GramsInfDataActor
+from grams.actors.grams_preprocess_actor import GramsPreprocessActor
 
 import yada
 from loguru import logger
@@ -39,7 +42,9 @@ WikidataDB.init(DATABASE_DIR)
 # fmt: off
 graph: ActorGraph = ActorGraph.auto({
     "ed": NEDDatasetActor, "er": EntityRecognitionActor, "cg": CanGenActor, "cr": CanRankActor,
-    "gd": GramsDatasetActor, "gde": GramsELDatasetActor, "gau": AugCanActor, "ga": GramsActor
+    "gd": GramsDatasetActor, "gde": GramsELDatasetActor, "gau": AugCanActor, 
+    "gp": GramsPreprocessActor, "gid": GramsInfDataActor, "gdb": GramsDBActor,
+    "ga": GramsActor
 })
 # fmt: on
 ########################################################

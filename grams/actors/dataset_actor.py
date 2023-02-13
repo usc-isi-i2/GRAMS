@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
 from functools import cached_property
 import random
-from typing import Literal
+from typing import Literal, Mapping
+from grams.actors.db_actor import GramsDBActor
 from grams.inputs.linked_table import CandidateEntityId, ExtendedLink, LinkedTable
 from kgdata.wikidata.db import WikidataDB
+from kgdata.wikidata.models.wdentity import WDEntity
 from loguru import logger
 from ned.actors.candidate_generation import CanGenActor
 from ned.actors.candidate_ranking import CanRankActor
@@ -20,13 +22,15 @@ from sm.inputs.link import WIKIDATA, EntityId
 from sm.namespaces.wikidata import WikidataNamespace
 from sm_datasets.datasets import Datasets
 import numpy as np
+from tqdm import tqdm
 
 
 class GramsDatasetActor(OsinActor[str, NoParams]):
     VERSION = 102
 
-    def __init__(self, params: NoParams):
-        super().__init__(params)
+    def __init__(self, params: NoParams, db_actor: GramsDBActor):
+        super().__init__(params, [db_actor])
+        self.db_actor = db_actor
         self.kgns = WikidataNamespace.create()
 
     @Cache.cls.file(
@@ -70,10 +74,11 @@ class GramsDatasetActor(OsinActor[str, NoParams]):
     @Cache.pickle.file(mem_persist=True, compression="lz4")
     def load_dataset(self, dataset: str) -> list[Example[FullTable]]:
         ds = Datasets()
-        db = WikidataDB.get_instance()
+        db = self.db_actor.db
+        wdentities = db.get_auto_cached_entities(None)
         examples = getattr(ds, dataset)()
         examples = ds.fix_redirection(
-            examples, db.wdentities, db.wdredirections, self.kgns
+            examples, wdentities, WikidataDB(db.data_dir).wdredirections, self.kgns
         )
         return examples
 
@@ -114,16 +119,18 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
     CHANGELOG:
     - 102: Each cell contains maximum one single link"""
 
-    VERSION = 104
+    VERSION = 105
 
     def __init__(
         self,
         params: GramsELParams,
+        db_actor: GramsDBActor,
         dataset_actor: GramsDatasetActor,
         cangen_actor: CanGenActor,
         canrank_actor: CanRankActor,
     ):
-        super().__init__(params, [dataset_actor, cangen_actor, canrank_actor])
+        super().__init__(params, [db_actor, dataset_actor, cangen_actor, canrank_actor])
+        self.db_actor = db_actor
         self.cangen_actor = cangen_actor
         self.canrank_actor = canrank_actor
         self.dataset_actor = dataset_actor
@@ -192,13 +199,16 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
 
             topk_cans = candidates.top_k_candidates(self.params.topk)
             newexamples: list[Example[LinkedTable]] = []
-            for example in examples:
+            for example in tqdm(
+                examples, desc=f"adding linked entities to examples in {name}"
+            ):
                 # populate the candidates to links
                 # because the entity linking method assumes one link per cell
                 # if there is multiple gold links in a cell, we will reduce it to
                 # just one link with the ground-truth containing all entities of
                 # links in the cell.
                 table = example.table
+                wdentities = self.db_actor.db.get_auto_cached_entities(table)
                 # the candidates inside table.links are always empty because grams dataset actor
                 # create a linked table from a full table which does not have candidates
                 newlinks = table.links.shallow_copy()
@@ -301,7 +311,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                         link.candidates = [
                             can
                             for can in link.candidates
-                            if not self.is_metadata_entity(can.entity_id)
+                            if not self.is_metadata_entity(can.entity_id, wdentities)
                         ]
                         newlinks[ri, ci] = [link]
 
@@ -332,16 +342,12 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                 ) as exprun:
                     pass
 
-    @cached_property
-    def wdentities(self):
-        return WikidataDB.get_instance().wdentities.cache()
-
-    def is_metadata_entity(self, entity_id: str):
+    def is_metadata_entity(self, entity_id: str, wdentities: Mapping[str, WDEntity]):
         """Test if an entity is a metadata entity or instance of a metadata entity."""
         return entity_id not in self.params.skip_meta_entities and (
-            entity_id in self.wdentities
+            entity_id in wdentities
             and any(
                 stmt.value.as_entity_id_safe() in self.params.skip_meta_entities
-                for stmt in self.wdentities[entity_id].props.get("P31", [])
+                for stmt in wdentities[entity_id].props.get("P31", [])
             )
         )

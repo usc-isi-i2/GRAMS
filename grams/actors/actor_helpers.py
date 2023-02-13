@@ -11,7 +11,7 @@ from osin.apis.remote_exp import RemoteExpRun
 from osin.types.pyobject import OHTML, OTable
 from osin.types.pyobject.html import OListHTML
 
-from grams.actors.db_actor import GramsDB
+from grams.actors.db_actor import GramsDB, to_grams_db
 from grams.evaluator import Evaluator
 from grams.inputs.linked_table import LinkedTable
 import ray
@@ -41,7 +41,7 @@ def eval_dataset(
     anns: Optional[list[AnnotationV2]] = None,
     exprun: Optional[RemoteExpRun] = None,
 ):
-    wdentities = db.wdentities.cache()
+    wdentities = db.get_auto_cached_entities(None)
     wdentity_labels = db.wdentity_labels.cache()
     wdclasses = db.wdclasses.cache()
     wdprops = db.wdprops.cache()
@@ -519,13 +519,3 @@ def extract_complex_objects(
         ).items():
             objs[f"structure-feat:{name}"] = tbl
     return objs
-
-
-def to_grams_db(db: Union[GramsDB, Path]) -> GramsDB:
-    if isinstance(db, Path):
-        datadir = db
-        db = get_instance(
-            lambda: GramsDB(datadir, False),
-            "GramsDB",
-        )
-    return db

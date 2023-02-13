@@ -4,7 +4,7 @@ from collections.abc import Mapping
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, MutableMapping, Set
+from typing import Dict, MutableMapping, Optional, Set, Union
 from grams.inputs.linked_table import LinkedTable
 from hugedict.types import HugeMutableMapping
 from kgdata.wikidata.models.wdproperty import WDProperty
@@ -14,6 +14,7 @@ from ream.helper import orjson_dumps
 import serde.prelude as serde
 from hugedict.prelude import CacheDict, Parallel
 from ream.actors.base import BaseActor
+from sm.misc.ray_helper import get_instance
 from timer import Timer
 from tqdm import tqdm
 
@@ -41,6 +42,11 @@ class GramsDB:
     def __init__(self, data_dir: Path, proxy_db: bool):
         self.data_dir = data_dir
         self.proxy_db = proxy_db
+
+        # cache entities that are used per table
+        # this option should be cleared after running the algorithm
+        # to avoid memory overflow
+        self.autocached_entities: dict[Optional[str], Mapping[str, WDEntity]] = {}
 
         with Timer().watch_and_report("init grams db"):
             read_only = not proxy_db
@@ -96,6 +102,54 @@ class GramsDB:
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(
                 os.path.join(data_dir, "quantity_prop_stats")
             )
+
+    @Cache.mem(
+        cache_key=lambda self, table, max_n_hop, verbose: (table.id.encode(), max_n_hop)
+    )
+    def get_table_entity_labels(
+        self, table: LinkedTable, max_n_hop: int, verbose: bool
+    ):
+        wdentity_ids, wdentities = self.get_table_entities(table, max_n_hop, verbose)
+        wdentity_labels = self.get_entity_labels(wdentities, verbose)
+        return wdentity_labels
+
+    @Cache.mem(
+        cache_key=lambda self, table, max_n_hop, verbose: (table.id.encode(), max_n_hop)
+    )
+    def get_table_entities(self, table: LinkedTable, max_n_hop: int, verbose: bool):
+        wdentity_ids: set[str] = {
+            entid
+            for links in table.links.flat_iter()
+            for link in links
+            for entid in link.entities
+        }
+        wdentity_ids.update(
+            (
+                candidate.entity_id
+                for links in table.links.flat_iter()
+                for link in links
+                for candidate in link.candidates
+            )
+        )
+        wdentity_ids.update(table.context.page_entities)
+        wdentities = self.get_entities(wdentity_ids, n_hop=max_n_hop, verbose=verbose)
+
+        return wdentity_ids, wdentities
+
+    def get_auto_cached_entities(
+        self, table: Optional[LinkedTable]
+    ) -> Mapping[str, WDEntity]:
+        """Get the cached entities for the given table."""
+        key = None if table is None else table.id
+        if key not in self.autocached_entities:
+            self.autocached_entities[key] = self.wdentities.cache()
+        return self.autocached_entities[key]
+
+    def clear_auto_cached_entities(self, table: Optional[LinkedTable]):
+        """Clear the cached entities for the given table."""
+        key = None if table is None else table.id
+        if key in self.autocached_entities:
+            del self.autocached_entities[key]
 
     def get_entities(
         self, wdentity_ids: Set[str], n_hop: int = 1, verbose: bool = False
@@ -205,3 +259,32 @@ class GramsDB:
                                     label = qnode_id
                                 id2label[qnode_id] = label
         return id2label
+
+
+@dataclass
+class GramsDBParams:
+    data_dir: Path = field(
+        metadata={"help": "Path to a directory containing databases"},
+    )
+    proxy_db: bool = field(
+        default=True,
+        metadata={"help": "Whether to use a proxy database for the semantic model"},
+    )
+
+
+class GramsDBActor(BaseActor[str, GramsDBParams]):
+    VERSION = 100
+
+    def __init__(self, params: GramsDBParams):
+        super().__init__(params, [])
+        self.db = GramsDB(params.data_dir, params.proxy_db)
+
+
+def to_grams_db(db: Union[GramsDB, Path]) -> GramsDB:
+    if isinstance(db, Path):
+        datadir = db
+        db = get_instance(
+            lambda: GramsDB(datadir, False),
+            "GramsDB",
+        )
+    return db

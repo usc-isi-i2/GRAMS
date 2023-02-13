@@ -85,13 +85,11 @@ class PSLGramModelExp3:
 
     def __init__(
         self,
-        context: AlgoContext,
         disable_rules: Optional[Iterable[str]] = None,
         rule_weights: Optional[Mapping[str, float]] = None,
         example_id: Optional[str] = None,
         use_readable_idmap: bool = False,
     ):
-        self.context = context
         self.sim_fn = StringSimilarity.hybrid_jaccard_similarity
         self.disable_rules = set(disable_rules or [])
         self.example_id = example_id

@@ -28,12 +28,12 @@ class Evaluator:
 
     def __init__(
         self,
-        qnodes: HugeMutableMapping[str, WDEntity],
+        qnodes: Mapping[str, WDEntity],
         qnode_labels: Mapping[str, WDEntityLabel],
         wdclasses: Mapping[str, WDClass],
         wdprops: Mapping[str, WDProperty],
     ):
-        self.qnodes = qnodes.cache()
+        self.qnodes = qnodes
         self.all_wdclasses = wdclasses
         self.all_wdprops = wdprops
 

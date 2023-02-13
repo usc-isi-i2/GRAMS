@@ -1,33 +1,20 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-import random
-from typing import Callable, Literal, Union
+from typing import Callable, Union
 from grams.actors.dataset_actor import GramsELDatasetActor
-from grams.actors.db_actor import GramsDB
+from grams.actors.db_actor import GramsDB, GramsDBActor
 from grams.actors.actor_helpers import to_grams_db
 from grams.algorithm.literal_matchers.string_match import StrSim
 from grams.inputs.linked_table import CandidateEntityId, ExtendedLink, LinkedTable
-from kgdata.wikidata.db import WikidataDB
 from kgdata.wikidata.models.wdentity import WDEntity
 from kgdata.wikidata.models.wdvalue import WDValue
-from loguru import logger
-from ned.actors.candidate_generation import CanGenActor
-from ned.actors.candidate_ranking import CanRankActor
-from ned.actors.evaluate_helper import EvalArgs
 from osin.integrations.ream import OsinActor
-from ream.cache_helper import Cache, CacheArgsHelper
-from ream.dataset_helper import DatasetDict, DatasetQuery
-from ream.params_helper import NoParams
-import serde.json
-from slugify import slugify
-from sm.dataset import Example, FullTable
-from sm.inputs.context import Context
+from ream.cache_helper import Cache
+from ream.dataset_helper import DatasetDict
+from sm.dataset import Example
 from sm.inputs.link import WIKIDATA, EntityId
 from sm.misc.ray_helper import ray_put, ray_map
-from sm.namespaces.wikidata import WikidataNamespace
-import numpy as np
-from tqdm import tqdm
 import ray
 
 
@@ -55,12 +42,12 @@ class AugCanActor(OsinActor[str, AugCanParams]):
     def __init__(
         self,
         params: AugCanParams,
-        db: GramsDB,
+        db_actor: GramsDBActor,
         dataset_actor: GramsELDatasetActor,
     ):
-        super().__init__(params, [dataset_actor])
+        super().__init__(params, [db_actor, dataset_actor])
         self.dataset_actor = dataset_actor
-        self.db = db
+        self.db = db_actor.db
         self.strsim: Callable[[str, str], float] = getattr(
             StrSim, self.params.similarity
         )
@@ -80,18 +67,32 @@ class AugCanActor(OsinActor[str, AugCanParams]):
             dsdict.name, {}, dsdict.provenance + ";" + self.provenance
         )
 
-        dbref = ray_put(self.db.data_dir)
+        dbref = None
 
         for name, ds in dsdict.items():
-            newdsdict[name] = ray_map(
-                ray_augmented_candidates.remote,
-                [
-                    (dbref, ex, self.params.similarity, self.params.threshold)
+            if len(ds) > 1:
+                if dbref is None:
+                    dbref = ray_put(self.db.data_dir)
+                newdsdict[name] = ray_map(
+                    ray_augmented_candidates.remote,
+                    [
+                        (dbref, ex, self.params.similarity, self.params.threshold)
+                        for ex in ds
+                    ],
+                    desc="augmenting candidates",
+                    verbose=True,
+                )
+            else:
+                strsim = getattr(StrSim, self.params.similarity)
+                newdsdict[name] = [
+                    augmented_candidates(
+                        ex,
+                        self.db.get_auto_cached_entities(ex.table),
+                        strsim,
+                        self.params.threshold,
+                    )
                     for ex in ds
-                ],
-                desc="augmenting candidates",
-                verbose=True,
-            )
+                ]
         return newdsdict
 
 
@@ -103,7 +104,7 @@ def ray_augmented_candidates(
     threshold: float,
 ):
     db = to_grams_db(db)
-    wdentities = db.wdentities.cache()
+    wdentities = db.get_auto_cached_entities(example.table)
 
     try:
         return augmented_candidates(
