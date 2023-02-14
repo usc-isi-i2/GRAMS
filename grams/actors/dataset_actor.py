@@ -33,7 +33,7 @@ class GramsDatasetActor(OsinActor[str, NoParams]):
         self.db_actor = db_actor
         self.kgns = WikidataNamespace.create()
 
-    @Cache.cls.file(
+    @Cache.cls.dir(
         cls=DatasetDict,
         mem_persist=True,
         compression="lz4",
@@ -140,7 +140,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
             return "oracle"
         return self.canrank_actor.get_provenance()
 
-    @Cache.cls.file(
+    @Cache.cls.dir(
         cls=DatasetDict,
         cache_self_args=CacheArgsHelper.gen_cache_self_args(get_provenance),
         mem_persist=True,

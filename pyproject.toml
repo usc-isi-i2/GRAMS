@@ -38,7 +38,7 @@ dependencies = [
     'kgdata >= 3.3.1, < 4.0.0',
     'click >= 8.0.0, <= 8.0.4',
     'steiner-tree >= 1.1.3, < 2.0.0',
-    'ned >= 1.3.0, < 2.0.0',
+    'ned >= 1.8.0, < 2.0.0',
     'typing_extensions >= 4.0.0, < 5.0.0',
     'hugedict >= 2.8.0, < 3.0.0',
     'graph-wrapper >= 1.5.0, < 2.0.0',

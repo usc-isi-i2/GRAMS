@@ -41,7 +41,7 @@ class GramsPreprocessActor(OsinActor[str, GramsPreprocessParams]):
 
         self.provenance = f"preprocess:remove_unk={self.params.remove_unk_entities}"
 
-    @Cache.cls.file(
+    @Cache.cls.dir(
         cls=DatasetDict,
         mem_persist=True,
         compression="lz4",

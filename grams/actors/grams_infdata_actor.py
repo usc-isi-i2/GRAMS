@@ -24,6 +24,11 @@ from ream.actors.base import BaseActor
 from ream.cache_helper import Cache, Cacheable
 from ream.dataset_helper import DatasetDict, DatasetQuery
 from sm.misc.ray_helper import ray_map
+from grams.algorithm.inferences_v2.features.feature import (
+    InfFeatureExtractor,
+    InfFeature,
+    InfBatchFeature,
+)
 
 
 @dataclass
@@ -43,15 +48,26 @@ class GramsInfDataParams:
 
 
 @dataclass
-class InfData:
-    # candidate graph
-    cg: CGGraph
-    # inference's features
-    features: PSLData
+class InfData(InfBatchFeature):
+    cgs: dict[str, CGGraph]
+
+    @staticmethod
+    def from_inf_batch_feature(cgs: dict[str, CGGraph], feat: InfBatchFeature):
+        return InfData(
+            cgs=cgs,
+            idmap=feat.idmap,
+            edge_features=feat.edge_features,
+            node_features=feat.node_features,
+            index=feat.index,
+        )
+
+
+class InfDatasetDict(DatasetDict[InfData]):
+    serde = (InfData.save, InfData.load, None)
 
 
 class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
-    VERSION = 100
+    VERSION = 101
 
     def __init__(
         self,
@@ -63,17 +79,17 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
         self.dbactor = dbactor
         self.preprocess_actor = preprocess_actor
 
-    @Cache.cls.file(
-        cls=DatasetDict,
+    @Cache.cls.dir(
+        cls=InfDatasetDict,
         mem_persist=True,
         compression="lz4",
         log_serde_time=True,
     )
-    def run_dataset(self, dsquery: str) -> DatasetDict[list[InfData]]:
+    def run_dataset(self, dsquery: str) -> InfDatasetDict:
         dsdict = self.preprocess_actor.run_dataset(
             dsquery, self.params.data_graph.max_n_hop
         )
-        newdsdict: DatasetDict[list[InfData]] = DatasetDict(
+        newdsdict: InfDatasetDict = InfDatasetDict(
             dsdict.name, {}, dsdict.provenance + ";infdata"
         )
 
@@ -97,7 +113,16 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
                     for ex in ds
                 ]
 
-            newdsdict[name] = newds
+            id2cg = {}
+            for ex, (cg, feat) in zip(ds, newds):
+                id2cg[ex.table.id] = cg
+
+            newdsdict[name] = InfData.from_inf_batch_feature(
+                id2cg,
+                InfBatchFeature.merge(
+                    [(ex.table.id, cg_feat[1]) for ex, cg_feat in zip(ds, newds)]
+                ),
+            )
         return newdsdict
 
     def evaluate(self, eval_args: EvalArgs):
@@ -180,8 +205,10 @@ def create_inference_data(
         wd_num_prop_stats=db.wd_numprop_stats,
     )
 
-    psldata = PSLGramsModelData3(context, use_readable_idmap=True).extract_data(
-        table, cg, dg
-    )
+    return cg, InfFeatureExtractor(context).extract(table, dg, cg)
 
-    return InfData(cg, psldata)
+    # psldata = PSLGramsModelData3(context, use_readable_idmap=True).extract_data(
+    #     table, cg, dg
+    # )
+
+    # return InfData(cg, psldata)

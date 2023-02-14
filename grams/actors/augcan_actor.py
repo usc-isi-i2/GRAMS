@@ -55,7 +55,7 @@ class AugCanActor(OsinActor[str, AugCanParams]):
         assert round(self.params.threshold, 3) == self.params.threshold
         self.provenance = f"augcan:{self.params.similarity}:{self.params.threshold}"
 
-    @Cache.cls.file(
+    @Cache.cls.dir(
         cls=DatasetDict,
         mem_persist=True,
         compression="lz4",
