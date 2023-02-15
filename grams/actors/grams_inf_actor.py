@@ -6,6 +6,7 @@ from operator import itemgetter
 from typing import Literal, TYPE_CHECKING
 from grams.actors.actor_helpers import eval_dataset
 from grams.actors.db_actor import GramsDBActor
+from grams.actors.grams_actor import AnnotationV2
 from grams.actors.grams_infdata_actor import GramsInfDataActor, InfData
 from grams.actors.grams_preprocess_actor import GramsPreprocessActor
 from grams.algorithm.inferences_v2.psl.model_v3 import PSLModelv3
@@ -143,7 +144,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                 with self.new_exp_run(
                     dataset=dsquery_p.get_query(name),
                 ) as exprun:
-                    pred_sms = self._normalize_results(
+                    anns = self._normalize_results(
                         examples,
                         infdata_dsdict[name],
                         infres_dsdict[name],
@@ -152,8 +153,8 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                     primitive_output, primitive_ex_output = eval_dataset(
                         self.db,
                         examples,
-                        pred_sms,
-                        anns=None,
+                        pred_sms=[ann.sm for ann in anns],
+                        anns=anns,
                         exprun=exprun,
                     )
                     self.logger.info(
@@ -182,7 +183,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
         infdata: InfData,
         infres: InfResult,
         threshold: float,
-    ) -> list[SemanticModel]:
+    ) -> list[AnnotationV2]:
         out = []
 
         wdclasses = self.db.wdclasses.cache()
@@ -197,7 +198,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                 estart, eend = infdata.edge_index[ex_id]
                 eprobs = infres.edge_prob.prob
                 edge_feats = infdata.edge_features
-                output_edge_probs = {}
+                output_edge_probs: dict[tuple[str, str, str], float] = {}
 
                 for i in range(estart, eend):
                     u = idmap.im(edge_feats.source[i])
@@ -211,7 +212,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                 ustart, uend = infdata.node_index[ex_id]
                 uprobs = infres.node_prob.prob
                 node_feats = infdata.node_features
-                output_node_probs = defaultdict(dict)
+                output_node_probs: dict[int, dict[str, float]] = defaultdict(dict)
 
                 for i in range(ustart, uend):
                     u = cg.get_column_node(idmap.im(node_feats.node[i])).column
@@ -238,6 +239,16 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                 sm = sm_helper.create_sm(ex.table, pred_cpa, pred_cta)
                 sm = sm_helper.minify_sm(sm)
 
-            out.append(sm)
+            out.append(
+                AnnotationV2(
+                    sm=sm,
+                    cg=cg,
+                    features=infdata,
+                    cg_edge_probs=output_edge_probs,
+                    cta_probs=output_node_probs,
+                    pred_cpa=pred_cpa,
+                    pred_cta=pred_cta,
+                )
+            )
 
         return out

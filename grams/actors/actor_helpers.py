@@ -28,6 +28,7 @@ from sm.outputs.semantic_model import (
     SemanticModel,
 )
 from grams.algorithm.inferences.psl_gram_model_exp3 import P
+from tqdm import tqdm
 
 
 if TYPE_CHECKING:
@@ -125,23 +126,23 @@ def eval_dataset(
 
     if exprun is not None:
         # log the results of each example
-        if len(examples) > 1:
-            complex_objs = ray_map(
-                ray_extract_complex_objects.remote,
-                [
-                    (db.data_dir, e, pred_sms[i], anns[i] if anns is not None else None)
-                    for i, e in enumerate(examples)
-                ],
-                desc="creating annotation debug info.",
-                verbose=True,
+        # if len(examples) > 1:
+        #     complex_objs = ray_map(
+        #         ray_extract_complex_objects.remote,
+        #         [
+        #             (db.data_dir, e, pred_sms[i], anns[i] if anns is not None else None)
+        #             for i, e in enumerate(examples)
+        #         ],
+        #         desc="creating annotation debug info.",
+        #         verbose=True,
+        #     )
+        # else:
+        complex_objs = [
+            extract_complex_objects(
+                db, e, pred_sms[i], anns[i] if anns is not None else None
             )
-        else:
-            complex_objs = [
-                extract_complex_objects(
-                    db, e, pred_sms[i], anns[i] if anns is not None else None
-                )
-                for i, e in enumerate(examples)
-            ]
+            for i, e in enumerate(tqdm(examples))
+        ]
         for i, e in enumerate(examples):
             exprun.update_example_output(
                 example_id=str(i),
@@ -394,21 +395,13 @@ class AuxComplexFeatures(AuxComplexObjectBase):
             assert isinstance(node, CGColumnNode)
             return node.column
 
-        idmap = ann.features.idmap
-        feats = {
-            k: {
-                (get_column_index(idmap.im(v[0])), idmap.im(v[1])): float(v[2])
-                for v in ann.features.observations[k]
-            }
-            for k in [
-                P.TypeFreqOverRow.name(),
-                P.TypeFreqOverEntRow.name(),
-                P.ExtendedTypeFreqOverRow.name(),
-                P.ExtendedTypeFreqOverEntRow.name(),
-                P.TypeDistance.name(),
-                P.TypeHeaderSimilarity.name(),
-                P.TypeDiscoveredPropFreqOverRow.name(),
-            ]
+        ex_id = example.table.id
+        idmap = ann.features.idmap[ex_id]
+        ufeat = ann.features.node_features
+
+        key2row = {
+            (get_column_index(idmap.im(ufeat.node[i])), idmap.im(ufeat.type[i])): i
+            for i in range(*ann.features.node_index[example.table.id])
         }
 
         records = []
@@ -418,11 +411,21 @@ class AuxComplexFeatures(AuxComplexObjectBase):
                     "index": ci,
                     "name": example.table.table.columns[ci].clean_name,
                     "type": self.get_ent_label(ctype),
-                    "prob": prob,
+                    "prob": float(prob),
                     "label": labeled_types[ci][ctype],
                 }
-                for feat, value in feats.items():
-                    record[feat] = value.get((ci, ctype), None)
+                for name, value in [
+                    ("freq_over_row", ufeat.freq_over_row),
+                    ("freq_over_ent_row", ufeat.freq_over_ent_row),
+                    ("extended_freq_over_row", ufeat.extended_freq_over_row),
+                    ("extended_freq_over_ent_row", ufeat.extended_freq_over_ent_row),
+                    ("type_distance", ufeat.type_distance),
+                    (
+                        "freq_discovered_prop_over_row",
+                        ufeat.freq_discovered_prop_over_row,
+                    ),
+                ]:
+                    record[name] = float(value[key2row[ci, ctype]])
 
                 records.append(record)
         return OTable(records)
@@ -432,18 +435,19 @@ class AuxComplexFeatures(AuxComplexObjectBase):
         example: Example[LinkedTable],
         ann: AnnotationV2,
     ) -> OTable:
+        idmap = ann.features.idmap[example.table.id]
+        efeat = ann.features.edge_features
+
         sms = self.get_equiv_sms(example)
         rel2label = self.autolabeler.label_relationships(ann.cg, sms, return_edge=False)
-        rel2feat = {
-            feat: self.reformat_observation(ann, feat)
-            for feat in [
-                P.RelFreqOverRow.name(),
-                P.RelFreqOverEntRow.name(),
-                P.RelFreqOverPosRel.name(),
-                P.RelFreqUnmatchOverEntRow.name(),
-                P.RelFreqUnmatchOverPosRel.name(),
-                # P.RelNotFuncDependency.name(),
-            ]
+        rel2key = {
+            (
+                idmap.im(efeat.source[i]),
+                idmap.im(efeat.target[i]),
+                idmap.im(efeat.statement[i]),
+                idmap.im(efeat.outprop[i]),
+            ): i
+            for i in range(*ann.features.edge_index[example.table.id])
         }
         objects = {
             rel: {
@@ -452,14 +456,20 @@ class AuxComplexFeatures(AuxComplexObjectBase):
                 "stmt": rel[2],
                 "predicate": self.get_prop_label(rel[3]),
                 "label": label,
-                "prob": ann.cg_edge_probs[rel[2], rel[1], rel[3]],
+                "prob": float(ann.cg_edge_probs[rel[2], rel[1], rel[3]]),
             }
             for rel, label in rel2label.items()
         }
 
-        for name, feats in rel2feat.items():
-            for rel, feat in feats.items():
-                objects[rel][name] = feat
+        for name, feat in [
+            ("freq_over_row", efeat.freq_over_row),
+            ("freq_over_ent_row", efeat.freq_over_ent_row),
+            ("freq_over_pos_rel", efeat.freq_over_pos_rel),
+            ("freq_unmatch_over_ent_row", efeat.freq_unmatch_over_ent_row),
+            ("freq_unmatch_over_pos_rel", efeat.freq_unmatch_over_pos_rel),
+        ]:
+            for rel, i in rel2key.items():
+                objects[rel][name] = float(feat[i])
 
         return OTable(list(objects.values()))
 
@@ -468,13 +478,6 @@ class AuxComplexFeatures(AuxComplexObjectBase):
         self, example: Example[LinkedTable]
     ) -> list[WrappedSemanticModel]:
         return self.autolabeler.get_equiv_sms(example.sms)
-
-    def reformat_observation(self, ann: AnnotationV2, pred_name: str):
-        idmap = ann.features.idmap
-        out = {}
-        for obs in ann.features.observations[pred_name]:
-            out[tuple([idmap.im(x) for x in obs[:-1]])] = obs[-1]
-        return out
 
 
 @ray.remote
@@ -514,8 +517,8 @@ def extract_complex_objects(
         # )
         objs["rel-feat"] = aux_complex_extractor.get_rel_features(example, ann)
         objs["type-feat"] = aux_complex_extractor.get_type_features(example, ann)
-        for name, tbl in aux_complex_extractor.get_structure_features(
-            example, ann
-        ).items():
-            objs[f"structure-feat:{name}"] = tbl
+        # for name, tbl in aux_complex_extractor.get_structure_features(
+        #     example, ann
+        # ).items():
+        #     objs[f"structure-feat:{name}"] = tbl
     return objs

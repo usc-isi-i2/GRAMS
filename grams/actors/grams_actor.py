@@ -68,7 +68,7 @@ class AnnotationV2:
     # original candidate graph
     cg: CGGraph
     # inference's features
-    features: PSLData
+    features: InfData
     # probabilities of each edge in cg (uid, vid, edge key)
     cg_edge_probs: dict[tuple[str, str, str], float]
     # probabilities of types of each column: column index -> type -> probability
