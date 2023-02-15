@@ -20,13 +20,17 @@ from grams.inputs.linked_table import LinkedTable
 from ned.actors.evaluate_helper import EvalArgs
 from osin.integrations.ream import OsinActor
 import ray
-from ream.actors.base import BaseActor
-from ream.cache_helper import Cache, Cacheable
-from ream.dataset_helper import DatasetDict, DatasetQuery
+from ream.prelude import (
+    ActorVersion,
+    Cache,
+    CacheArgsHelper,
+    Cacheable,
+    DatasetDict,
+    DatasetQuery,
+)
 from sm.misc.ray_helper import ray_map
-from grams.algorithm.inferences_v2.features.feature import (
+from grams.algorithm.inferences_v2.features.inf_feature import (
     InfFeatureExtractor,
-    InfFeature,
     InfBatchFeature,
 )
 
@@ -55,19 +59,21 @@ class InfData(InfBatchFeature):
     def from_inf_batch_feature(cgs: dict[str, CGGraph], feat: InfBatchFeature):
         return InfData(
             cgs=cgs,
+            edge_index=feat.edge_index,
+            node_index=feat.node_index,
             idmap=feat.idmap,
             edge_features=feat.edge_features,
             node_features=feat.node_features,
-            index=feat.index,
+            misc_features=feat.misc_features,
         )
 
 
-class InfDatasetDict(DatasetDict[InfData]):
+class InfDataDatasetDict(DatasetDict[InfData]):
     serde = (InfData.save, InfData.load, None)
 
 
 class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
-    VERSION = 101
+    VERSION = ActorVersion.create(105, [InfFeatureExtractor])
 
     def __init__(
         self,
@@ -80,17 +86,19 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
         self.preprocess_actor = preprocess_actor
 
     @Cache.cls.dir(
-        cls=InfDatasetDict,
+        cls=InfDataDatasetDict,
         mem_persist=True,
         compression="lz4",
         log_serde_time=True,
     )
-    def run_dataset(self, dsquery: str) -> InfDatasetDict:
+    def run_dataset(self, dsquery: str) -> InfDataDatasetDict:
         dsdict = self.preprocess_actor.run_dataset(
             dsquery, self.params.data_graph.max_n_hop
         )
-        newdsdict: InfDatasetDict = InfDatasetDict(
-            dsdict.name, {}, dsdict.provenance + ";infdata"
+        newdsdict: InfDataDatasetDict = InfDataDatasetDict(
+            dsdict.name,
+            {},
+            dsdict.provenance,
         )
 
         dbref = None
@@ -206,9 +214,3 @@ def create_inference_data(
     )
 
     return cg, InfFeatureExtractor(context).extract(table, dg, cg)
-
-    # psldata = PSLGramsModelData3(context, use_readable_idmap=True).extract_data(
-    #     table, cg, dg
-    # )
-
-    # return InfData(cg, psldata)

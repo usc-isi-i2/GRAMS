@@ -28,6 +28,11 @@ from operator import itemgetter
 K = TypeVar("K")
 
 
+class OverrideModel(Model):
+    def _write_data(self, temp_dir):
+        super()._write_data(temp_dir)
+
+
 class PSLModel:
     def __init__(
         self,
@@ -165,6 +170,7 @@ class PSLModel:
         force_setall: bool = True,
         cleanup_tempdir: bool = True,
         retry: bool = True,
+        provenance: str = "",
     ):
         self.set_data(observations, targets, truth or {}, force_setall)
 

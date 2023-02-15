@@ -19,7 +19,7 @@ from grams.algorithm.inferences_v2.features.func_dependency import (
 )
 from grams.algorithm.inferences_v2.features.helper import MISSING_VALUE, IDMap
 from grams.inputs.linked_table import LinkedTable
-from nptyping import Bool, Float32, Int32, NDArray, Shape
+from nptyping import Bool, Float64, Int32, NDArray, Shape
 from ream.data_model_helper import NumpyDataModel
 from grams.algorithm.inferences_v2.features.graph_traversal_helper import (
     GraphTraversalHelper,
@@ -30,7 +30,7 @@ from sm.misc.fn_cache import CacheMethod
 class EdgeFeature(NumpyDataModel):
     # fmt: off
     __slots__ = [
-        "source", "target", "statement", "predicate", "is_qualifier",
+        "source", "target", "statement", "inprop", "outprop", "is_qualifier",
         "freq_over_row", "freq_over_ent_row", "freq_over_pos_rel", "freq_unmatch_over_ent_row",
         "freq_unmatch_over_pos_rel", "not_func_dependency"
     ]
@@ -39,21 +39,23 @@ class EdgeFeature(NumpyDataModel):
     source: NDArray[Shape["*"], Int32]
     target: NDArray[Shape["*"], Int32]
     statement: NDArray[Shape["*"], Int32]
-    predicate: NDArray[Shape["*"], Int32]
+    inprop: NDArray[Shape["*"], Int32]  # incoming property of the statement
+    outprop: NDArray[Shape["*"], Int32]  # outgoing property of the statement
     is_qualifier: NDArray[Shape["*"], Bool]
-    freq_over_row: NDArray[Shape["*"], Float32]
-    freq_over_ent_row: NDArray[Shape["*"], Float32]
-    freq_over_pos_rel: NDArray[Shape["*"], Float32]
-    freq_unmatch_over_ent_row: NDArray[Shape["*"], Float32]
-    freq_unmatch_over_pos_rel: NDArray[Shape["*"], Float32]
-    not_func_dependency: NDArray[Shape["*"], Float32]
+    freq_over_row: NDArray[Shape["*"], Float64]
+    freq_over_ent_row: NDArray[Shape["*"], Float64]
+    freq_over_pos_rel: NDArray[Shape["*"], Float64]
+    freq_unmatch_over_ent_row: NDArray[Shape["*"], Float64]
+    freq_unmatch_over_pos_rel: NDArray[Shape["*"], Float64]
+    not_func_dependency: NDArray[Shape["*"], Float64]
 
     def shift_id(self, offset: int):
         return EdgeFeature(
             source=self.source + offset,
             target=self.target + offset,
             statement=self.statement + offset,
-            predicate=self.predicate + offset,
+            inprop=self.inprop + offset,
+            outprop=self.outprop + offset,
             is_qualifier=self.is_qualifier,
             freq_over_row=self.freq_over_row,
             freq_over_ent_row=self.freq_over_ent_row,
@@ -112,14 +114,16 @@ class EdgeFeatureExtractor:
         source = []
         target = []
         statement = []
-        predicate = []
+        inprop = []
+        outprop = []
         is_qualifier = []
 
         for s, inedge, outedge in rels:
             source.append(idmap.m(inedge.source))
             target.append(idmap.m(outedge.target))
             statement.append(idmap.m(s.id))
-            predicate.append(idmap.m(outedge.predicate))
+            inprop.append(idmap.m(inedge.predicate))
+            outprop.append(idmap.m(outedge.predicate))
             # TODO: store is_qualifier in the CGEdge
             is_qualifier.append(outedge.predicate != inedge.predicate)
 
@@ -134,18 +138,19 @@ class EdgeFeatureExtractor:
             source=np.array(source, dtype=np.int32),
             target=np.array(target, dtype=np.int32),
             statement=np.array(statement, dtype=np.int32),
-            predicate=np.array(predicate, dtype=np.int32),
+            inprop=np.array(inprop, dtype=np.int32),
+            outprop=np.array(outprop, dtype=np.int32),
             is_qualifier=np.array(is_qualifier, dtype=np.bool_),
-            freq_over_row=np.array(freq_over_row, dtype=np.float32),
-            freq_over_ent_row=np.array(freq_over_ent_row, dtype=np.float32),
-            freq_over_pos_rel=np.array(freq_over_pos_rel, dtype=np.float32),
+            freq_over_row=np.array(freq_over_row, dtype=np.float64),
+            freq_over_ent_row=np.array(freq_over_ent_row, dtype=np.float64),
+            freq_over_pos_rel=np.array(freq_over_pos_rel, dtype=np.float64),
             freq_unmatch_over_ent_row=np.array(
-                freq_unmatch_over_ent_row, dtype=np.float32
+                freq_unmatch_over_ent_row, dtype=np.float64
             ),
             freq_unmatch_over_pos_rel=np.array(
-                freq_unmatch_over_pos_rel, dtype=np.float32
+                freq_unmatch_over_pos_rel, dtype=np.float64
             ),
-            not_func_dependency=np.array(not_func_dependency, dtype=np.float32),
+            not_func_dependency=np.array(not_func_dependency, dtype=np.float64),
         )
 
     def FREQ_OVER_ROW(self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]):

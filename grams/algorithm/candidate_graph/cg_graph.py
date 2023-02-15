@@ -303,6 +303,11 @@ class CGGraph(RetworkXStrDiGraph[str, CGNode, CGEdge]):
         assert isinstance(u, CGStatementNode)
         return u
 
+    def get_column_node(self, uid: str) -> CGColumnNode:
+        u = self.get_node(uid)
+        assert isinstance(u, CGColumnNode)
+        return u
+
     def remove_dangling_statement(self):
         """Remove statement nodes that have no incoming nodes or no outgoing edges"""
         for s in self.nodes():

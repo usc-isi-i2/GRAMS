@@ -1,9 +1,10 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Tuple
 from grams.actors.augcan_actor import AugCanActor
 from grams.actors.db_actor import GramsDBActor
+from grams.actors.grams_inf_actor import GramsInfActor
 from grams.actors.grams_infdata_actor import GramsInfDataActor
 from grams.actors.grams_preprocess_actor import GramsPreprocessActor
 
@@ -18,7 +19,6 @@ from ned.actors.candidate_generation import CanGenActor
 from ned.actors.candidate_ranking import CanRankActor
 from ned.actors.entity_recognition import EntityRecognitionActor
 from ned.actors.dataset import NEDDatasetActor
-from ned.actors.evaluate_helper import EvalArgs
 from grams.actors.dataset_actor import GramsDatasetActor, GramsELDatasetActor
 from grams.actors.grams_actor import GramsActor
 from sm.misc.ray_helper import set_ray_init_args
@@ -44,10 +44,18 @@ graph: ActorGraph = ActorGraph.auto({
     "ed": NEDDatasetActor, "er": EntityRecognitionActor, "cg": CanGenActor, "cr": CanRankActor,
     "gd": GramsDatasetActor, "gde": GramsELDatasetActor, "gau": AugCanActor, 
     "gp": GramsPreprocessActor, "gid": GramsInfDataActor, "gdb": GramsDBActor,
-    "ga": GramsActor
+    "gia": GramsInfActor, "ga": GramsActor
 })
 # fmt: on
 ########################################################
+
+
+@dataclass
+class EvalArgs:
+    dsqueries: List[str] = field(
+        metadata={"help": "List of dataset queries to evaluate"}
+    )
+    threshold: float = 0.5
 
 
 @dataclass

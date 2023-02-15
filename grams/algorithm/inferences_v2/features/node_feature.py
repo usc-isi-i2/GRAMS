@@ -23,7 +23,7 @@ from grams.algorithm.data_graph.dg_graph import (
 )
 from grams.algorithm.inferences_v2.features.helper import IDMap
 from grams.inputs.linked_table import LinkedTable
-from nptyping import Float32, Int32, NDArray, Shape
+from nptyping import Float64, Int32, NDArray, Shape
 from ream.data_model_helper import NumpyDataModel
 from sm.misc.fn_cache import CacheMethod
 
@@ -38,12 +38,12 @@ class NodeFeature(NumpyDataModel):
 
     node: NDArray[Shape["*"], Int32]
     type: NDArray[Shape["*"], Int32]
-    freq_over_row: NDArray[Shape["*"], Float32]
-    freq_over_ent_row: NDArray[Shape["*"], Float32]
-    extended_freq_over_row: NDArray[Shape["*"], Float32]
-    extended_freq_over_ent_row: NDArray[Shape["*"], Float32]
-    freq_discovered_prop_over_row: NDArray[Shape["*"], Float32]
-    type_distance: NDArray[Shape["*"], Float32]
+    freq_over_row: NDArray[Shape["*"], Float64]
+    freq_over_ent_row: NDArray[Shape["*"], Float64]
+    extended_freq_over_row: NDArray[Shape["*"], Float64]
+    extended_freq_over_ent_row: NDArray[Shape["*"], Float64]
+    freq_discovered_prop_over_row: NDArray[Shape["*"], Float64]
+    type_distance: NDArray[Shape["*"], Float64]
 
     def shift_id(self, offset: int):
         return NodeFeature(
@@ -94,9 +94,7 @@ class NodeFeatureExtractor:
         self.graph_helper = graph_helper or GraphHelper(table, cg, dg, context)
 
     def extract(self) -> NodeFeature:
-        tagged_columns = self.get_tagged_columns()
-
-        node_types = [(u, sorted(self.get_type_freq(u).keys())) for u in tagged_columns]
+        node_types = self.get_column_cantypes()
 
         nodes = []
         types = []
@@ -116,18 +114,19 @@ class NodeFeatureExtractor:
         return NodeFeature(
             node=np.array(nodes, dtype=np.int32),
             type=np.array(types, dtype=np.int32),
-            freq_over_row=np.array(freq_over_row, dtype=np.float32),
-            freq_over_ent_row=np.array(freq_over_ent_row, dtype=np.float32),
-            extended_freq_over_row=np.array(extended_freq_over_row, dtype=np.float32),
+            freq_over_row=np.array(freq_over_row, dtype=np.float64),
+            freq_over_ent_row=np.array(freq_over_ent_row, dtype=np.float64),
+            extended_freq_over_row=np.array(extended_freq_over_row, dtype=np.float64),
             extended_freq_over_ent_row=np.array(
-                extended_freq_over_ent_row, dtype=np.float32
+                extended_freq_over_ent_row, dtype=np.float64
             ),
             freq_discovered_prop_over_row=np.array(
-                freq_discovered_prop_over_row, dtype=np.float32
+                freq_discovered_prop_over_row, dtype=np.float64
             ),
-            type_distance=np.array(type_distance, dtype=np.float32),
+            type_distance=np.array(type_distance, dtype=np.float64),
         )
 
+    @CacheMethod.cache(CacheMethod.as_is)
     def get_tagged_columns(self) -> list[CGColumnNode]:
         """Return list of entity columns that will be tagged with type."""
         tagged_columns = []
@@ -166,8 +165,15 @@ class NodeFeatureExtractor:
             tagged_columns.append(u)
         return tagged_columns
 
+    @CacheMethod.cache(CacheMethod.as_is)
+    def get_column_cantypes(self):
+        return [
+            (u, sorted(self.get_type_freq(u).keys())) for u in self.get_tagged_columns()
+        ]
+
+    @CacheMethod.cache(CacheMethod.as_is)
     def get_cantypes(self):
-        """Get candidate types for each column."""
+        """Get candidate types for all tagged columns."""
         can_types = set()
         for u in self.get_tagged_columns():
             can_types.update(self.get_type_freq(u).keys())

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+import re
 from typing import Generic, TypeVar
 
 
@@ -32,3 +33,23 @@ class IDMap(Generic[K]):
 
     def __contains__(self, key: K) -> bool:
         return key in self.map
+
+
+@dataclass
+class OffsetIDMap(IDMap[K]):
+    offset: int = 0
+
+    def add(self, key: K) -> int:
+        raise Exception("OffsetIDMap is read-only")
+
+    def m(self, key: K) -> int:
+        if key not in self.map:
+            raise KeyError(f"Key {key} not found in OffsetIDMap")
+        return self.map[key] + self.offset
+
+    def im(self, new_key: int) -> K:
+        return self.invert_map[new_key - self.offset]
+
+    @staticmethod
+    def from_idmap(offset: int, idmap: IDMap[K]) -> OffsetIDMap[K]:
+        return OffsetIDMap(offset=offset, map=idmap.map, invert_map=idmap.invert_map)

@@ -90,8 +90,8 @@ class GramsParams:
 class GramsActor(OsinActor[I.LinkedTable, GramsParams]):
     """GRAMS for Semantic Modeling"""
 
-    NAME = "Semantic Modeling"
     VERSION = 107
+    EXP_NAME = "Semantic Modeling"
     EXP_VERSION = 3
 
     def __init__(
