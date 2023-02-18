@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,10 +36,16 @@ class AugCanParams:
             "Any value greater than 1.0 mean we do not apply the similarity function"
         },
     )
+    use_column_name: bool = field(
+        default=False,
+        metadata={
+            "help": "add column name to the search text. This is useful for value such as X town, Y town, Z town. "
+        },
+    )
 
 
 class AugCanActor(OsinActor[str, AugCanParams]):
-    VERSION = 100
+    VERSION = 104
 
     def __init__(
         self,
@@ -68,17 +76,16 @@ class AugCanActor(OsinActor[str, AugCanParams]):
         )
 
         dbref = None
+        paramref = None
 
         for name, ds in dsdict.items():
             if len(ds) > 1:
                 if dbref is None:
                     dbref = ray_put(self.db.data_dir)
+                    paramref = ray_put(self.params)
                 newdsdict[name] = ray_map(
                     ray_augmented_candidates.remote,
-                    [
-                        (dbref, ex, self.params.similarity, self.params.threshold)
-                        for ex in ds
-                    ],
+                    [(dbref, ex, self.params.similarity, paramref) for ex in ds],
                     desc="augmenting candidates",
                     verbose=True,
                 )
@@ -89,7 +96,7 @@ class AugCanActor(OsinActor[str, AugCanParams]):
                         ex,
                         self.db.get_auto_cached_entities(ex.table),
                         strsim,
-                        self.params.threshold,
+                        self.params,
                     )
                     for ex in ds
                 ]
@@ -101,14 +108,14 @@ def ray_augmented_candidates(
     db: Union[GramsDB, Path],
     example: Example[LinkedTable],
     strsim: str,
-    threshold: float,
+    params: AugCanParams,
 ):
     db = to_grams_db(db)
     wdentities = db.get_auto_cached_entities(example.table)
 
     try:
         return augmented_candidates(
-            example, wdentities, getattr(StrSim, strsim), threshold
+            example, wdentities, getattr(StrSim, strsim), params
         )
     except Exception as e:
         raise Exception("Failed to augment table: " + example.table.id) from e
@@ -118,7 +125,7 @@ def augmented_candidates(
     example: Example[LinkedTable],
     wdentities: Mapping[str, WDEntity],
     strsim: Callable[[str, str], float],
-    threshold: float,
+    params: AugCanParams,
 ):
     nrows, ncols = example.table.shape()
     next_entity_cache: dict[str, set[str]] = {}
@@ -140,7 +147,9 @@ def augmented_candidates(
             if len(links) == 0:
                 continue
 
-            row = [(oci, example.table.table[ri, oci]) for oci in other_ent_columns]
+            row: list[tuple[int, str]] = [
+                (oci, example.table.table[ri, oci]) for oci in other_ent_columns
+            ]
             next_ent_ids = gather_next_entities(
                 {can.entity_id for link in links for can in link.candidates},
                 wdentities,
@@ -149,8 +158,23 @@ def augmented_candidates(
             next_ents = [wdentities[eid] for eid in next_ent_ids]
 
             for oci, value in row:
+                if params.use_column_name:
+                    header = example.table.table.columns[oci].clean_name or ""
+                    values = {
+                        value,
+                        (value + " " + header).strip(),
+                        (header + " " + value).strip(),
+                    }
+                else:
+                    values = [value]
+
                 # search for value in next_ents
-                match_ents = search_value(value, next_ents, strsim, threshold)
+                match_ents = search_value(
+                    values,
+                    next_ents,
+                    strsim,
+                    params.threshold,
+                )
                 if len(match_ents) > 0:
                     olinks = newlinks[ri, oci]
                     for olink in olinks:
@@ -200,7 +224,7 @@ def augmented_candidates(
 
 
 def search_value(
-    value: str,
+    values: list[str] | set[str],
     ents: list[WDEntity],
     strsim: Callable[[str, str], float],
     threshold: float,
@@ -209,11 +233,14 @@ def search_value(
     for ent in ents:
         if len(ent.aliases) > 0:
             ent_score = max(
-                strsim(value, ent.label),
-                max(strsim(value, alias) for alias in ent.aliases),
+                max(strsim(value, ent.label) for value in values),
+                max(
+                    max(strsim(value, alias) for value in values)
+                    for alias in ent.aliases
+                ),
             )
         else:
-            ent_score = strsim(value, ent.label)
+            ent_score = max(strsim(value, ent.label) for value in values)
         if ent_score >= threshold:
             match_ents[EntityId(ent.id, WIKIDATA)] = ent_score
     return match_ents
