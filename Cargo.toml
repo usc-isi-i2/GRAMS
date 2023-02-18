@@ -29,6 +29,9 @@ thiserror = "1.0.31"
 kgdata = { path = "../kgdata" }
 hashbrown = "0.13.2"
 postcard = { version = "1.0.2", features = ["alloc"] }
+itertools = "0.10.5"
+strsim = "0.10.0"
+rocksdb = "0.20.1"
 
 [dev-dependencies]
 rstest = "0.13.0"

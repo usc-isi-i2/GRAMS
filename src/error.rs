@@ -6,6 +6,13 @@ use thiserror::Error;
 /// Represent possible errors returned by this library.
 #[derive(Error, Debug)]
 pub enum GramsError {
+    /// Represents errors that occur when the input data passing to the library is invalid.
+    #[error("Invalid input data: {0}")]
+    InvalidInputData(String),
+    /// Represents errors that occur when the configuration data passing to the library is invalid.
+    #[error("Invalid configuration: {0}")]
+    InvalidConfigData(String),
+
     #[error(transparent)]
     PostcardError(#[from] postcard::Error),
 
