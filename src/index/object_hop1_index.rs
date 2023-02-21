@@ -18,17 +18,17 @@ pub struct ObjectHop1Index {
 }
 
 impl ObjectHop1Index {
-    pub fn from_entities(
-        entity_ids: &[&str],
+    pub fn from_entities<S: AsRef<str>>(
+        entity_ids: &[S],
         all_entities: &HashMap<String, Entity>,
     ) -> ObjectHop1Index {
         let mut index = HashMap::with_capacity(entity_ids.len());
         let filter_props = None;
 
         for entid in entity_ids {
-            let ent = all_entities.get(*entid).unwrap();
+            let ent = all_entities.get((*entid).as_ref()).unwrap();
             index.insert(
-                (*entid).to_owned(),
+                (*entid).as_ref().to_owned(),
                 Self::_build_outgoing_index(ent, filter_props),
             );
         }

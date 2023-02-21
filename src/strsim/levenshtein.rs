@@ -137,7 +137,7 @@ impl StrSim for Levenshtein {
      *
      * Directly translated from RLTK's implementation.
      */
-    fn similarity(&self, key: &str, query: &str) -> Result<f64> {
+    fn similarity(&self, key: &str, query: &str) -> Result<f64, GramsError> {
         let s1: Vec<char> = key.chars().collect();
         let s2: Vec<char> = query.chars().collect();
 
@@ -169,8 +169,7 @@ impl StrSim for Levenshtein {
         if max_cost < lev {
             return Err(GramsError::InvalidConfigData(
                 "Illegal value of operation costs".to_owned(),
-            )
-            .into());
+            ));
         }
 
         if max_cost == 0.0 {

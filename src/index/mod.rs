@@ -5,6 +5,7 @@ mod object_hop1_index;
 
 use kgdata::models::Entity;
 
+pub use self::index_traversal::IndexTraversal;
 pub use self::object_hop1_index::{MatchedStatement, ObjectHop1Index};
 
 pub trait EntityTraversal {

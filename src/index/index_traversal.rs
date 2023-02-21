@@ -1,14 +1,26 @@
 use hashbrown::{HashMap, HashSet};
 use kgdata::models::Entity;
 
+use crate::context::AlgoContext;
+
 use super::{
     object_hop1_index::{MatchedStatement, ObjectHop1Index},
     EntityTraversal,
 };
 
-struct IndexTraversal<'t> {
+pub struct IndexTraversal<'t> {
     pub entities: &'t HashMap<String, Entity>,
-    pub index: ObjectHop1Index,
+    pub index: &'t ObjectHop1Index,
+}
+
+impl<'t> IndexTraversal<'t> {
+    pub fn from_context(context: &'t mut AlgoContext) -> Self {
+        context.init_object_1hop_index();
+        Self {
+            entities: &context.entities,
+            index: context.get_object_1hop_index(),
+        }
+    }
 }
 
 impl<'t> EntityTraversal for IndexTraversal<'t> {

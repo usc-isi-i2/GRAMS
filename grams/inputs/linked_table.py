@@ -18,6 +18,7 @@ from sm.inputs.prelude import (
     Link,
 )
 from sm.misc.matrix import Matrix
+import grams.core.table as gcore
 
 
 @dataclass
@@ -218,6 +219,46 @@ class LinkedTable(FullTable):
             links[ri][ci].append(link)
 
         return Matrix(links)
+
+    def to_rust_table(self) -> gcore.LinkedTable:
+        def to_col(col: Column) -> gcore.Column:
+            values = []
+            for v in col.values:
+                if isinstance(v, str):
+                    values.append(v)
+                elif v is None:
+                    values.append("")
+                else:
+                    raise ValueError(f"Unsupported value type: {type(v)}")
+            return gcore.Column(col.index, col.clean_name, values)
+
+        def to_link(link: ExtendedLink) -> gcore.Link:
+            return gcore.Link(
+                link.start,
+                link.end,
+                link.url,
+                [gcore.EntityId(str(eid)) for eid in link.entities],
+                [
+                    gcore.CandidateEntityId(
+                        gcore.EntityId(str(c.entity_id)), c.probability
+                    )
+                    for c in link.candidates
+                ],
+            )
+
+        return gcore.LinkedTable(
+            self.table.table_id,
+            [
+                [[to_link(link) for link in cell] for cell in row]
+                for row in self.links.data
+            ],
+            [to_col(col) for col in self.table.columns],
+            gcore.Context(
+                self.context.page_title,
+                self.context.page_url,
+                [gcore.EntityId(str(eid)) for eid in self.context.page_entities],
+            ),
+        )
 
 
 class CandidateEntityId:

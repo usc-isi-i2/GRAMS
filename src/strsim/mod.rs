@@ -1,5 +1,6 @@
 mod levenshtein;
-use anyhow::Result;
+
+use crate::error::GramsError;
 
 pub use self::levenshtein::Levenshtein;
 
@@ -12,5 +13,5 @@ pub trait StrSim {
      *
      * The return value is a likelihood between 0 and 1.
      */
-    fn similarity(&self, key: &str, query: &str) -> Result<f64>;
+    fn similarity(&self, key: &str, query: &str) -> Result<f64, GramsError>;
 }

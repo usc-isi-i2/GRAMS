@@ -7,7 +7,6 @@ use crate::{
     strsim::StrSim,
     table::{EntityId, LinkedTable},
 };
-use anyhow::Result;
 use kgdata::models::Entity;
 
 /**
@@ -26,13 +25,13 @@ use kgdata::models::Entity;
  * @param threshold Candidate entities that have scores less than this threshold will not be added to the candidates
  * @param use_column_name If true, the column name will be used as a part of the queries to find candidates
  */
-pub fn augment_candidates(
+pub fn augment_candidates<'t0: 't1, 't1>(
     table: &LinkedTable,
-    entity_traversal: &mut dyn EntityTraversal,
-    strsim: &dyn StrSim,
+    entity_traversal: &'t1 mut Box<dyn EntityTraversal + 't0>,
+    strsim: &Box<dyn StrSim>,
     threshold: f64,
     use_column_name: bool,
-) -> Result<LinkedTable> {
+) -> Result<LinkedTable, GramsError> {
     let (nrows, ncols) = table.shape();
 
     for ri in 0..nrows {
@@ -41,8 +40,7 @@ pub fn augment_candidates(
                 return Err(GramsError::InvalidInputData(format!(
                     "Table has more than one link per cell at row {} column {}",
                     ri, ci
-                ))
-                .into());
+                )));
             }
         }
     }
@@ -122,7 +120,7 @@ pub fn augment_candidates(
                             .extend(matched_entity_ids);
                         newtable.links[ri][oci][0]
                             .candidates
-                            .sort_by(|a, b| a.probability.partial_cmp(&b.probability).unwrap());
+                            .sort_by(|a, b| b.probability.partial_cmp(&a.probability).unwrap());
                     }
                 }
             }
@@ -138,9 +136,9 @@ pub fn augment_candidates(
 pub fn search_text<'t>(
     queries: &[&str],
     entities: &[&'t Entity],
-    strsim: &dyn StrSim,
+    strsim: &Box<dyn StrSim>,
     threshold: f64,
-) -> Result<Vec<CandidateEntityId>> {
+) -> Result<Vec<CandidateEntityId>, GramsError> {
     let mut matched_ents = Vec::new();
 
     for ent in entities {
@@ -148,7 +146,7 @@ pub fn search_text<'t>(
             .iter()
             .map(|q| strsim.similarity(ent.label.get_default_value(), q))
             .try_fold(f64::NEG_INFINITY, |acc, x| {
-                Ok::<f64, anyhow::Error>(acc.max(x?))
+                Ok::<f64, GramsError>(acc.max(x?))
             })?;
 
         score = score.max(
@@ -156,14 +154,14 @@ pub fn search_text<'t>(
                 .get_default_values()
                 .iter()
                 .map(|k| {
-                    let res: Result<f64> = queries
+                    let res: Result<f64, GramsError> = queries
                         .iter()
                         .map(|q| strsim.similarity(k, q))
                         .try_fold(f64::NEG_INFINITY, |acc, x| Ok(acc.max(x?)));
                     res
                 })
                 .try_fold(f64::NEG_INFINITY, |acc, x| {
-                    Ok::<f64, anyhow::Error>(acc.max(x?))
+                    Ok::<f64, GramsError>(acc.max(x?))
                 })?,
         );
 

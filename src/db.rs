@@ -1,38 +1,177 @@
-use anyhow::Result;
-use rocksdb::{self, Options};
+use std::path::PathBuf;
 
-#[pyclass(module = "grams.core.db", subclass)]
+use hashbrown::{HashMap, HashSet};
+use kgdata::{
+    db::{open_entity_db, ReadonlyRocksDBDict},
+    models::{Entity, Value},
+};
+
+use crate::{
+    context::{AlgoContext, PyAlgoContext},
+    error::{into_pyerr, GramsError},
+    table::LinkedTable,
+};
+use once_cell::sync::OnceCell;
+use pyo3::prelude::*;
+
+// This is okay to use unsync once cell due to the GIL from Python
+static DB_INSTANCE: OnceCell<Py<GramsDB>> = OnceCell::new();
+
+#[pyclass(module = "grams.core", subclass)]
 pub struct GramsDB {
-    datadir: Path,
-    entities: rocksdb::DB,
+    pub datadir: PathBuf,
+    entities: ReadonlyRocksDBDict<String, Entity>,
+}
+
+impl std::fmt::Debug for GramsDB {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GramsDB")
+            .field("datadir", &self.datadir)
+            .finish()
+    }
+}
+
+impl GramsDB {
+    pub fn new(datadir: &str) -> Result<Self, GramsError> {
+        let datadir = PathBuf::from(datadir);
+        Ok(Self {
+            entities: open_entity_db(datadir.join("wdentities.db").as_os_str())?,
+            datadir,
+        })
+    }
+
+    fn get_table_entity_ids(&self, table: &LinkedTable) -> Vec<String> {
+        let mut entity_ids = HashSet::new();
+        for row in &table.links {
+            for links in row {
+                for link in links {
+                    for candidate in &link.candidates {
+                        entity_ids.insert(&candidate.id.0);
+                    }
+                    for entityid in &link.entities {
+                        entity_ids.insert(&entityid.0);
+                    }
+                }
+            }
+        }
+        for entityid in &table.context.page_entities {
+            entity_ids.insert(&entityid.0);
+        }
+
+        entity_ids
+            .into_iter()
+            .map(|x| x.to_owned())
+            .collect::<Vec<_>>()
+    }
+
+    fn get_entities(
+        &self,
+        entity_ids: &[String],
+        n_hop: usize,
+    ) -> Result<HashMap<String, Entity>, GramsError> {
+        let mut entities = HashMap::new();
+        for eid in entity_ids {
+            let entity = self
+                .entities
+                .get(eid)?
+                .ok_or_else(|| GramsError::IntegrityError(eid.clone()))?;
+            entities.insert(eid.to_owned(), entity);
+        }
+
+        if n_hop == 1 {
+            return Ok(entities);
+        }
+
+        let mut next_hop_entities: HashMap<String, Entity>;
+        let mut current_hop_entities: HashMap<String, Entity> = HashMap::new();
+
+        for i in 2..=n_hop {
+            // almost certainly that the number of entities in the next hop is bigger than the current hop
+            next_hop_entities = HashMap::with_capacity(entity_ids.len());
+            let it = if i == 2 {
+                entities.values()
+            } else {
+                current_hop_entities.values()
+            };
+
+            for ent in it {
+                for stmts in ent.props.values() {
+                    for stmt in stmts {
+                        if let Value::EntityId(eid) = &stmt.value {
+                            if !entities.contains_key(&eid.id)
+                                && !next_hop_entities.contains_key(&eid.id)
+                            {
+                                let next_entity = self
+                                    .entities
+                                    .get(&eid.id)?
+                                    .ok_or_else(|| GramsError::IntegrityError(eid.id.clone()))?;
+                                next_hop_entities.insert(eid.id.clone(), next_entity);
+                            }
+                        }
+
+                        for qvals in stmt.qualifiers.values() {
+                            for qval in qvals {
+                                if let Value::EntityId(eid) = &qval {
+                                    if !entities.contains_key(&eid.id)
+                                        && !next_hop_entities.contains_key(&eid.id)
+                                    {
+                                        let next_entity =
+                                            self.entities.get(&eid.id)?.ok_or_else(|| {
+                                                GramsError::IntegrityError(eid.id.clone())
+                                            })?;
+                                        next_hop_entities.insert(eid.id.clone(), next_entity);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // integrate the current hop
+            entities.extend(current_hop_entities.into_iter());
+            current_hop_entities = next_hop_entities;
+        }
+        entities.extend(current_hop_entities.into_iter());
+        Ok(entities)
+    }
 }
 
 #[pymethods]
 impl GramsDB {
-    pub fn new(datadir: Path) -> Result<Self> {
-        Self {
-            datadir,
-            entities: open_entity_db(&datadir.join("wdentities.db"))?,
+    #[staticmethod]
+    pub fn init(py: Python<'_>, datadir: &str) -> PyResult<()> {
+        if let Some(db) = DB_INSTANCE.get() {
+            if !(&db.borrow(py)).datadir.as_os_str().eq(datadir) {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "The database is already initialized with a different data directory. Call deinit first.",
+                ));
+            }
+        } else {
+            DB_INSTANCE
+                .set(Py::new(py, Self::new(datadir).map_err(into_pyerr)?)?)
+                .unwrap();
         }
+
+        Ok(())
     }
-}
 
-/// A context object that contains the data needed for the algorithm to run for each table.
-pub struct AlgoContext {
-    entities: HashMap<String, Entity>,
-}
+    #[staticmethod]
+    pub fn get_instance(py: Python<'_>) -> PyResult<Py<Self>> {
+        Ok(DB_INSTANCE
+            .get()
+            .ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err(
+                    "The database is not initialized. Call init first.",
+                )
+            })?
+            .clone_ref(py))
+    }
 
-fn open_entity_db(dbpath: &str) -> Result<rocksdb::DB> {
-    let options = Options::default();
-    options.create_if_missing(false);
-    options.set_compression_type("zstd");
-    options.set_compression_options(
-        -14,       // window_bits
-        6,         // level
-        0,         // strategy
-        16 * 1024, // max_dict_bytes
-    );
-    options.set_zstd_max_train_bytes(100 * 16 * 1024);
+    pub fn get_algo_context(&self, table: &LinkedTable, n_hop: usize) -> PyResult<PyAlgoContext> {
+        let entity_ids = self.get_table_entity_ids(table);
+        let entities = self.get_entities(&entity_ids, n_hop).map_err(into_pyerr)?;
 
-    rocksdb::DB::open_for_read_only(options, dbpath, false).map_err(into_pyerr)?
+        Ok(PyAlgoContext(AlgoContext::new(entity_ids, entities)))
+    }
 }

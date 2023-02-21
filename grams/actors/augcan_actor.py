@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Union
+from typing import TYPE_CHECKING, Callable, Union
 from grams.actors.dataset_actor import GramsELDatasetActor
 from grams.actors.db_actor import GramsDB, GramsDBActor
 from grams.actors.actor_helpers import to_grams_db
@@ -16,8 +16,14 @@ from ream.cache_helper import Cache
 from ream.dataset_helper import DatasetDict
 from sm.dataset import Example
 from sm.inputs.link import WIKIDATA, EntityId
-from sm.misc.ray_helper import ray_put, ray_map
+from sm.misc.ray_helper import enhance_error_info, ray_put, ray_map
 import ray
+import grams.core as gcore
+import grams.core.steps as gcoresteps
+from timer import Timer
+
+if TYPE_CHECKING:
+    from grams.actors.__main__ import EvalArgs
 
 
 @dataclass
@@ -84,49 +90,117 @@ class AugCanActor(OsinActor[str, AugCanParams]):
                     dbref = ray_put(self.db.data_dir)
                     paramref = ray_put(self.params)
                 newdsdict[name] = ray_map(
-                    ray_augmented_candidates.remote,
+                    ray.remote(rust_augment_candidates).remote,
                     [(dbref, ex, self.params.similarity, paramref) for ex in ds],
                     desc="augmenting candidates",
                     verbose=True,
                 )
             else:
-                strsim = getattr(StrSim, self.params.similarity)
                 newdsdict[name] = [
-                    augmented_candidates(
+                    rust_augment_candidates(
+                        self.db.data_dir,
                         ex,
-                        self.db.get_auto_cached_entities(ex.table),
-                        strsim,
                         self.params,
                     )
                     for ex in ds
                 ]
         return newdsdict
 
+    def evaluate(self, eval_args: EvalArgs):
+        for dsquery in eval_args.dsqueries:
+            with Timer().watch_and_report(f"augment candidates {dsquery}"):
+                # self.run_dataset(dsquery)
+                self.check_rust_implementation(dsquery)
 
-@ray.remote
-def ray_augmented_candidates(
-    db: Union[GramsDB, Path],
+    def check_rust_implementation(self, dsquery: str):
+        dsdict = self.dataset_actor.run_dataset(dsquery)
+
+        dbref = ray_put(self.db.data_dir)
+        paramref = ray_put(self.params)
+
+        out = {}
+        for name, ds in dsdict.items():
+            out[name] = ray_map(
+                ray.remote(check_rust_implementation).remote,
+                [(dbref, ex, paramref) for ex in ds],
+                desc="checking rust implementation",
+                verbose=True,
+                debug=True,
+            )
+        return out
+
+
+@enhance_error_info(lambda data_dir, example, params: example.table.id)
+def rust_augment_candidates(
+    data_dir: Path,
     example: Example[LinkedTable],
-    strsim: str,
     params: AugCanParams,
 ):
-    db = to_grams_db(db)
-    wdentities = db.get_auto_cached_entities(example.table)
+    cfg = gcoresteps.AugCanConfig(
+        params.similarity, params.threshold, params.use_column_name
+    )
+    gcore.GramsDB.init(str(data_dir))
+    cdb = gcore.GramsDB.get_instance()
 
-    try:
-        return augmented_candidates(
-            example, wdentities, getattr(StrSim, strsim), params
-        )
-    except Exception as e:
-        raise Exception("Failed to augment table: " + example.table.id) from e
+    newtable = example.table.to_rust_table()
+    context = cdb.get_algo_context(newtable, n_hop=2)
+    newtable = gcoresteps.augment_candidates(newtable, context, cfg)
+
+    # copy results back to python
+    newlinks = example.table.links.shallow_copy()
+    for ri, ci, links in example.table.links.enumerate_flat_iter():
+        tmp_links = newtable.get_links(ri, ci)
+        assert len(tmp_links) == len(links)
+        for i, link in enumerate(links):
+            link.candidates = [
+                CandidateEntityId(EntityId(c.id.id, WIKIDATA), c.probability)
+                for c in tmp_links[i].candidates
+            ]
+
+    return Example(
+        sms=example.sms,
+        table=LinkedTable(
+            table=example.table.table,
+            context=example.table.context,
+            links=newlinks,
+        ),
+    )
 
 
-def augmented_candidates(
+def check_rust_implementation(
+    db: Union[GramsDB, Path],
     example: Example[LinkedTable],
-    wdentities: Mapping[str, WDEntity],
+    params: AugCanParams,
+):
+    db = to_grams_db(db) if not isinstance(db, GramsDB) else db
+
+    table1 = rust_augment_candidates(db.data_dir, example, params).table
+    table2 = augment_candidates(
+        db, example, getattr(StrSim, params.similarity), params
+    ).table
+
+    for ri, ci, links1 in table1.links.enumerate_flat_iter():
+        links2 = table2.links[ri, ci]
+
+        assert len(links1) == len(links2)
+        for link1, link2 in zip(links1, links2):
+            assert len(link1.candidates) == len(link2.candidates)
+            for c1, c2 in zip(link1.candidates, link2.candidates):
+                assert c1.entity_id == c2.entity_id, f"{c1.entity_id} != {c2.entity_id}"
+                assert round(c1.probability, 7) == round(c2.probability, 7)
+    return 1
+
+
+@enhance_error_info(lambda db, example, strsim, params: example.table.id)
+def augment_candidates(
+    db: Union[GramsDB, Path],
+    example: Example[LinkedTable],
     strsim: Callable[[str, str], float],
     params: AugCanParams,
 ):
+    db = to_grams_db(db) if not isinstance(db, GramsDB) else db
+    wdentities = db.get_auto_cached_entities(example.table)
+
     nrows, ncols = example.table.shape()
     next_entity_cache: dict[str, set[str]] = {}
     entity_columns: list[int] = []

@@ -1,6 +1,7 @@
+from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union
+from typing import TYPE_CHECKING, Union
 from grams.actors.augcan_actor import AugCanActor
 from grams.actors.db_actor import GramsDB, GramsDBActor, to_grams_db
 from grams.actors.grams_preprocess_actor import GramsPreprocessActor
@@ -17,7 +18,6 @@ from grams.algorithm.literal_matchers.literal_match import (
 )
 from grams.algorithm.literal_matchers.text_parser import TextParser, TextParserConfigs
 from grams.inputs.linked_table import LinkedTable
-from ned.actors.evaluate_helper import EvalArgs
 from osin.integrations.ream import OsinActor
 import ray
 from ream.prelude import (
@@ -33,6 +33,9 @@ from grams.algorithm.inferences_v2.features.inf_feature import (
     InfFeatureExtractor,
     InfBatchFeature,
 )
+
+if TYPE_CHECKING:
+    from grams.actors.__main__ import EvalArgs
 
 
 @dataclass

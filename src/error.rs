@@ -1,6 +1,5 @@
 use postcard;
 use pyo3::PyErr;
-use serde_json;
 use thiserror::Error;
 
 /// Represent possible errors returned by this library.
@@ -13,12 +12,18 @@ pub enum GramsError {
     #[error("Invalid configuration: {0}")]
     InvalidConfigData(String),
 
+    #[error("Integrity error - asking for an entity that isn't in the database: {0}")]
+    IntegrityError(String),
+
     #[error(transparent)]
     PostcardError(#[from] postcard::Error),
 
     /// Represents all other cases of `std::io::Error`.
     #[error(transparent)]
     IOError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    KGDataError(#[from] kgdata::error::KGDataError),
 
     /// serde_json error
     #[error(transparent)]
