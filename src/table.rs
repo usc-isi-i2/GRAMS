@@ -4,9 +4,13 @@ use serde::{Deserialize, Serialize};
 #[pyclass(module = "grams.core.table", name = "LinkedTable")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkedTable {
+    #[pyo3(get)]
     pub id: String,
+    #[pyo3(get)]
     pub links: Vec<Vec<Vec<Link>>>,
+    #[pyo3(get)]
     pub columns: Vec<Column>,
+    #[pyo3(get)]
     pub context: Context,
 }
 
@@ -23,17 +27,24 @@ impl LinkedTable {
 #[pyclass(module = "grams.core.table", name = "Context")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Context {
+    #[pyo3(get)]
     pub page_title: Option<String>,
+    #[pyo3(get)]
     pub page_url: Option<String>,
+    #[pyo3(get)]
     pub page_entities: Vec<EntityId>,
 }
 
 #[pyclass(module = "grams.core.table", name = "Link")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Link {
+    #[pyo3(get)]
     pub start: usize,
+    #[pyo3(get)]
     pub end: usize,
+    #[pyo3(get)]
     pub url: Option<String>,
+    #[pyo3(get)]
     pub entities: Vec<EntityId>,
     #[pyo3(get)]
     pub candidates: Vec<CandidateEntityId>,
@@ -55,8 +66,11 @@ pub struct CandidateEntityId {
 #[pyclass(module = "grams.core.table", name = "Column")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Column {
+    #[pyo3(get)]
     pub index: usize,
+    #[pyo3(get)]
     pub name: Option<String>,
+    #[pyo3(get)]
     pub values: Vec<String>,
 }
 

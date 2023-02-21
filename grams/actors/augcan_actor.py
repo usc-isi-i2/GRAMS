@@ -122,10 +122,11 @@ class AugCanActor(OsinActor[str, AugCanParams]):
         for name, ds in dsdict.items():
             out[name] = ray_map(
                 ray.remote(check_rust_implementation).remote,
+                # check_rust_implementation,
                 [(dbref, ex, paramref) for ex in ds],
                 desc="checking rust implementation",
                 verbose=True,
-                debug=True,
+                debug=len(ds) <= 1,
             )
         return out
 
@@ -148,14 +149,29 @@ def rust_augment_candidates(
 
     # copy results back to python
     newlinks = example.table.links.shallow_copy()
-    for ri, ci, links in example.table.links.enumerate_flat_iter():
-        tmp_links = newtable.get_links(ri, ci)
-        assert len(tmp_links) == len(links)
-        for i, link in enumerate(links):
-            link.candidates = [
-                CandidateEntityId(EntityId(c.id.id, WIKIDATA), c.probability)
-                for c in tmp_links[i].candidates
-            ]
+    nrows, ncols = example.table.shape()
+    for ri in range(nrows):
+        for ci in range(ncols):
+            tmp_links = newtable.get_links(ri, ci)
+            if len(tmp_links) == 0:
+                newlinks[ri, ci] = []
+            else:
+                newlinks[ri, ci] = [
+                    ExtendedLink(
+                        start=tmp_links[0].start,
+                        end=tmp_links[0].end,
+                        url=tmp_links[0].url,
+                        entities=[
+                            EntityId(e.id, WIKIDATA) for e in tmp_links[0].entities
+                        ],
+                        candidates=[
+                            CandidateEntityId(
+                                EntityId(c.id.id, WIKIDATA), c.probability
+                            )
+                            for c in tmp_links[0].candidates
+                        ],
+                    )
+                ]
 
     return Example(
         sms=example.sms,
@@ -167,6 +183,7 @@ def rust_augment_candidates(
     )
 
 
+@enhance_error_info(lambda data_dir, example, params: example.table.id)
 def check_rust_implementation(
     db: Union[GramsDB, Path],
     example: Example[LinkedTable],
@@ -174,20 +191,26 @@ def check_rust_implementation(
 ):
     db = to_grams_db(db) if not isinstance(db, GramsDB) else db
 
-    table1 = rust_augment_candidates(db.data_dir, example, params).table
-    table2 = augment_candidates(
-        db, example, getattr(StrSim, params.similarity), params
-    ).table
+    with Timer().watch_and_report("rust"):
+        table1 = rust_augment_candidates(db.data_dir, example, params).table
+    with Timer().watch_and_report("python"):
+        table2 = augment_candidates(
+            db, example, getattr(StrSim, params.similarity), params
+        ).table
 
     for ri, ci, links1 in table1.links.enumerate_flat_iter():
         links2 = table2.links[ri, ci]
 
         assert len(links1) == len(links2)
         for link1, link2 in zip(links1, links2):
-            assert len(link1.candidates) == len(link2.candidates)
-            for c1, c2 in zip(link1.candidates, link2.candidates):
-                assert c1.entity_id == c2.entity_id, f"{c1.entity_id} != {c2.entity_id}"
-                assert round(c1.probability, 7) == round(c2.probability, 7)
+            c1 = {c.entity_id: c.probability for c in link1.candidates}
+            c2 = {c.entity_id: c.probability for c in link2.candidates}
+            diff_keys = set(c1.keys()).symmetric_difference(c2.keys())
+            assert len(diff_keys) == 0, f"Found: {diff_keys} at {ri}, {ci}"
+
+            for eid in c1.keys():
+                assert round(c1[eid], 7) == round(c2[eid], 7), f"{c1[eid]} != {c2[eid]}"
+
     return 1
 
 
@@ -232,6 +255,10 @@ def augment_candidates(
             next_ents = [wdentities[eid] for eid in next_ent_ids]
 
             for oci, value in row:
+                value = value.strip()
+                if value == "":
+                    continue
+
                 if params.use_column_name:
                     header = example.table.table.columns[oci].clean_name or ""
                     values = {
@@ -261,7 +288,7 @@ def augment_candidates(
                         for eid, score in match_ents.items()
                     ]
                     if len(olinks) == 0:
-                        olinks.append(
+                        newlinks[ri, oci] = [
                             ExtendedLink(
                                 start=0,
                                 end=len(example.table.table[ri, oci]),
@@ -269,7 +296,7 @@ def augment_candidates(
                                 entities=[],
                                 candidates=candidates,
                             )
-                        )
+                        ]
                     else:
                         (
                             olink,
@@ -333,7 +360,7 @@ def gather_next_entities(
             for stmts in ent.props.values():
                 for stmt in stmts:
                     if WDValue.is_entity_id(stmt.value):
-                        next_entities.add(stmt.value.value["id"])
+                        next_tmp.add(stmt.value.value["id"])
                     next_tmp.update(
                         qval.value["id"]
                         for qvals in stmt.qualifiers.values()

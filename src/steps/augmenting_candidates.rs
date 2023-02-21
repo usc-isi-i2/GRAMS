@@ -75,7 +75,11 @@ pub fn augment_candidates<'t0: 't1, 't1>(
                     continue;
                 }
 
-                let value = &table.columns[oci].values[ri];
+                let value = &table.columns[oci].values[ri].trim();
+                if value.is_empty() {
+                    continue;
+                }
+
                 let queries: Vec<&str> = if use_column_name {
                     if let Some(header) = &table.columns[oci].name {
                         tmp_strs[0] = format!("{} {}", header, value);
@@ -89,22 +93,26 @@ pub fn augment_candidates<'t0: 't1, 't1>(
                 };
 
                 // search for value in next_ents
-                let filtered_next_ents = {
-                    let existing_candidates: HashSet<&String> = newtable.links[ri][oci][0]
-                        .candidates
-                        .iter()
-                        .map(|c| &c.id.0)
-                        .collect();
+                let matched_entity_ids = if newtable.links[ri][oci].len() > 0 {
+                    let filtered_next_ents = {
+                        let existing_candidates: HashSet<&String> = newtable.links[ri][oci][0]
+                            .candidates
+                            .iter()
+                            .map(|c| &c.id.0)
+                            .collect();
 
-                    next_ents
-                        .iter()
-                        .map(|m| *m)
-                        .filter(|k| !existing_candidates.contains(&k.id))
-                        .collect::<Vec<_>>()
+                        next_ents
+                            .iter()
+                            .map(|m| *m)
+                            .filter(|k| !existing_candidates.contains(&k.id))
+                            .collect::<Vec<_>>()
+                    };
+
+                    search_text(&queries, &filtered_next_ents, strsim, threshold)?
+                } else {
+                    search_text(&queries, &next_ents, strsim, threshold)?
                 };
 
-                let matched_entity_ids =
-                    search_text(&queries, &filtered_next_ents, strsim, threshold)?;
                 if matched_entity_ids.len() > 0 {
                     if newtable.links[ri][oci].len() == 0 {
                         newtable.links[ri][oci].push(Link {

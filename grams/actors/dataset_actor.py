@@ -119,7 +119,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
     CHANGELOG:
     - 102: Each cell contains maximum one single link"""
 
-    VERSION = 105
+    VERSION = 106
 
     def __init__(
         self,
@@ -218,102 +218,97 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                     page_entities=[],
                     content_hierarchy=table.context.content_hierarchy,
                 )
+                for ri, ci, links in table.links.enumerate_flat_iter():
+                    cell = table.links[ri, ci]
+                    tindex = topk_cans.index[table.id][2]
+                    if ci in tindex and ri in tindex[ci][2]:
+                        rstart, rend = tindex[ci][2][ri]
+                    else:
+                        rstart, rend = 0, 0
 
-                for ci, (cstart, cend, cindex) in topk_cans.index[table.id][2].items():
-                    for ri, (rstart, rend) in cindex.items():
-                        cell = table.table[ri, ci]
-                        links = table.links[ri, ci]
-
-                        if len(links) == 1:
+                    if len(links) == 1:
+                        link = ExtendedLink(
+                            start=0,
+                            end=len(cell),
+                            url=links[0].url,
+                            entities=links[0].entities.copy(),
+                            candidates=[],
+                        )
+                    elif len(links) > 1:
+                        link = ExtendedLink(
+                            start=0,
+                            end=len(cell),
+                            url=";".join(urls)
+                            if (urls := [l.url for l in links if l.url is not None])
+                            else None,
+                            entities=[eid for link in links for eid in link.entities],
+                            candidates=[],
+                        )
+                    else:
+                        if rend > rstart:
+                            # no gold links but we have some candidates
+                            # so we need to create a new link
                             link = ExtendedLink(
                                 start=0,
                                 end=len(cell),
-                                url=links[0].url,
-                                entities=links[0].entities.copy(),
-                                candidates=[],
-                            )
-                        elif len(links) > 1:
-                            link = ExtendedLink(
-                                start=0,
-                                end=len(cell),
-                                url=";".join(urls)
-                                if (urls := [l.url for l in links if l.url is not None])
-                                else None,
-                                entities=[
-                                    eid for link in links for eid in link.entities
-                                ],
+                                url=None,
+                                entities=[],
                                 candidates=[],
                             )
                         else:
-                            if rend > rstart:
-                                # no gold links but we have some candidates
-                                # so we need to create a new link
-                                link = ExtendedLink(
-                                    start=0,
-                                    end=len(cell),
-                                    url=None,
-                                    entities=[],
-                                    candidates=[],
-                                )
-                            else:
-                                # no gold links and no candidates
-                                continue
+                            # no gold links and no candidates
+                            continue
 
-                        can_ids = topk_cans.id[rstart:rend]
-                        can_scores = topk_cans.score[rstart:rend]
-                        link.candidates = [
-                            CandidateEntityId(EntityId(can_id, WIKIDATA), can_score)
-                            for can_id, can_score in zip(can_ids, can_scores)
-                        ]
-                        if self.params.add_gold == "when-not-topk":
-                            gold_ents = set(link.entities)
-                            all_can_ids = candidates.get_cell_candidates(
-                                table.id, ri, ci
-                            )
-                            # if not np.isin(can_ids, gold_ents).any() and :
-                            if not any(id in gold_ents for id in can_ids):
-                                matches = [
-                                    i
-                                    for i, id in enumerate(all_can_ids.id)
-                                    if id in gold_ents
-                                ]
-                                if len(matches) > 0:
-                                    link.candidates.extend(
-                                        [
-                                            CandidateEntityId(
-                                                EntityId(all_can_ids.id[i], WIKIDATA),
-                                                all_can_ids.score[i],
-                                            )
-                                            for i in matches
-                                        ]
-                                    )
-                        elif self.params.add_gold == "always":
-                            gold_ents = set(link.entities)
-                            if all(
-                                can.entity_id not in gold_ents
-                                for can in link.candidates
-                            ):
-                                if len(link.candidates) == 0:
-                                    score = 0.5
-                                else:
-                                    score = min(c.probability for c in link.candidates)
+                    can_ids = topk_cans.id[rstart:rend]
+                    can_scores = topk_cans.score[rstart:rend]
+                    link.candidates = [
+                        CandidateEntityId(EntityId(can_id, WIKIDATA), can_score)
+                        for can_id, can_score in zip(can_ids, can_scores)
+                    ]
+                    if self.params.add_gold == "when-not-topk":
+                        gold_ents = set(link.entities)
+                        all_can_ids = candidates.get_cell_candidates(table.id, ri, ci)
+                        # if not np.isin(can_ids, gold_ents).any() and :
+                        if not any(id in gold_ents for id in can_ids):
+                            matches = [
+                                i
+                                for i, id in enumerate(all_can_ids.id)
+                                if id in gold_ents
+                            ]
+                            if len(matches) > 0:
                                 link.candidates.extend(
                                     [
                                         CandidateEntityId(
-                                            EntityId(eid, WIKIDATA), score
+                                            EntityId(all_can_ids.id[i], WIKIDATA),
+                                            all_can_ids.score[i],
                                         )
-                                        for eid in gold_ents
+                                        for i in matches
                                     ]
                                 )
-                        else:
-                            assert self.params.add_gold == "no"
+                    elif self.params.add_gold == "always":
+                        gold_ents = set(link.entities)
+                        if all(
+                            can.entity_id not in gold_ents for can in link.candidates
+                        ):
+                            if len(link.candidates) == 0:
+                                score = 0.5
+                            else:
+                                score = min(c.probability for c in link.candidates)
+                            link.candidates.extend(
+                                [
+                                    CandidateEntityId(EntityId(eid, WIKIDATA), score)
+                                    for eid in gold_ents
+                                ]
+                            )
+                    else:
+                        assert self.params.add_gold == "no"
 
-                        link.candidates = [
-                            can
-                            for can in link.candidates
-                            if not self.is_metadata_entity(can.entity_id, wdentities)
-                        ]
-                        newlinks[ri, ci] = [link]
+                    link.candidates = [
+                        can
+                        for can in link.candidates
+                        if not self.is_metadata_entity(can.entity_id, wdentities)
+                    ]
+                    newlinks[ri, ci] = [link]
 
                 newexamples.append(
                     Example(
