@@ -1,4 +1,4 @@
-from __future__ import annotations
+    from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -51,7 +51,7 @@ class AugCanParams:
 
 
 class AugCanActor(OsinActor[str, AugCanParams]):
-    VERSION = 104
+    VERSION = 105
 
     def __init__(
         self,
@@ -81,29 +81,19 @@ class AugCanActor(OsinActor[str, AugCanParams]):
             dsdict.name, {}, dsdict.provenance + ";" + self.provenance
         )
 
-        dbref = None
-        paramref = None
+        using_ray = sum(len(x) for x in dsdict.values()) > 1
+        dbref = ray_put(self.db.data_dir, using_ray)
+        paramref = ray_put(self.params, using_ray)
 
         for name, ds in dsdict.items():
-            if len(ds) > 1:
-                if dbref is None:
-                    dbref = ray_put(self.db.data_dir)
-                    paramref = ray_put(self.params)
-                newdsdict[name] = ray_map(
-                    ray.remote(rust_augment_candidates).remote,
-                    [(dbref, ex, self.params.similarity, paramref) for ex in ds],
-                    desc="augmenting candidates",
-                    verbose=True,
-                )
-            else:
-                newdsdict[name] = [
-                    rust_augment_candidates(
-                        self.db.data_dir,
-                        ex,
-                        self.params,
-                    )
-                    for ex in ds
-                ]
+            newdsdict[name] = ray_map(
+                rust_augment_candidates,
+                [(dbref, ex, paramref) for ex in ds],
+                desc="augmenting candidates",
+                verbose=True,
+                using_ray=not using_ray,
+                is_func_remote=False
+            )
         return newdsdict
 
     def evaluate(self, eval_args: EvalArgs):
@@ -115,18 +105,19 @@ class AugCanActor(OsinActor[str, AugCanParams]):
     def check_rust_implementation(self, dsquery: str):
         dsdict = self.dataset_actor.run_dataset(dsquery)
 
-        dbref = ray_put(self.db.data_dir)
-        paramref = ray_put(self.params)
+        using_ray = sum(len(x) for x in dsdict.values()) > 1
+        dbref = ray_put(self.db.data_dir, using_ray)
+        paramref = ray_put(self.params, using_ray)
 
         out = {}
         for name, ds in dsdict.items():
             out[name] = ray_map(
-                ray.remote(check_rust_implementation).remote,
-                # check_rust_implementation,
+                check_rust_implementation,
                 [(dbref, ex, paramref) for ex in ds],
                 desc="checking rust implementation",
                 verbose=True,
-                debug=len(ds) <= 1,
+                using_ray=using_ray,
+                is_func_remote=False
             )
         return out
 
