@@ -1,4 +1,4 @@
-    from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -92,7 +92,7 @@ class AugCanActor(OsinActor[str, AugCanParams]):
                 desc="augmenting candidates",
                 verbose=True,
                 using_ray=not using_ray,
-                is_func_remote=False
+                is_func_remote=False,
             )
         return newdsdict
 
@@ -117,7 +117,7 @@ class AugCanActor(OsinActor[str, AugCanParams]):
                 desc="checking rust implementation",
                 verbose=True,
                 using_ray=using_ray,
-                is_func_remote=False
+                is_func_remote=False,
             )
         return out
 

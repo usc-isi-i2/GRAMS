@@ -3,7 +3,7 @@ use crate::error::into_pyerr;
 use postcard::{from_bytes, to_allocvec};
 use pyo3::{prelude::*, types::PyBytes};
 
-#[pyclass]
+#[pyclass(module = "grams.core.datagraph", name = "DGraph")]
 pub struct PyDGraph {
     pub graph: DGraph,
 }
