@@ -24,6 +24,7 @@ use kgdata::models::Entity;
  * @param strsim The string similarity function to use
  * @param threshold Candidate entities that have scores less than this threshold will not be added to the candidates
  * @param use_column_name If true, the column name will be used as a part of the queries to find candidates
+ * @param language The language to use to match the cell value, None to use the default language, empty string to use all languages
  */
 pub fn augment_candidates<'t0: 't1, 't1>(
     table: &LinkedTable,
@@ -31,6 +32,7 @@ pub fn augment_candidates<'t0: 't1, 't1>(
     strsim: &Box<dyn StrSim>,
     threshold: f64,
     use_column_name: bool,
+    language: Option<&String>,
 ) -> Result<LinkedTable, GramsError> {
     let (nrows, ncols) = table.shape();
 
@@ -108,9 +110,9 @@ pub fn augment_candidates<'t0: 't1, 't1>(
                             .collect::<Vec<_>>()
                     };
 
-                    search_text(&queries, &filtered_next_ents, strsim, threshold)?
+                    search_text(&queries, &filtered_next_ents, strsim, threshold, language)?
                 } else {
-                    search_text(&queries, &next_ents, strsim, threshold)?
+                    search_text(&queries, &next_ents, strsim, threshold, language)?
                 };
 
                 if matched_entity_ids.len() > 0 {
@@ -146,40 +148,91 @@ pub fn search_text<'t>(
     entities: &[&'t Entity],
     strsim: &Box<dyn StrSim>,
     threshold: f64,
+    language: Option<&String>,
 ) -> Result<Vec<CandidateEntityId>, GramsError> {
     let mut matched_ents = Vec::new();
 
-    for ent in entities {
-        let mut score = queries
-            .iter()
-            .map(|q| strsim.similarity(ent.label.get_default_value(), q))
-            .try_fold(f64::NEG_INFINITY, |acc, x| {
-                Ok::<f64, GramsError>(acc.max(x?))
-            })?;
-
-        score = score.max(
-            ent.aliases
-                .get_default_values()
-                .iter()
-                .map(|k| {
-                    let res: Result<f64, GramsError> = queries
-                        .iter()
-                        .map(|q| strsim.similarity(k, q))
-                        .try_fold(f64::NEG_INFINITY, |acc, x| Ok(acc.max(x?)));
-                    res
-                })
-                .try_fold(f64::NEG_INFINITY, |acc, x| {
-                    Ok::<f64, GramsError>(acc.max(x?))
-                })?,
-        );
-
-        if score >= threshold {
-            matched_ents.push(CandidateEntityId {
-                id: EntityId(ent.id.clone()),
-                probability: score,
-            });
+    if let Some(lang) = language {
+        if lang.is_empty() {
+            // use all available languages
+            for ent in entities {
+                let mut score = cal_max_score(queries, ent.label.lang2value.values(), strsim)?;
+                for values in ent.aliases.lang2values.values() {
+                    score = score.max(cal_max_score(queries, values.iter(), strsim)?);
+                }
+                if score >= threshold {
+                    matched_ents.push(CandidateEntityId {
+                        id: EntityId(ent.id.clone()),
+                        probability: score,
+                    });
+                }
+            }
+        } else {
+            // use specific language
+            for ent in entities {
+                let mut score = -1.0;
+                if let Some(val) = ent.label.lang2value.get(lang) {
+                    score = cal_max_score_single_key(queries, val, strsim)?;
+                }
+                if let Some(vals) = ent.aliases.lang2values.get(lang) {
+                    score = score.max(cal_max_score(queries, vals.iter(), strsim)?);
+                }
+                if score >= threshold {
+                    matched_ents.push(CandidateEntityId {
+                        id: EntityId(ent.id.clone()),
+                        probability: score,
+                    });
+                }
+            }
+        }
+    } else {
+        // use default languages
+        for ent in entities {
+            let score =
+                cal_max_score_single_key(queries, ent.label.get_default_value(), strsim)?.max(
+                    cal_max_score(queries, ent.aliases.get_default_values().iter(), strsim)?,
+                );
+            if score >= threshold {
+                matched_ents.push(CandidateEntityId {
+                    id: EntityId(ent.id.clone()),
+                    probability: score,
+                });
+            }
         }
     }
 
     Ok(matched_ents)
+}
+
+#[inline(always)]
+fn cal_max_score<'t, I: Iterator<Item = &'t String>>(
+    queries: &[&str],
+    keys: I,
+    strsim: &Box<dyn StrSim>,
+) -> Result<f64, GramsError> {
+    let mut max_score = f64::NEG_INFINITY;
+    for k in keys {
+        for q in queries {
+            let score = strsim.similarity(k, q)?;
+            if score > max_score {
+                max_score = score;
+            }
+        }
+    }
+    return Ok(max_score);
+}
+
+fn cal_max_score_single_key(
+    queries: &[&str],
+    key: &String,
+    strsim: &Box<dyn StrSim>,
+) -> Result<f64, GramsError> {
+    let mut max_score = f64::NEG_INFINITY;
+    for q in queries {
+        let score = strsim.similarity(key, q)?;
+        if score > max_score {
+            max_score = score;
+        }
+    }
+    return Ok(max_score);
 }

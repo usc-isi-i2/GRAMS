@@ -13,16 +13,23 @@ pub struct PyAugCanConfig {
     pub strsim: String,
     pub threshold: f64,
     pub use_column_name: bool,
+    pub use_language: Option<String>,
 }
 
 #[pymethods]
 impl PyAugCanConfig {
     #[new]
-    pub fn new(strsim: String, threshold: f64, use_column_name: bool) -> Self {
+    pub fn new(
+        strsim: String,
+        threshold: f64,
+        use_column_name: bool,
+        use_language: Option<String>,
+    ) -> Self {
         Self {
             strsim,
             threshold,
             use_column_name,
+            use_language,
         }
     }
 }
@@ -51,6 +58,7 @@ pub fn py_augment_candidates<'t>(
         &strsim,
         cfg.threshold,
         cfg.use_column_name,
+        cfg.use_language.as_ref(),
     )
     .map_err(into_pyerr)
 }

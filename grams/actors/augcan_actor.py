@@ -91,7 +91,7 @@ class AugCanActor(OsinActor[str, AugCanParams]):
                 [(dbref, ex, paramref) for ex in ds],
                 desc="augmenting candidates",
                 verbose=True,
-                using_ray=not using_ray,
+                using_ray=using_ray,
                 is_func_remote=False,
             )
         return newdsdict
