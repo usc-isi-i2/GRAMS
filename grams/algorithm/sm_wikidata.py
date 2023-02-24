@@ -326,9 +326,11 @@ class WikidataSemanticModelHelper:
         limited_invertible_props: Optional[Set[str]] = None,
         incorrect_invertible_props: Optional[Set[str]] = None,
     ):
-        """Given a semantic model (not being modified), generate equivalent models by inferring inverse properties.
+        """Given a semantic model (not being modified), generate equivalent **normalized** models by inferring inverse properties.
 
         Currently, we only inverse the properties, not qualifiers.
+
+
 
         Parameters
         ----------

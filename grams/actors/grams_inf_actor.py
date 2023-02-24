@@ -71,7 +71,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
 
     VERSION = 100
     EXP_NAME = "Semantic Modeling Inference"
-    EXP_VERSION = 1
+    EXP_VERSION = 3
 
     def __init__(
         self,

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
-from operator import attrgetter
 from typing import Literal, overload
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
@@ -12,67 +10,23 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGLiteralValueNode,
     CGStatementNode,
 )
-from grams.algorithm.context import AlgoContext
-from grams.algorithm.helpers import IndirectDictAccess
-from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 
-from kgdata.wikidata.models import WDEntity, WDEntityLabel
-from sm.evaluation.cpa_cta_metrics import _cpa_transformation
 from sm.outputs.semantic_model import (
-    SemanticModel,
     LiteralNodeDataType,
     Node,
     DataNode,
-    ClassNode,
     LiteralNode,
 )
 from rdflib import RDFS
-
-
-@dataclass
-class WrappedSemanticModel:
-    sm: SemanticModel
-    is_normalized: bool = False
-    is_cpa_transformed: bool = False
+from grams.evaluation.evaluator import Evaluator, WrappedSemanticModel
 
 
 class AutoLabeler:
     """Automatically label relationships and types in the candidate graph"""
 
-    def __init__(self, context: AlgoContext):
-        self.sm_helper = WikidataSemanticModelHelper(
-            context.wdentities,
-            IndirectDictAccess(context.wdentity_labels, attrgetter("label")),
-            context.wdclasses,
-            context.wdprops,
-        )
-        self.wdns = self.sm_helper.wdns
-
-    def get_equiv_sms(self, sms: list[SemanticModel]) -> list[WrappedSemanticModel]:
-        return [
-            WrappedSemanticModel(equiv_sm, is_normalized=True)
-            for sm in sms
-            for equiv_sm in self.sm_helper.gen_equivalent_sm(
-                sm, strict=False, incorrect_invertible_props={"P571", "P582"}
-            )
-        ]
-
-    def convert_sm_for_cpa(
-        self, wrapped_sm: WrappedSemanticModel
-    ) -> WrappedSemanticModel:
-        """Convert a semantic model to another model for evaluating the CPA task:
-        - SemModelTransformation.replace_class_nodes_by_subject_columns(sm, id_props)
-        - SemModelTransformation.remove_isolated_nodes(sm)
-        """
-        assert wrapped_sm.is_normalized
-        if wrapped_sm.is_cpa_transformed:
-            return wrapped_sm
-
-        sm = wrapped_sm.sm
-        cpa_sm = sm.deep_copy()
-        _cpa_transformation(cpa_sm, self.sm_helper.ID_PROPS)
-
-        return WrappedSemanticModel(cpa_sm, is_normalized=True, is_cpa_transformed=True)
+    def __init__(self, evaluator: Evaluator):
+        self.evaluator = evaluator
+        self.wdns = evaluator.wdns
 
     def label_types(
         self,
@@ -117,7 +71,7 @@ class AutoLabeler:
         return_edge: bool = True,
     ) -> dict[int, bool] | dict[tuple[str, str, str, str], bool]:
         """Return mapping from edge id to the label"""
-        gold_cpa_sms = [self.convert_sm_for_cpa(sm) for sm in gold_sms]
+        gold_cpa_sms = [self.evaluator.convert_sm_for_cpa(sm) for sm in gold_sms]
 
         edge_label: dict[int, bool] = {}
         rels: dict[tuple[str, str, str, str], bool] = {}

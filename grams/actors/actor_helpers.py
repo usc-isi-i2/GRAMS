@@ -1,10 +1,12 @@
 from __future__ import annotations
+from collections import defaultdict
 
 from pathlib import Path
 from grams.algorithm.candidate_graph.cg_graph import CGColumnNode
 from typing import Optional, Union, TYPE_CHECKING
-from grams.algorithm.autolabeler import AutoLabeler, WrappedSemanticModel
+from grams.evaluation.autolabeler import AutoLabeler
 from grams.algorithm.context import AlgoContext
+from ned.metrics import PrecisionRecallF1
 import numpy as np
 from loguru import logger
 from osin.apis.remote_exp import RemoteExpRun
@@ -12,12 +14,13 @@ from osin.types.pyobject import OHTML, OTable
 from osin.types.pyobject.html import OListHTML
 
 from grams.actors.db_actor import GramsDB, to_grams_db
-from grams.evaluator import Evaluator
+from grams.evaluation.evaluator import CPAEvalRes, Evaluator
 from grams.inputs.linked_table import LinkedTable
 import ray
 from sm.dataset import Example
+from sm.evaluation.cpa_cta_metrics import CTAEvalOutput
 from sm.misc.fn_cache import CacheMethod
-from sm.misc.ray_helper import get_instance, ray_map
+from sm.misc.ray_helper import get_instance, ray_map, enhance_error_info
 from sm.namespaces.namespace import OutOfNamespace
 from sm.namespaces.wikidata import WikidataNamespace
 from sm.outputs.semantic_model import (
@@ -47,48 +50,46 @@ def eval_dataset(
     wdclasses = db.wdclasses.cache()
     wdprops = db.wdprops.cache()
 
-    evaluator = Evaluator(wdentities, wdentity_labels, wdclasses, wdprops)
-    sms = []
-    for e in examples:
-        sms.extend(evaluator.get_equiv_sms(e))
-    sms.extend(pred_sms)
-    evaluator.update_score_fns(sms)
+    evaluator = Evaluator(wdentities, wdentity_labels, wdclasses, wdprops, db.data_dir)
 
-    eval_outputs = []
+    hits = [3, 5, 10]
+
+    cpas: list[CPAEvalRes] = []
+    ctas: list[CTAEvalOutput] = []
+    cta_at_k: dict[str, list[PrecisionRecallF1]] = defaultdict(list)
+    ceas = []
     for i, (example, sm) in enumerate(zip(examples, pred_sms)):
         try:
-            evalout = evaluator.cpa_cta(example, sm)
+            cpas.append(evaluator.cpa(example, sm))
         except:
             logger.error("Failed to evaluate example: {} - {}", i, example.table.id)
             raise
 
-        cea = evaluator.cea(example, k=[1, 5])
-        eval_outputs.append((example.table.id, evalout["cpa"], evalout["cta"], cea))
+        if anns is not None:
+            for k, v in evaluator.cta_at_k(example, anns[i].cta_probs, k=hits)[
+                0
+            ].items():
+                cta_at_k[k].append(v)
 
-    cpa_precision, cpa_recall, cpa_f1 = (
-        np.mean([y.precision for x, y, z, t in eval_outputs]),
-        np.mean([y.recall for x, y, z, t in eval_outputs]),
-        np.mean([y.f1 for x, y, z, t in eval_outputs]),
-    )
+        ctas.append(evaluator.cta(example, sm))
+        ceas.append(evaluator.cea(example, k=[1, 5]))
 
-    cta_precision, cta_recall, cta_f1 = (
-        np.mean([z.precision for x, y, z, t in eval_outputs]),
-        np.mean([z.recall for x, y, z, t in eval_outputs]),
-        np.mean([z.f1 for x, y, z, t in eval_outputs]),
-    )
+    avg_cpa = PrecisionRecallF1.avg([cpa.result for cpa in cpas])
+    avg_cta = PrecisionRecallF1.avg(ctas)
+    avg_cta_k = {k: PrecisionRecallF1.avg(v) for k, v in cta_at_k.items()}
 
     # calculate cea macro scores
     cea_macro = {}
     cea_micro = {}
 
-    for x, y, z, t in eval_outputs:
+    for t in ceas:
         for name, value in t["value"].items():
             if name not in cea_macro:
-                cea_macro[name] = {k: [v] for k, v in value.items()}
+                cea_macro[name] = {k: [v] for k, v in value.iter_prf()}
                 cea_micro[name] = t["confusion_matrix"][name]
                 continue
 
-            for k, v in value.items():
+            for k, v in value.iter_prf():
                 cea_macro[name][k].append(v)
             cea_micro[name] = cea_micro[name] + t["confusion_matrix"][name]
     for name, value in cea_macro.items():
@@ -104,22 +105,22 @@ def eval_dataset(
         ex_details.append(
             {
                 "cpa": {
-                    "precision": eval_outputs[i][1].precision,
-                    "recall": eval_outputs[i][1].recall,
-                    "f1": eval_outputs[i][1].f1,
+                    "p": cpas[i].result.precision,
+                    "r": cpas[i].result.recall,
+                    "f1": cpas[i].result.f1,
                 },
                 "cta": {
-                    "precision": eval_outputs[i][2].precision,
-                    "recall": eval_outputs[i][2].recall,
-                    "f1": eval_outputs[i][2].f1,
+                    "p": ctas[i].precision,
+                    "r": ctas[i].recall,
+                    "f1": ctas[i].f1,
                 },
                 "cea": {
                     name: {
-                        "p": value["precision"],
-                        "r": value["recall"],
-                        "f1": value["f1"],
+                        "p": value.precision,
+                        "r": value.recall,
+                        "f1": value.f1,
                     }
-                    for name, value in eval_outputs[i][3]["value"].items()
+                    for name, value in ceas[i]["value"].items()
                 },
             }
         )
@@ -156,20 +157,30 @@ def eval_dataset(
         "for copying...\nrun-id\tcpa-p\tcpa-r\tcpa-f1\tcta-p\tcta-r\tcta-f1\n{}",
         ",".join(
             [str(0 if exprun is None else exprun.id)] +
-            ["%.2f" % (round(float(x) * 100, 2)) for x in [cpa_precision, cpa_recall, cpa_f1, cta_precision, cta_recall, cta_f1]]
+            ["%.2f" % (round(float(x) * 100, 2)) for x in [avg_cpa.precision, avg_cpa.recall, avg_cpa.f1, avg_cta.precision, avg_cta.recall, avg_cta.f1]]
     ))
     # fmt: on
 
     return {
         "cpa": {
-            "precision": float(cpa_precision),
-            "recall": float(cpa_recall),
-            "f1": float(cpa_f1),
+            "precision": float(avg_cpa.precision),
+            "recall": float(avg_cpa.recall),
+            "f1": float(avg_cpa.f1),
         },
         "cta": {
-            "precision": float(cta_precision),
-            "recall": float(cta_recall),
-            "f1": float(cta_f1),
+            "perf@1": {
+                "precision": float(avg_cta.precision),
+                "recall": float(avg_cta.recall),
+                "f1": float(avg_cta.f1),
+            },
+            **{
+                k: {
+                    "precision": float(avg_cta_k[k].precision),
+                    "recall": float(avg_cta_k[k].recall),
+                    "f1": float(avg_cta_k[k].f1),
+                }
+                for k in [f"perf@{k}" for k in hits] + ["perf@all"]
+            },
         },
         "cea": {
             "macro": cea_macro,
@@ -350,9 +361,17 @@ class AuxComplexSmObject(AuxComplexObjectBase):
 
 
 class AuxComplexFeatures(AuxComplexObjectBase):
-    def __init__(self, context: AlgoContext):
+    def __init__(self, context: AlgoContext, datadir: Path):
         super().__init__(context)
-        self.autolabeler = AutoLabeler(context)
+        self.autolabeler = AutoLabeler(
+            Evaluator(
+                context.wdentities,
+                context.wdentity_labels,
+                context.wdclasses,
+                context.wdprops,
+                datadir,
+            )
+        )
 
     def get_structure_features(
         self,
@@ -387,7 +406,7 @@ class AuxComplexFeatures(AuxComplexObjectBase):
         example: Example[LinkedTable],
         ann: AnnotationV2,
     ) -> OTable:
-        sms = self.get_equiv_sms(example)
+        sms = self.autolabeler.evaluator.get_example_gold_sms(example)
         labeled_types = self.autolabeler.label_types(ann.cta_probs, sms)
 
         def get_column_index(uid: str):
@@ -438,7 +457,7 @@ class AuxComplexFeatures(AuxComplexObjectBase):
         idmap = ann.features.idmap[example.table.id]
         efeat = ann.features.edge_features
 
-        sms = self.get_equiv_sms(example)
+        sms = self.autolabeler.evaluator.get_example_gold_sms(example)
         rel2label = self.autolabeler.label_relationships(ann.cg, sms, return_edge=False)
         rel2key = {
             (
@@ -473,36 +492,15 @@ class AuxComplexFeatures(AuxComplexObjectBase):
 
         return OTable(list(objects.values()))
 
-    @CacheMethod.cache(CacheMethod.single_object_arg)
-    def get_equiv_sms(
-        self, example: Example[LinkedTable]
-    ) -> list[WrappedSemanticModel]:
-        return self.autolabeler.get_equiv_sms(example.sms)
 
-
-@ray.remote
-def ray_extract_complex_objects(
+@enhance_error_info(lambda db, example, pred_sm, ann: example.table.id)
+def extract_complex_objects(
     db: Union[GramsDB, Path],
     example: Example[LinkedTable],
     pred_sm: SemanticModel,
     ann: Optional[AnnotationV2],
 ):
     db = to_grams_db(db)
-    try:
-        objs = extract_complex_objects(db, example, pred_sm, ann)
-    except Exception as e:
-        raise Exception(
-            "Cannot extract complex objects for example: %s" % example.table.id
-        ) from e
-    return objs
-
-
-def extract_complex_objects(
-    db: GramsDB,
-    example: Example[LinkedTable],
-    pred_sm: SemanticModel,
-    ann: Optional[AnnotationV2],
-):
     context = AlgoContext.from_grams_db(db, cache=True)
     aux_sm_extractor = AuxComplexSmObject(context)
     objs = {
@@ -511,7 +509,7 @@ def extract_complex_objects(
         "pred-sm": aux_sm_extractor.get_sm(example, pred_sm),
     }
     if ann is not None:
-        aux_complex_extractor = AuxComplexFeatures(context)
+        aux_complex_extractor = AuxComplexFeatures(context, db.data_dir)
         # objs["rel-feat-v2"] = aux_complex_extractor.get_rel_features(
         #     example, ann, "v2"
         # )
