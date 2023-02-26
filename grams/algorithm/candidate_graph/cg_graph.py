@@ -24,6 +24,7 @@ from grams.algorithm.data_graph import (
     ContextSpan,
     FlowProvenance,
 )
+from sm.namespaces.namespace import KnowledgeGraphNamespace
 
 
 @dataclass
@@ -58,6 +59,10 @@ class CGEntityValueNode(BaseNode[str]):
     def clone(self):
         return copy.deepcopy(self)
 
+    def get_literal_node_value(self, ns: KnowledgeGraphNamespace):
+        """Return value of a literal node in a semantic model"""
+        return ns.get_entity_abs_uri(self.qnode_id)
+
 
 @dataclass
 class CGLiteralValueNode(BaseNode[str]):
@@ -72,6 +77,10 @@ class CGLiteralValueNode(BaseNode[str]):
 
     def clone(self):
         return copy.deepcopy(self)
+
+    def get_literal_node_value(self) -> str:
+        """Return value of a literal node in a semantic model"""
+        return self.value.to_string_repr()
 
 
 CGEdgeFlowTarget = NamedTuple(

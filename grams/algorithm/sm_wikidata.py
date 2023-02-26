@@ -274,7 +274,7 @@ class WikidataSemanticModelHelper:
             elif isinstance(vnode, CGEntityValueNode):
                 if vnode.id not in cpa_idmap:
                     target = LiteralNode(
-                        value=wdns.get_entity_abs_uri(vnode.qnode_id),
+                        value=vnode.get_literal_node_value(wdns),
                         readable_label=self.get_qnode_label(vnode.qnode_id),
                         datatype=LiteralNodeDataType.Entity,
                         is_in_context=any(
@@ -288,7 +288,7 @@ class WikidataSemanticModelHelper:
             elif isinstance(vnode, CGLiteralValueNode):
                 if vnode.id not in cpa_idmap:
                     target = LiteralNode(
-                        value=vnode.value.to_string_repr(),
+                        value=vnode.get_literal_node_value(),
                         readable_label=vnode.label,
                         datatype=LiteralNodeDataType.String,
                     )

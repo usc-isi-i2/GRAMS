@@ -1,7 +1,8 @@
 from __future__ import annotations
+from collections import defaultdict
 
 from collections.abc import Mapping
-from typing import Literal, overload
+from typing import Literal, Sequence, overload
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEdge,
@@ -10,6 +11,9 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGLiteralValueNode,
     CGStatementNode,
 )
+from grams.inputs.linked_table import LinkedTable
+from sm.dataset import Example
+from sm.misc.fn_cache import CacheMethod
 
 from sm.outputs.semantic_model import (
     LiteralNodeDataType,
@@ -28,23 +32,26 @@ class AutoLabeler:
         self.evaluator = evaluator
         self.wdns = evaluator.wdns
 
+    def label_example_types(
+        self, pred_types: Sequence[tuple[int, str]], example: Example[LinkedTable]
+    ):
+        col2types = self._get_example_gold_types(example)
+        return [ctype in col2types[ci] for ci, ctype in pred_types]
+
     def label_types(
         self,
-        type_probs: Mapping[int, Mapping[str, float]],
+        pred_types: Sequence[tuple[int, str]],
         gold_sms: list[WrappedSemanticModel],
-    ) -> dict[int, dict[str, bool]]:
-        col2types: dict[int, set[str]] = {ci: set() for ci in type_probs}
+    ) -> list[bool]:
+        col2types: dict[int, set[str]] = {ci: set() for ci, _ in pred_types}
         for wsm in gold_sms:
-            for ci in type_probs:
+            for ci, _ in pred_types:
                 col2types[ci].update(
                     self.wdns.get_entity_id(stype.class_abs_uri)
                     for stype in wsm.sm.get_semantic_types_of_column(ci)
                     if stype.predicate_abs_uri == str(RDFS.label)
                 )
-        return {
-            ci: {ctype: ctype in col2types[ci] for ctype in ctypes}
-            for ci, ctypes in type_probs.items()
-        }
+        return [ctype in col2types[ci] for ci, ctype in pred_types]
 
     @overload
     def label_relationships(
@@ -194,3 +201,17 @@ class AutoLabeler:
                 and sm_node.datatype == LiteralNodeDataType.String
                 and sm_node.value == cg_node.value.to_string_repr()
             )
+
+    @CacheMethod.cache(CacheMethod.single_object_arg)
+    def _get_example_gold_types(self, example: Example[LinkedTable]):
+        gold_sms = self.evaluator.get_example_gold_sms(example)
+        cols = [col.index for col in example.table.table.columns]
+        col2types: dict[int, set[str]] = {ci: set() for ci in cols}
+        for wsm in gold_sms:
+            for ci in cols:
+                col2types[ci].update(
+                    self.wdns.get_entity_id(stype.class_abs_uri)
+                    for stype in wsm.sm.get_semantic_types_of_column(ci)
+                    if stype.predicate_abs_uri == str(RDFS.label)
+                )
+        return col2types

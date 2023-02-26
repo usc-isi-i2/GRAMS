@@ -20,6 +20,7 @@ from grams.algorithm.literal_matchers.text_parser import TextParser, TextParserC
 from grams.inputs.linked_table import LinkedTable
 from osin.integrations.ream import OsinActor
 import ray
+from ream.data_model_helper import NumpyDataModel, NumpyDataModelContainer
 from ream.prelude import (
     ActorVersion,
     Cache,
@@ -28,8 +29,9 @@ from ream.prelude import (
     DatasetDict,
     DatasetQuery,
 )
-from sm.misc.ray_helper import ray_map
+from sm.misc.ray_helper import ray_map, ray_put
 from grams.algorithm.inferences_v2.features.inf_feature import (
+    InfFeature,
     InfFeatureExtractor,
     InfBatchFeature,
 )
@@ -55,24 +57,13 @@ class GramsInfDataParams:
 
 
 @dataclass
-class InfData(InfBatchFeature):
-    cgs: dict[str, CGGraph]
-
-    @staticmethod
-    def from_inf_batch_feature(cgs: dict[str, CGGraph], feat: InfBatchFeature):
-        return InfData(
-            cgs=cgs,
-            edge_index=feat.edge_index,
-            node_index=feat.node_index,
-            idmap=feat.idmap,
-            edge_features=feat.edge_features,
-            node_features=feat.node_features,
-            misc_features=feat.misc_features,
-        )
+class InfData(NumpyDataModelContainer):
+    cg: CGGraph
+    feat: InfFeature
 
 
-class InfDataDatasetDict(DatasetDict[InfData]):
-    serde = (InfData.save, InfData.load, None)
+class InfDataDatasetDict(DatasetDict[list[InfData]]):
+    serde = (InfData.batch_save, InfData.batch_load, None)
 
 
 class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
@@ -104,36 +95,25 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
             dsdict.provenance,
         )
 
-        dbref = None
-        paramref = None
+        using_ray = sum(len(ds) for ds in dsdict.values()) > 1
+        dbref = ray_put(self.dbactor.db.data_dir) if using_ray else self.dbactor.db
+        paramref = ray_put(self.params) if using_ray else self.params
 
         for name, ds in dsdict.items():
-            if len(ds) > 1:
-                if dbref is None:
-                    dbref = ray.put(self.dbactor.db.data_dir)
-                    paramref = ray.put(self.params)
-                newds = ray_map(
-                    ray_create_inference_data.remote,
-                    [(dbref, paramref, ex.table) for ex in ds],
-                    desc=f"Creating inference data",
-                    verbose=True,
-                )
-            else:
-                newds = [
-                    create_inference_data(self.dbactor.db, self.params, ex.table)
-                    for ex in ds
-                ]
+            newds = ray_map(
+                create_inference_data,
+                [(dbref, paramref, ex.table) for ex in ds],
+                desc=f"Creating inference data",
+                verbose=True,
+                using_ray=using_ray,
+                is_func_remote=False,
+            )
 
             id2cg = {}
             for ex, (cg, feat) in zip(ds, newds):
                 id2cg[ex.table.id] = cg
 
-            newdsdict[name] = InfData.from_inf_batch_feature(
-                id2cg,
-                InfBatchFeature.merge(
-                    [(ex.table.id, cg_feat[1]) for ex, cg_feat in zip(ds, newds)]
-                ),
-            )
+            newdsdict[name] = [InfData(cg, feat) for cg, feat in newds]
         return newdsdict
 
     def evaluate(self, eval_args: EvalArgs):
@@ -153,20 +133,14 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
         return evalout
 
 
-@ray.remote
-def ray_create_inference_data(
-    db: Union[GramsDB, Path], params: GramsInfDataParams, table: LinkedTable
+def create_inference_data(
+    db: Union[GramsDB, Path],
+    params: GramsInfDataParams,
+    table: LinkedTable,
+    verbose: bool = True,
 ):
     db = to_grams_db(db)
-    try:
-        return create_inference_data(db, params, table)
-    except Exception as e:
-        raise Exception("Failed to extract inference data: " + table.id) from e
 
-
-def create_inference_data(
-    db: GramsDB, params: GramsInfDataParams, table: LinkedTable, verbose: bool = True
-):
     wdentity_ids, wdentities = db.get_table_entities(
         table, params.data_graph.max_n_hop, verbose
     )

@@ -5,6 +5,14 @@ from dataclasses import dataclass
 from operator import attrgetter, itemgetter
 from pathlib import Path
 from typing import Optional, Protocol, Sequence, Union
+from grams.algorithm.candidate_graph.cg_graph import (
+    CGColumnNode,
+    CGEntityValueNode,
+    CGGraph,
+    CGLiteralValueNode,
+    CGNode,
+    CGStatementNode,
+)
 from grams.algorithm.helpers import IndirectDictAccess
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 from grams.evaluation.scoring_fn import ItemType, get_hierarchy_scoring_fn
@@ -28,6 +36,10 @@ from sm.misc.fn_cache import CacheMethod
 from sm.misc.matrix import Matrix
 from sm.outputs.semantic_model import (
     SemanticModel,
+    Node as SMNode,
+    ClassNode,
+    DataNode,
+    LiteralNode,
 )
 
 
@@ -142,13 +154,115 @@ class Evaluator:
         perf, cm = inkb_eval_table(gold_ents, pred_ents, k)
         return {"value": perf, "confusion_matrix": cm}
 
+    def cpa_at_k(
+        self,
+        example: Example[LinkedTable],
+        cg: CGGraph,
+        edge_probs: dict[tuple[str, str, str], float],
+        k: Optional[Union[int, Sequence[Optional[int]]]] = None,
+    ):
+        """Compute CPA performance @K between nodes (such as columns or entities) presented only in the ground truth.
+
+        To compute top K, we group by pairs of non-statement nodes participating in the main property of the n-ary relationships.
+        Then, the properties used between the pair are considered ground truth. If the model predicts any of the properties,
+        it is considered correct. This implies that inversed properties are allowed, and we assume that the properties of the pair
+        cannot be qualifiers in another relationship.
+
+        The qualifiers of any relationships that the pair has are also grouped by one of the nodes in the pair and the target node of
+        the considered qualifier.
+
+        Because of the assumption that two nodes cannot be both participating in relationships that it is part of a statement property
+        or part of a statement qualifier, it is equivalent to treating n-ary relationships as binary relationships.
+
+        Args:
+            example:
+            cg:
+            edge_probs: probability of each edge in the predicted candidate graph
+        """
+
+        def get_sm_node_id(u: SMNode):
+            if isinstance(u, DataNode):
+                return u.col_index
+            if isinstance(u, LiteralNode):
+                return u.value
+            raise Exception("Unreachable")
+
+        def get_cg_node_id(u: CGNode):
+            if isinstance(u, CGColumnNode):
+                return u.column
+            if isinstance(u, CGEntityValueNode):
+                return u.get_literal_node_value(self.wdns)
+            if isinstance(u, CGLiteralValueNode):
+                return u.get_literal_node_value()
+            raise Exception("Unreachable")
+
+        gold_sms = self.get_example_gold_sms(example)
+
+        # mapping between a pair of column to its index
+        rel2index: dict[tuple[int | str, str | int], int] = {}
+        gold_rels: list[set[str]] = []
+
+        for sm in gold_sms:
+            cpa_sm = self.convert_sm_for_cpa(sm).sm
+            for node in cpa_sm.iter_nodes():
+                if (
+                    not isinstance(node, ClassNode)
+                    or node.abs_uri != self.wdns.STATEMENT_URI
+                ):
+                    continue
+
+                (inedge,) = cpa_sm.in_edges(node.id)
+                outedges = cpa_sm.out_edges(node.id)
+
+                uid = get_sm_node_id(cpa_sm.get_node(inedge.source))
+
+                for outedge in outedges:
+                    vid = get_sm_node_id(cpa_sm.get_node(outedge.target))
+                    if (uid, vid) not in rel2index:
+                        rel2index[uid, vid] = len(rel2index)
+                        gold_rels.append(set())
+                    gold_rels[rel2index[uid, vid]].add(
+                        self.wdns.get_prop_id(outedge.abs_uri)
+                    )
+
+        tmp_pred_rels: list[dict[str, float]] = [{} for _ in range(len(rel2index))]
+
+        for s in cg.iter_nodes():
+            if not isinstance(s, CGStatementNode):
+                continue
+            (inedge,) = cg.in_edges(s.id)
+            outedges = cg.out_edges(s.id)
+
+            uid = get_cg_node_id(cg.get_node(inedge.source))
+            for outedge in outedges:
+                vid = get_cg_node_id(cg.get_node(outedge.target))
+                if (uid, vid) not in rel2index:
+                    continue
+                tmp_pred_rels[rel2index[uid, vid]][outedge.predicate] = edge_probs[
+                    outedge.source, outedge.target, outedge.predicate
+                ]
+
+        pred_rels = [
+            [
+                k
+                for k, v in sorted(
+                    tmp_pred_rels[idx].items(), key=itemgetter(1), reverse=True
+                )
+            ]
+            for (uid, vid), idx in rel2index.items()
+        ]
+
+        return inkb_eval_table(Matrix([gold_rels]), Matrix([pred_rels]), k)
+
     def cta_at_k(
         self,
         example: Example[LinkedTable],
         cta_probs: dict[int, dict[str, float]],
         k: Optional[Union[int, Sequence[Optional[int]]]] = None,
     ):
-        """Compute CTA performance @K."""
+        """Compute CTA performance @K. The classes of a column is aggregated from multiple semantic models so it's possible
+        that perf@1 is different from the results of cta().
+        """
         gold_sms = self.get_example_gold_sms(example)
 
         # re-use inkb_eval_table to compute CTA performance @K

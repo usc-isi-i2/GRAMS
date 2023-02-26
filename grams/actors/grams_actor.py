@@ -13,6 +13,7 @@ from grams.algorithm.inferences.psl_gram_model_exp3 import (
     PSLGramModelExp3,
     PSLGramsModelData3,
 )
+from grams.algorithm.inferences_v2.features.inf_feature import InfFeature
 
 import orjson
 import ray
@@ -68,7 +69,7 @@ class AnnotationV2:
     # original candidate graph
     cg: CGGraph
     # inference's features
-    features: InfData
+    features: InfFeature
     # probabilities of each edge in cg (uid, vid, edge key)
     cg_edge_probs: dict[tuple[str, str, str], float]
     # probabilities of types of each column: column index -> type -> probability

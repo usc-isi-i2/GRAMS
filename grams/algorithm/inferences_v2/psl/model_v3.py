@@ -25,7 +25,7 @@ class PSLModelv3:
     def __init__(
         self,
         config: PslConfig,
-        temp_dir: Path,
+        temp_dir: Optional[Path],
     ):
         self.cfg = config
         self.temp_dir = temp_dir

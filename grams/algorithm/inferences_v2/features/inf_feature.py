@@ -38,46 +38,6 @@ class InfFeature(NumpyDataModelContainer):
     misc_features: MiscInfFeature
 
 
-@dataclass
-class InfBatchFeature(InfFeature):
-    edge_index: dict[str, tuple[int, int]]
-    node_index: dict[str, tuple[int, int]]
-    idmap: dict[str, IDMap[str]]
-    edge_features: EdgeFeature
-    node_features: NodeFeature
-    misc_features: MiscInfFeature
-
-    @staticmethod
-    def merge(feats: list[tuple[str, InfFeature]]) -> InfBatchFeature:
-        id_offset = 0
-        idmap = {}
-
-        edge_feats = []
-        node_feats = []
-        misc_feats = []
-
-        for name, feat in feats:
-            idmap[name] = OffsetIDMap.from_idmap(id_offset, feat.idmap)
-            edge_feats.append(feat.edge_features.shift_id(id_offset))
-            node_feats.append(feat.node_features.shift_id(id_offset))
-            misc_feats.append(feat.misc_features.shift_id(id_offset))
-
-            id_offset += len(feat.idmap.invert_map)
-
-        names = [name for name, feat in feats]
-        edge_index = NumpyDataModelHelper.create_simple_index(names, edge_feats)
-        node_index = NumpyDataModelHelper.create_simple_index(names, node_feats)
-
-        return InfBatchFeature(
-            edge_index=edge_index,
-            node_index=node_index,
-            idmap=idmap,
-            edge_features=EdgeFeature.concatenate(edge_feats),
-            node_features=NodeFeature.concatenate(node_feats),
-            misc_features=MiscInfFeature.concatenate(misc_feats),
-        )
-
-
 class InfFeatureExtractor:
     """Extracting features in a candidate graph."""
 

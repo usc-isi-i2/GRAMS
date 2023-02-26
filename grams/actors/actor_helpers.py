@@ -56,6 +56,7 @@ def eval_dataset(
 
     cpas: list[CPAEvalRes] = []
     ctas: list[CTAEvalOutput] = []
+    cpa_at_k: dict[str, list[PrecisionRecallF1]] = defaultdict(list)
     cta_at_k: dict[str, list[PrecisionRecallF1]] = defaultdict(list)
     ceas = []
     for i, (example, sm) in enumerate(zip(examples, pred_sms)):
@@ -70,6 +71,10 @@ def eval_dataset(
                 0
             ].items():
                 cta_at_k[k].append(v)
+            for k, v in evaluator.cpa_at_k(
+                example, anns[i].cg, anns[i].cg_edge_probs, k=hits
+            )[0].items():
+                cpa_at_k[k].append(v)
 
         ctas.append(evaluator.cta(example, sm))
         ceas.append(evaluator.cea(example, k=[1, 5]))
@@ -77,6 +82,7 @@ def eval_dataset(
     avg_cpa = PrecisionRecallF1.avg([cpa.result for cpa in cpas])
     avg_cta = PrecisionRecallF1.avg(ctas)
     avg_cta_k = {k: PrecisionRecallF1.avg(v) for k, v in cta_at_k.items()}
+    avg_cpa_k = {k: PrecisionRecallF1.avg(v) for k, v in cpa_at_k.items()}
 
     # calculate cea macro scores
     cea_macro = {}
@@ -105,14 +111,34 @@ def eval_dataset(
         ex_details.append(
             {
                 "cpa": {
-                    "p": cpas[i].result.precision,
-                    "r": cpas[i].result.recall,
-                    "f1": cpas[i].result.f1,
+                    "normal": {
+                        "p": cpas[i].result.precision,
+                        "r": cpas[i].result.recall,
+                        "f1": cpas[i].result.f1,
+                    },
+                    **{
+                        k: {
+                            "p": v[i].precision,
+                            "r": v[i].recall,
+                            "f1": v[i].f1,
+                        }
+                        for k, v in cpa_at_k.items()
+                    },
                 },
                 "cta": {
-                    "p": ctas[i].precision,
-                    "r": ctas[i].recall,
-                    "f1": ctas[i].f1,
+                    "normal": {
+                        "p": ctas[i].precision,
+                        "r": ctas[i].recall,
+                        "f1": ctas[i].f1,
+                    },
+                    **{
+                        k: {
+                            "p": v[i].precision,
+                            "r": v[i].recall,
+                            "f1": v[i].f1,
+                        }
+                        for k, v in cta_at_k.items()
+                    },
                 },
                 "cea": {
                     name: {
@@ -163,12 +189,22 @@ def eval_dataset(
 
     return {
         "cpa": {
-            "precision": float(avg_cpa.precision),
-            "recall": float(avg_cpa.recall),
-            "f1": float(avg_cpa.f1),
+            "normal": {
+                "precision": float(avg_cpa.precision),
+                "recall": float(avg_cpa.recall),
+                "f1": float(avg_cpa.f1),
+            },
+            **{
+                k: {
+                    "precision": float(avg_cpa_k[k].precision),
+                    "recall": float(avg_cpa_k[k].recall),
+                    "f1": float(avg_cpa_k[k].f1),
+                }
+                for k in [f"perf@{k}" for k in hits] + ["perf@all"]
+            },
         },
         "cta": {
-            "perf@1": {
+            "normal": {
                 "precision": float(avg_cta.precision),
                 "recall": float(avg_cta.recall),
                 "f1": float(avg_cta.f1),
@@ -407,7 +443,14 @@ class AuxComplexFeatures(AuxComplexObjectBase):
         ann: AnnotationV2,
     ) -> OTable:
         sms = self.autolabeler.evaluator.get_example_gold_sms(example)
-        labeled_types = self.autolabeler.label_types(ann.cta_probs, sms)
+        pred_types = [
+            (ci, ctype) for ci, ctypes in ann.cta_probs.items() for ctype in ctypes
+        ]
+        labeled_pred_types = self.autolabeler.label_types(
+            pred_types,
+            sms,
+        )
+        labeled_types = dict(zip(pred_types, labeled_pred_types))
 
         def get_column_index(uid: str):
             node = ann.cg.get_node(uid)
@@ -415,12 +458,12 @@ class AuxComplexFeatures(AuxComplexObjectBase):
             return node.column
 
         ex_id = example.table.id
-        idmap = ann.features.idmap[ex_id]
+        idmap = ann.features.idmap
         ufeat = ann.features.node_features
 
         key2row = {
             (get_column_index(idmap.im(ufeat.node[i])), idmap.im(ufeat.type[i])): i
-            for i in range(*ann.features.node_index[example.table.id])
+            for i in range(len(ann.features.node_features))
         }
 
         records = []
@@ -431,7 +474,7 @@ class AuxComplexFeatures(AuxComplexObjectBase):
                     "name": example.table.table.columns[ci].clean_name,
                     "type": self.get_ent_label(ctype),
                     "prob": float(prob),
-                    "label": labeled_types[ci][ctype],
+                    "label": labeled_types[ci, ctype],
                 }
                 for name, value in [
                     ("freq_over_row", ufeat.freq_over_row),
@@ -454,7 +497,7 @@ class AuxComplexFeatures(AuxComplexObjectBase):
         example: Example[LinkedTable],
         ann: AnnotationV2,
     ) -> OTable:
-        idmap = ann.features.idmap[example.table.id]
+        idmap = ann.features.idmap
         efeat = ann.features.edge_features
 
         sms = self.autolabeler.evaluator.get_example_gold_sms(example)
@@ -466,7 +509,7 @@ class AuxComplexFeatures(AuxComplexObjectBase):
                 idmap.im(efeat.statement[i]),
                 idmap.im(efeat.outprop[i]),
             ): i
-            for i in range(*ann.features.edge_index[example.table.id])
+            for i in range(len(ann.features.edge_features))
         }
         objects = {
             rel: {

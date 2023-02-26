@@ -11,6 +11,7 @@ from grams.actors.grams_infdata_actor import GramsInfDataActor, InfData
 from grams.actors.grams_preprocess_actor import GramsPreprocessActor
 from grams.algorithm.inferences_v2.psl.model_v3 import PSLModelv3
 from grams.algorithm.inferences_v2.psl.config import PslConfig
+from grams.algorithm.inferences_v2.ind.ind_model import IndModel, IndConfig
 from grams.algorithm.postprocessing.steiner_tree import SteinerTree
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
 from grams.inputs.linked_table import LinkedTable
@@ -22,6 +23,7 @@ from ream.dataset_helper import DatasetQuery
 from ream.prelude import DatasetDict, EnumParams
 from serde.helper import orjson_dumps
 from sm.dataset import Example
+from sm.misc.ray_helper import enhance_error_info, ray_map, ray_put
 from sm.outputs.semantic_model import SemanticModel
 from timer import Timer
 from tqdm import tqdm
@@ -33,18 +35,23 @@ if TYPE_CHECKING:
 
 @dataclass
 class GramsInfParams(EnumParams):
-    method: Literal["psl"] = field(
+    method: Literal["psl", "ind"] = field(
         default="psl",
         metadata={
             "help": "The inference method to use",
             "variants": {
                 "psl": PSLModelv3,
+                "ind": IndModel,
             },
         },
     )
     psl: PslConfig = field(
         default_factory=PslConfig,
         metadata={"help": "Configuration for the PSL model"},
+    )
+    ind: IndConfig = field(
+        default_factory=IndConfig,
+        metadata={"help": "Configuration for the Ind model"},
     )
 
 
@@ -62,16 +69,16 @@ class InfResult(NumpyDataModelContainer):
     node_prob: InfProb
 
 
-class InfResDatasetDict(DatasetDict[InfResult]):
-    serde = (InfResult.save, InfResult.load, None)
+class InfResDatasetDict(DatasetDict[list[InfResult]]):
+    serde = (InfResult.batch_save, InfResult.batch_load, None)
 
 
 class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
     """GRAMS' Inference Step"""
 
-    VERSION = 100
+    VERSION = 101
     EXP_NAME = "Semantic Modeling Inference"
-    EXP_VERSION = 3
+    EXP_VERSION = 4
 
     def __init__(
         self,
@@ -116,17 +123,31 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                 {},
                 self._fmt_prov(infdata_dsdict.provenance, self.get_provenance()),
             )
-            method = self.get_trained_method()
 
-            for name, infdata in infdata_dsdict.items():
-                edge_probs, node_probs = method.predict(infdata)
-                out_dsdict[name] = InfResult(InfProb(edge_probs), InfProb(node_probs))
+            method = self.get_trained_method()
+            use_ray = sum(len(infdatas) for infdatas in infdata_dsdict.items()) > 1
+            methodref = ray_put(method) if use_ray else method
+
+            for name, infdatas in infdata_dsdict.items():
+                exds = dsdict[name]
+                out_dsdict[name] = ray_map(
+                    predict,
+                    [(methodref, exds[i].table.id, x) for i, x in enumerate(infdatas)],
+                    desc=f"Run inference ({name})",
+                    verbose=True,
+                    using_ray=use_ray,
+                    is_func_remote=False,
+                )
 
         return out_dsdict
 
     def get_trained_method(self):
         if self.params.method == "psl":
-            return PSLModelv3(self.params.psl, self.get_working_fs().root / "psl")
+            return PSLModelv3(self.params.psl, temp_dir=None)
+        if self.params.method == "ind":
+            model = IndModel(self.params.ind)
+            # model.train()
+            return model
         raise NotImplementedError()
 
     def evaluate(self, eval_args: EvalArgs):
@@ -180,8 +201,8 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
     def _normalize_results(
         self,
         examples: list[Example[LinkedTable]],
-        infdata: InfData,
-        infres: InfResult,
+        infdatas: list[InfData],
+        infress: list[InfResult],
         threshold: float,
     ) -> list[AnnotationV2]:
         out = []
@@ -189,15 +210,15 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
         wdclasses = self.db.wdclasses.cache()
         wdprops = self.db.wdprops.cache()
 
-        for ex in tqdm(examples):
+        for ex, infdata, infres in tqdm(zip(examples, infdatas, infress)):
             ex_id = ex.table.id
 
             with self.timer.watch(f"Postprocessing (SteinerTree)"):
-                cg = infdata.cgs[ex_id]
-                idmap = infdata.idmap[ex_id]
-                estart, eend = infdata.edge_index[ex_id]
+                cg = infdata.cg
+                idmap = infdata.feat.idmap
+                estart, eend = 0, len(infdata.feat.edge_features)
                 eprobs = infres.edge_prob.prob
-                edge_feats = infdata.edge_features
+                edge_feats = infdata.feat.edge_features
                 output_edge_probs: dict[tuple[str, str, str], float] = {}
 
                 for i in range(estart, eend):
@@ -209,9 +230,9 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                         output_edge_probs[u, s, outedge] = eprobs[i]
                     output_edge_probs[s, v, outedge] = eprobs[i]
 
-                ustart, uend = infdata.node_index[ex_id]
+                ustart, uend = 0, len(infdata.feat.node_features)
                 uprobs = infres.node_prob.prob
-                node_feats = infdata.node_features
+                node_feats = infdata.feat.node_features
                 output_node_probs: dict[int, dict[str, float]] = defaultdict(dict)
 
                 for i in range(ustart, uend):
@@ -219,9 +240,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                     t = idmap.im(node_feats.type[i])
                     output_node_probs[u][t] = uprobs[i]
 
-                pp = SteinerTree(
-                    ex.table, infdata.cgs[ex_id], output_edge_probs, threshold
-                )
+                pp = SteinerTree(ex.table, infdata.cg, output_edge_probs, threshold)
                 pred_cpa = pp.get_result()
                 pred_cta = {
                     ci: max(classes.items(), key=itemgetter(1))[0]
@@ -243,7 +262,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                 AnnotationV2(
                     sm=sm,
                     cg=cg,
-                    features=infdata,
+                    features=infdata.feat,
                     cg_edge_probs=output_edge_probs,
                     cta_probs=output_node_probs,
                     pred_cpa=pred_cpa,
@@ -252,3 +271,13 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
             )
 
         return out
+
+
+@enhance_error_info(lambda method, id, input: id)
+def predict(method: PSLModelv3, id, input: InfData) -> InfResult:
+    if isinstance(method, PSLModelv3):
+        # set different temp dir for each example
+        method.model.temp_dir = f"/tmp/pslpython/{id}"
+
+    edge_probs, node_probs = method.predict(input.feat)
+    return InfResult(InfProb(edge_probs), InfProb(node_probs))
