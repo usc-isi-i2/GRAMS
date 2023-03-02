@@ -8,6 +8,7 @@ from typing import Dict, MutableMapping, Optional, Set, Union
 from grams.inputs.linked_table import LinkedTable
 from hugedict.types import HugeMutableMapping
 from kgdata.wikidata.models.wdproperty import WDProperty
+from ream.actor_version import ActorVersion
 from ream.cache_helper import Cache
 from ream.helper import orjson_dumps
 
@@ -20,6 +21,7 @@ from tqdm import tqdm
 
 from kgdata.wikidata.db import (
     WDProxyDB,
+    WikidataDB,
     get_entity_db,
     get_entity_label_db,
     get_wdclass_db,
@@ -37,11 +39,10 @@ from kgdata.wikidata.models import (
 
 
 class GramsDB:
-    VERSION = 100
+    VERSION = 102
 
-    def __init__(self, data_dir: Path, proxy_db: bool):
+    def __init__(self, data_dir: Path):
         self.data_dir = data_dir
-        self.proxy_db = proxy_db
 
         # cache entities that are used per table
         # this option should be cleared after running the algorithm
@@ -49,56 +50,13 @@ class GramsDB:
         self.autocached_entities: dict[Optional[str], Mapping[str, WDEntity]] = {}
 
         with Timer().watch_and_report("init grams db"):
-            read_only = not proxy_db
-            self.wdentities = get_entity_db(
-                os.path.join(data_dir, "wdentities.db"),
-                read_only=read_only,
-                proxy=proxy_db,
-            )
-            if proxy_db:
-                assert isinstance(self.wdentities, WDProxyDB)
-            if os.path.exists(os.path.join(data_dir, "wdentity_labels.db")):
-                self.wdentity_labels = get_entity_label_db(
-                    os.path.join(data_dir, "wdentity_labels.db"),
-                )
-            else:
-                self.wdentity_labels: HugeMutableMapping[
-                    str, WDEntityLabel
-                ] = CacheDict({})
-            self.wdclasses = get_wdclass_db(
-                os.path.join(data_dir, "wdclasses.db"),
-                read_only=read_only,
-                proxy=proxy_db,
-            )
-            if os.path.exists(os.path.join(data_dir, "wdclasses.fixed.jl")):
-                self.wdclasses = self.wdclasses.cache()
-                assert isinstance(self.wdclasses, CacheDict)
-                for record in serde.jl.deser(
-                    os.path.join(data_dir, "wdclasses.fixed.jl")
-                ):
-                    cls = WDClass.from_dict(record)
-                    self.wdclasses._cache[cls.id] = cls
-            self.wdprops = get_wdprop_db(
-                os.path.join(data_dir, "wdprops.db"),
-                read_only=read_only,
-                proxy=proxy_db,
-            )
-            if os.path.exists(os.path.join(data_dir, "wdprop_domains.db")):
-                self.wdprop_domains = get_wdprop_domain_db(
-                    os.path.join(data_dir, "wdprop_domains.db"),
-                    read_only=True,
-                )
-            else:
-                self.wdprop_domains = None
-
-            if os.path.exists(os.path.join(data_dir, "wdprop_ranges.db")):
-                self.wdprop_ranges = get_wdprop_range_db(
-                    os.path.join(data_dir, "wdprop_ranges.db"),
-                    read_only=True,
-                )
-            else:
-                self.wdprop_ranges = None
-
+            db = WikidataDB(data_dir)
+            self.wdentities = db.wdentities
+            self.wdentity_labels = db.wdentity_labels
+            self.wdclasses = db.wdclasses
+            self.wdprops = db.wdprops
+            self.wdprop_domains = db.wdprop_domains
+            self.wdprop_ranges = db.wdprop_ranges
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(
                 os.path.join(data_dir, "quantity_prop_stats")
             )
@@ -266,25 +224,21 @@ class GramsDBParams:
     data_dir: Path = field(
         metadata={"help": "Path to a directory containing databases"},
     )
-    proxy_db: bool = field(
-        default=True,
-        metadata={"help": "Whether to use a proxy database for the semantic model"},
-    )
 
 
 class GramsDBActor(BaseActor[str, GramsDBParams]):
-    VERSION = 100
+    VERSION = ActorVersion.create(102, [GramsDB])
 
     def __init__(self, params: GramsDBParams):
         super().__init__(params, [])
-        self.db = GramsDB(params.data_dir, params.proxy_db)
+        self.db = GramsDB(params.data_dir)
 
 
 def to_grams_db(db: Union[GramsDB, Path]) -> GramsDB:
     if isinstance(db, Path):
         datadir = db
         db = get_instance(
-            lambda: GramsDB(datadir, False),
-            "GramsDB",
+            lambda: GramsDB(datadir),
+            f"GramsDB[{datadir}]",
         )
     return db

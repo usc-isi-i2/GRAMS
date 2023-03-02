@@ -1,27 +1,30 @@
+from inspect import signature
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, make_dataclass
 from pathlib import Path
-from typing import Optional, List, Tuple
-from grams.actors.augcan_actor import AugCanActor
-from grams.actors.db_actor import GramsDBActor
-from grams.actors.grams_inf_actor import GramsInfActor
-from grams.actors.grams_infdata_actor import GramsInfDataActor
-from grams.actors.grams_preprocess_actor import GramsPreprocessActor
-
+from typing import Generic, List, Optional, Tuple, get_type_hints
+from ned.actors.db import DBActor
+from functools import partial
 import yada
 from loguru import logger
 from osin.apis.osin import Osin
 from osin.integrations.ream import OsinActor
 from ream.prelude import ActorGraph, ReamWorkspace, configure_loguru
 
+from grams.actors.augcan_actor import AugCanActor
+from grams.actors.dataset_actor import GramsDatasetActor, GramsELDatasetActor
+from grams.actors.db_actor import GramsDBActor
+from grams.actors.grams_actor import GramsActor
+from grams.actors.grams_inf_actor import GramsInfActor
+from grams.actors.grams_infdata_actor import GramsInfDataActor
+from grams.actors.grams_preprocess_actor import GramsPreprocessActor
 from kgdata.wikidata.db import WikidataDB
 from ned.actors.candidate_generation import CanGenActor
 from ned.actors.candidate_ranking import CanRankActor
+from ned.actors.dataset.prelude import NEDDatasetActor, NEDAutoDatasetActor
 from ned.actors.entity_recognition import EntityRecognitionActor
-from ned.actors.dataset import NEDDatasetActor
-from grams.actors.dataset_actor import GramsDatasetActor, GramsELDatasetActor
-from grams.actors.grams_actor import GramsActor
 from sm.misc.ray_helper import set_ray_init_args
+from ream.cli_helper import CLI
 
 ########################################################
 # CONFIG REAM AND DEFINE ACTOR GRAPH
@@ -41,7 +44,8 @@ ReamWorkspace.init(HOME_DIR / "ream")
 WikidataDB.init(DATABASE_DIR)
 # fmt: off
 graph: ActorGraph = ActorGraph.auto({
-    "ed": NEDDatasetActor, "er": EntityRecognitionActor, "cg": CanGenActor, "cr": CanRankActor,
+    "db": DBActor, "eda": NEDAutoDatasetActor, "ed": NEDDatasetActor, 
+    "er": EntityRecognitionActor, "cg": CanGenActor, "cr": CanRankActor,
     "gd": GramsDatasetActor, "gde": GramsELDatasetActor, "gau": AugCanActor, 
     "gp": GramsPreprocessActor, "gid": GramsInfDataActor, "gdb": GramsDBActor,
     "gia": GramsInfActor, "ga": GramsActor
@@ -58,36 +62,7 @@ class EvalArgs:
     threshold: float = 0.5
 
 
-@dataclass
-class MainArgs:
-    actor: str
-    eval_args: EvalArgs
-    logfile: Optional[str] = "logs/run_{time}.log"
-    allow_unknown_args: bool = False
-
-
-def main(sysargs=None):
-    logger.debug("Started!")
-    args, remain_args = yada.Parser1(MainArgs).parse_known_args(sysargs)
-    graph.run(
-        actor_class=args.actor,
-        actor_method="evaluate",
-        run_args=args.eval_args,
-        args=remain_args,
-        log_file=args.logfile,
-        allow_unknown_args=args.allow_unknown_args,
-    )
-    logger.debug("Finished!")
-
-
-def get_actor(sysargs=None):
-    args, remain_args = yada.Parser1(MainArgs).parse_known_args(sysargs)
-    return graph.create_actor(
-        actor_class=args.actor,
-        args=remain_args,
-        log_file=args.logfile,
-    )
-
+main = partial(CLI.main, graph)
 
 if __name__ == "__main__":
-    main()
+    CLI.main(graph)

@@ -3,6 +3,8 @@ from collections import defaultdict
 
 from dataclasses import dataclass, field
 from operator import itemgetter
+import os
+import shutil
 from typing import Literal, TYPE_CHECKING
 from grams.actors.actor_helpers import eval_dataset
 from grams.actors.db_actor import GramsDBActor
@@ -14,6 +16,7 @@ from grams.algorithm.inferences_v2.psl.config import PslConfig
 from grams.algorithm.inferences_v2.ind.ind_model import IndModel, IndConfig
 from grams.algorithm.postprocessing.steiner_tree import SteinerTree
 from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
+from grams.evaluation.evaluator import Evaluator
 from grams.inputs.linked_table import LinkedTable
 from nptyping import Float32, Float64, NDArray, Shape
 from osin.integrations.ream import OsinActor
@@ -99,6 +102,8 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
     def get_provenance(self):
         if self.params.method == "psl":
             return f"inf:psl={PSLModelv3.VERSION}"
+        if self.params.method == "ind":
+            return f"inf:ind={IndModel.VERSION}"
         raise NotImplementedError()
 
     @Cache.cls.dir(
@@ -125,7 +130,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
             )
 
             method = self.get_trained_method()
-            use_ray = sum(len(infdatas) for infdatas in infdata_dsdict.items()) > 1
+            use_ray = sum(len(infdatas) for infdatas in infdata_dsdict.values()) > 1
             methodref = ray_put(method) if use_ray else method
 
             for name, infdatas in infdata_dsdict.items():
@@ -138,15 +143,34 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                     using_ray=use_ray,
                     is_func_remote=False,
                 )
-
         return out_dsdict
 
     def get_trained_method(self):
         if self.params.method == "psl":
             return PSLModelv3(self.params.psl, temp_dir=None)
         if self.params.method == "ind":
+
+            def dsquery(query: str):
+                with self.timer.watch("Preprocess dataset"):
+                    dsdict = self.preprocess_actor.run_dataset(
+                        query, self.infdata_actor.params.data_graph.max_n_hop
+                    )
+
+                with self.timer.watch("Prepare inference data"):
+                    infdata_dsdict = self.infdata_actor.run_dataset(query).map(
+                        lambda lst: [x.feat for x in lst]
+                    )
+                return infdata_dsdict, dsdict
+
+            evaluator = Evaluator(
+                self.db.wdentities.cache(),
+                self.db.wdentity_labels.cache(),
+                self.db.wdclasses.cache(),
+                self.db.wdprops.cache(),
+                self.db.data_dir,
+            )
             model = IndModel(self.params.ind)
-            # model.train()
+            model.train(self.params.ind.train_args, dsquery, evaluator)
             return model
         raise NotImplementedError()
 
@@ -278,6 +302,8 @@ def predict(method: PSLModelv3, id, input: InfData) -> InfResult:
     if isinstance(method, PSLModelv3):
         # set different temp dir for each example
         method.model.temp_dir = f"/tmp/pslpython/{id}"
+        if os.path.exists(method.model.temp_dir):
+            shutil.rmtree(method.model.temp_dir)
 
     edge_probs, node_probs = method.predict(input.feat)
     return InfResult(InfProb(edge_probs), InfProb(node_probs))

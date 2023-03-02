@@ -2,7 +2,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
-from grams.actors.augcan_actor import AugCanActor
 from grams.actors.db_actor import GramsDB, GramsDBActor, to_grams_db
 from grams.actors.grams_preprocess_actor import GramsPreprocessActor
 from grams.algorithm.candidate_graph.cg_factory import CGFactory
@@ -10,7 +9,6 @@ from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.context import AlgoContext
 from grams.algorithm.data_graph.dg_config import DGConfigs
 from grams.algorithm.data_graph.dg_factory import DGFactory
-from grams.algorithm.inferences.psl_gram_model_exp3 import PSLData, PSLGramsModelData3
 from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
 from grams.algorithm.literal_matchers.literal_match import (
     LiteralMatch,
@@ -19,21 +17,17 @@ from grams.algorithm.literal_matchers.literal_match import (
 from grams.algorithm.literal_matchers.text_parser import TextParser, TextParserConfigs
 from grams.inputs.linked_table import LinkedTable
 from osin.integrations.ream import OsinActor
-import ray
-from ream.data_model_helper import NumpyDataModel, NumpyDataModelContainer
+from ream.data_model_helper import NumpyDataModelContainer
 from ream.prelude import (
     ActorVersion,
     Cache,
-    CacheArgsHelper,
-    Cacheable,
     DatasetDict,
     DatasetQuery,
 )
-from sm.misc.ray_helper import ray_map, ray_put
+from sm.misc.ray_helper import enhance_error_info, ray_map, ray_put
 from grams.algorithm.inferences_v2.features.inf_feature import (
     InfFeature,
     InfFeatureExtractor,
-    InfBatchFeature,
 )
 
 if TYPE_CHECKING:
@@ -67,7 +61,7 @@ class InfDataDatasetDict(DatasetDict[list[InfData]]):
 
 
 class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
-    VERSION = ActorVersion.create(105, [InfFeatureExtractor])
+    VERSION = ActorVersion.create(108, [InfFeatureExtractor])
 
     def __init__(
         self,
@@ -133,6 +127,7 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
         return evalout
 
 
+@enhance_error_info("2.id")
 def create_inference_data(
     db: Union[GramsDB, Path],
     params: GramsInfDataParams,

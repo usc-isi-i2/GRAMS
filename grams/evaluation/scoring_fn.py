@@ -101,7 +101,8 @@ class SqliteItemDistance(SqliteDict[str, int]):
                 if distance < MAX_DISTANCE:
                     # still within the distance limit, we can explore further
                     stack.append((parent_id, distance + 1))
-        return visited[target_id]
+        # we may have not visited the target node because its too far away (> MAX_DISTANCE).
+        return visited.get(target_id, INF_DISTANCE)
 
 
 def get_hierarchy_scoring_fn(

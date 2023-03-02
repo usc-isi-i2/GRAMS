@@ -47,7 +47,7 @@ class EdgeFeature(NumpyDataModel):
     freq_over_pos_rel: NDArray[Shape["*"], Float64]
     freq_unmatch_over_ent_row: NDArray[Shape["*"], Float64]
     freq_unmatch_over_pos_rel: NDArray[Shape["*"], Float64]
-    not_func_dependency: NDArray[Shape["*"], Float64]
+    not_func_dependency: NDArray[Shape["*"], Int32]
 
     def shift_id(self, offset: int):
         return EdgeFeature(
@@ -72,7 +72,7 @@ EdgeFeature.init()
 class EdgeFeatureExtractor:
     """Extracting edge features in a candidate graph."""
 
-    VERSION = 100
+    VERSION = 101
 
     def __init__(
         self,
@@ -150,7 +150,7 @@ class EdgeFeatureExtractor:
             freq_unmatch_over_pos_rel=np.array(
                 freq_unmatch_over_pos_rel, dtype=np.float64
             ),
-            not_func_dependency=np.array(not_func_dependency, dtype=np.float64),
+            not_func_dependency=np.array(not_func_dependency, dtype=np.int32),
         )
 
     def FREQ_OVER_ROW(self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]):
