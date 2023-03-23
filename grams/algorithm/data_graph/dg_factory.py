@@ -89,7 +89,7 @@ class DGFactory:
                 # =====================================================
 
                 node = CellNode(
-                    id=f"{ri}-{ci}",
+                    id=CellNode.get_id(ri, ci),
                     value=val,
                     column=ci,
                     row=ri,

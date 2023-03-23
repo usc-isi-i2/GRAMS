@@ -88,6 +88,10 @@ class CellNode(BaseNode[str]):
             tup[6],
         )
 
+    @staticmethod
+    def get_id(row: int, col: int):
+        return f"{row}-{col}"
+
 
 @dataclass
 class ContextSpan:
