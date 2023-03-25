@@ -200,7 +200,8 @@ def eval_dataset(
                     "recall": float(avg_cpa_k[k].recall),
                     "f1": float(avg_cpa_k[k].f1),
                 }
-                for k in [f"perf@{k}" for k in hits] + ["perf@all"]
+                for k in [f"perf@{kp}" for kp in hits] + ["perf@all"]
+                if k in avg_cpa_k
             },
         },
         "cta": {
@@ -215,7 +216,8 @@ def eval_dataset(
                     "recall": float(avg_cta_k[k].recall),
                     "f1": float(avg_cta_k[k].f1),
                 }
-                for k in [f"perf@{k}" for k in hits] + ["perf@all"]
+                for k in [f"perf@{kp}" for kp in hits] + ["perf@all"]
+                if k in avg_cta_k
             },
         },
         "cea": {

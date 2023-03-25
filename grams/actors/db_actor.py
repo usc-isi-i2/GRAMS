@@ -50,13 +50,13 @@ class GramsDB:
         self.autocached_entities: dict[Optional[str], Mapping[str, WDEntity]] = {}
 
         with Timer().watch_and_report("init grams db"):
-            db = WikidataDB(data_dir)
-            self.wdentities = db.wdentities
-            self.wdentity_labels = db.wdentity_labels
-            self.wdclasses = db.wdclasses
-            self.wdprops = db.wdprops
-            self.wdprop_domains = db.wdprop_domains
-            self.wdprop_ranges = db.wdprop_ranges
+            self.db = WikidataDB(data_dir)
+            self.wdentities = self.db.wdentities
+            self.wdentity_labels = self.db.wdentity_labels
+            self.wdclasses = self.db.wdclasses
+            self.wdprops = self.db.wdprops
+            self.wdprop_domains = self.db.wdprop_domains
+            self.wdprop_ranges = self.db.wdprop_ranges
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(
                 os.path.join(data_dir, "quantity_prop_stats")
             )

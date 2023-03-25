@@ -230,7 +230,7 @@ class LinkedTable(FullTable):
                     values.append("")
                 else:
                     raise ValueError(f"Unsupported value type: {type(v)}")
-            return gcore.Column(col.index, col.clean_name, values)
+            return gcore.Column(col.index, col.clean_multiline_name, values)
 
         def to_link(link: ExtendedLink) -> gcore.Link:
             return gcore.Link(
