@@ -48,16 +48,24 @@ class SqliteItemDistance(SqliteDict[str, int]):
         else:
             raise ValueError(f"Unknown item type: {item_type}")
 
+        self.is_valid_id = WikidataNamespace.is_valid_id
+        self.is_valid_uri = WikidataNamespace.create().is_uri_in_ns
+
     def get_distance(self, pred_item: str, target_item: str) -> int:
         if pred_item == target_item:
             return 0
 
         if (pred_item, target_item) not in self._cache_distance:
-            try:
+            if self.is_valid_uri(target_item):
+                assert self.is_valid_uri(pred_item)
                 pred_id = self.uri2id(pred_item)
                 target_id = self.uri2id(target_item)
-            except OutOfNamespace:
-                return INF_DISTANCE
+            else:
+                assert self.is_valid_id(pred_item)
+                assert self.is_valid_id(target_item)
+
+                pred_id = pred_item
+                target_id = target_item
 
             key = orjson.dumps([pred_id, target_id]).decode()
             if key not in self:

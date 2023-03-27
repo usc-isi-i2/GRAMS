@@ -261,7 +261,8 @@ class Evaluator:
         k: Optional[Union[int, Sequence[Optional[int]]]] = None,
     ):
         """Compute CTA performance @K. The classes of a column is aggregated from multiple semantic models so it's possible
-        that perf@1 is different from the results of cta().
+        that perf@1 is different from the results of cta(). Also, it doesn't use approximate precision/recall so the results
+        can also be different.
         """
         gold_sms = self.get_example_gold_sms(example)
 
