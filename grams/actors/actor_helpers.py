@@ -1,9 +1,10 @@
 from __future__ import annotations
 from collections import defaultdict
+from dataclasses import dataclass, field
 
 from pathlib import Path
 from grams.algorithm.candidate_graph.cg_graph import CGColumnNode
-from typing import Optional, Union, TYPE_CHECKING
+from typing import List, Optional, Union, TYPE_CHECKING
 from grams.evaluation.autolabeler import AutoLabeler
 from grams.algorithm.context import AlgoContext
 from ned.metrics import PrecisionRecallF1
@@ -36,6 +37,14 @@ from tqdm import tqdm
 
 if TYPE_CHECKING:
     from grams.actors.grams_actor import AnnotationV2
+
+
+@dataclass
+class EvalArgs:
+    dsqueries: List[str] = field(
+        metadata={"help": "List of dataset queries to evaluate"}
+    )
+    threshold: float = 0.5
 
 
 def eval_dataset(

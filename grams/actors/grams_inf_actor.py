@@ -1,23 +1,12 @@
 from __future__ import annotations
-from collections import defaultdict
 
-from dataclasses import dataclass, field
-from operator import itemgetter
 import os
 import shutil
-from typing import Literal, TYPE_CHECKING
-from grams.actors.actor_helpers import eval_dataset
-from grams.actors.db_actor import GramsDBActor
-from grams.actors.grams_actor import AnnotationV2
-from grams.actors.grams_infdata_actor import GramsInfDataActor, InfData
-from grams.actors.grams_preprocess_actor import GramsPreprocessActor
-from grams.algorithm.inferences_v2.psl.model_v3 import PSLModelv3
-from grams.algorithm.inferences_v2.psl.config import PslConfig
-from grams.algorithm.inferences_v2.ind.ind_model import IndModel, IndConfig
-from grams.algorithm.postprocessing.steiner_tree import SteinerTree
-from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
-from grams.evaluation.evaluator import Evaluator
-from grams.inputs.linked_table import LinkedTable
+from collections import defaultdict
+from dataclasses import dataclass, field
+from operator import itemgetter
+from typing import TYPE_CHECKING, Literal
+
 from nptyping import Float32, Float64, NDArray, Shape
 from osin.integrations.ream import OsinActor
 from ream.cache_helper import Cache, CacheArgsHelper
@@ -25,15 +14,24 @@ from ream.data_model_helper import NumpyDataModel, NumpyDataModelContainer
 from ream.dataset_helper import DatasetQuery
 from ream.prelude import DatasetDict, EnumParams
 from serde.helper import orjson_dumps
-from sm.dataset import Example
-from sm.misc.ray_helper import enhance_error_info, ray_map, ray_put
-from sm.outputs.semantic_model import SemanticModel
 from timer import Timer
 from tqdm import tqdm
 
-
-if TYPE_CHECKING:
-    from grams.actors.__main__ import EvalArgs
+from grams.actors.actor_helpers import EvalArgs, eval_dataset
+from grams.actors.db_actor import GramsDBActor
+from grams.actors.grams_actor import AnnotationV2
+from grams.actors.grams_infdata_actor import GramsInfDataActor, InfData
+from grams.actors.grams_preprocess_actor import GramsPreprocessActor
+from grams.algorithm.inferences_v2.ind.ind_model import IndConfig, IndModel
+from grams.algorithm.inferences_v2.psl.config import PslConfig
+from grams.algorithm.inferences_v2.psl.model_v3 import PSLModelv3
+from grams.algorithm.postprocessing.steiner_tree import SteinerTree
+from grams.algorithm.sm_wikidata import WikidataSemanticModelHelper
+from grams.evaluation.evaluator import Evaluator
+from grams.inputs.linked_table import LinkedTable
+from sm.dataset import Example
+from sm.misc.ray_helper import enhance_error_info, ray_map, ray_put
+from sm.outputs.semantic_model import SemanticModel
 
 
 @dataclass

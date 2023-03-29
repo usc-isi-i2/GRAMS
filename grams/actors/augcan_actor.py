@@ -4,26 +4,26 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Union
+
+import ray
+from osin.integrations.ream import OsinActor
+from ream.cache_helper import Cache
+from ream.dataset_helper import DatasetDict
+from sm_datasets.datasets import Datasets
+from timer import Timer
+
+import grams.core as gcore
+import grams.core.steps as gcoresteps
+from grams.actors.actor_helpers import EvalArgs, to_grams_db
 from grams.actors.dataset_actor import GramsELDatasetActor
 from grams.actors.db_actor import GramsDB, GramsDBActor
-from grams.actors.actor_helpers import to_grams_db
 from grams.algorithm.literal_matchers.string_match import StrSim
 from grams.inputs.linked_table import CandidateEntityId, ExtendedLink, LinkedTable
 from kgdata.wikidata.models.wdentity import WDEntity
 from kgdata.wikidata.models.wdvalue import WDValue
-from osin.integrations.ream import OsinActor
-from ream.cache_helper import Cache
-from ream.dataset_helper import DatasetDict
 from sm.dataset import Example
 from sm.inputs.link import WIKIDATA, EntityId
-from sm.misc.ray_helper import enhance_error_info, ray_put, ray_map
-import ray
-import grams.core as gcore
-import grams.core.steps as gcoresteps
-from timer import Timer
-
-if TYPE_CHECKING:
-    from grams.actors.__main__ import EvalArgs
+from sm.misc.ray_helper import enhance_error_info, ray_map, ray_put
 
 
 @dataclass

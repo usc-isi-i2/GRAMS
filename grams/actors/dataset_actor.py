@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 
 class GramsDatasetActor(OsinActor[str, NoParams]):
-    VERSION = 104
+    VERSION = 105
 
     def __init__(self, params: NoParams, db_actor: GramsDBActor):
         super().__init__(params, [db_actor])

@@ -1,14 +1,10 @@
-from inspect import signature
 import os
-from dataclasses import dataclass, field, fields, make_dataclass
-from pathlib import Path
-from typing import Generic, List, Optional, Tuple, get_type_hints
-from ned.actors.db import DBActor
 from functools import partial
-import yada
-from loguru import logger
+from pathlib import Path
+
 from osin.apis.osin import Osin
 from osin.integrations.ream import OsinActor
+from ream.cli_helper import CLI
 from ream.prelude import ActorGraph, ReamWorkspace, configure_loguru
 
 from grams.actors.augcan_actor import AugCanActor
@@ -21,10 +17,10 @@ from grams.actors.grams_preprocess_actor import GramsPreprocessActor
 from kgdata.wikidata.db import WikidataDB
 from ned.actors.candidate_generation import CanGenActor
 from ned.actors.candidate_ranking import CanRankActor
-from ned.actors.dataset.prelude import NEDDatasetActor, NEDAutoDatasetActor
+from ned.actors.dataset.prelude import NEDAutoDatasetActor, NEDDatasetActor
+from ned.actors.db import DBActor
 from ned.actors.entity_recognition import EntityRecognitionActor
 from sm.misc.ray_helper import set_ray_init_args
-from ream.cli_helper import CLI
 
 ########################################################
 # CONFIG REAM AND DEFINE ACTOR GRAPH
@@ -52,14 +48,6 @@ graph: ActorGraph = ActorGraph.auto({
 })
 # fmt: on
 ########################################################
-
-
-@dataclass
-class EvalArgs:
-    dsqueries: List[str] = field(
-        metadata={"help": "List of dataset queries to evaluate"}
-    )
-    threshold: float = 0.5
 
 
 main = partial(CLI.main, graph)
