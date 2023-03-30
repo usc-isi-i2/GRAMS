@@ -48,6 +48,10 @@ class AugCanParams:
             "help": "add column name to the search text. This is useful for value such as X town, Y town, Z town. "
         },
     )
+    search_all_columns: bool = field(
+        default=False,
+        metadata={"help": "search all columns instead of just the entity columns."},
+    )
 
 
 class AugCanActor(OsinActor[str, AugCanParams]):
@@ -127,16 +131,20 @@ def rust_augment_candidates(
     data_dir: Path,
     example: Example[LinkedTable],
     params: AugCanParams,
-):
-    cfg = gcoresteps.AugCanConfig(
-        params.similarity, params.threshold, params.use_column_name
+) -> Example[LinkedTable]:
+    cfg = gcoresteps.CandidateLocalSearchConfig(
+        params.similarity,
+        params.threshold,
+        params.use_column_name,
+        None,
+        params.search_all_columns,
     )
     gcore.GramsDB.init(str(data_dir))
     cdb = gcore.GramsDB.get_instance()
 
     newtable = example.table.to_rust_table()
     context = cdb.get_algo_context(newtable, n_hop=2)
-    newtable = gcoresteps.augment_candidates(newtable, context, cfg)
+    newtable = gcoresteps.candidate_local_search(newtable, context, cfg)
 
     # copy results back to python
     newlinks = example.table.links.shallow_copy()

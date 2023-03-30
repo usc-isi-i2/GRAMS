@@ -25,14 +25,16 @@ use kgdata::models::Entity;
  * @param threshold Candidate entities that have scores less than this threshold will not be added to the candidates
  * @param use_column_name If true, the column name will be used as a part of the queries to find candidates
  * @param language The language to use to match the cell value, None to use the default language, empty string to use all languages
+ * @param search_all_columns If true, all columns will be used to find the candidates, otherwise, only columns that have at least one candidate entity will be used
  */
-pub fn augment_candidates<'t0: 't1, 't1>(
+pub fn candidate_local_search<'t0: 't1, 't1>(
     table: &LinkedTable,
     entity_traversal: &'t1 mut Box<dyn EntityTraversal + 't0>,
     strsim: &Box<dyn StrSim>,
     threshold: f64,
     use_column_name: bool,
     language: Option<&String>,
+    search_all_columns: bool,
 ) -> Result<LinkedTable, GramsError> {
     let (nrows, ncols) = table.shape();
 
@@ -51,7 +53,9 @@ pub fn augment_candidates<'t0: 't1, 't1>(
 
     let mut entity_columns = Vec::new();
     for ci in 0..ncols {
-        if (0..nrows).any(|ri| table.links[ri][ci].iter().any(|l| l.candidates.len() > 0)) {
+        if search_all_columns
+            || (0..nrows).any(|ri| table.links[ri][ci].iter().any(|l| l.candidates.len() > 0))
+        {
             entity_columns.push(ci);
         }
     }

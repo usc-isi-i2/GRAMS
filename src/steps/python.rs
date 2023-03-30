@@ -6,39 +6,42 @@ use crate::index::{EntityTraversal, IndexTraversal};
 use crate::strsim;
 use crate::table::LinkedTable;
 
-use super::augmenting_candidates::augment_candidates;
+use super::candidate_local_search::candidate_local_search;
 
-#[pyclass(module = "grams.core.steps", name = "AugCanConfig")]
-pub struct PyAugCanConfig {
+#[pyclass(module = "grams.core.steps", name = "CandidateLocalSearchConfig")]
+pub struct PyCandidateLocalSearchConfig {
     pub strsim: String,
     pub threshold: f64,
     pub use_column_name: bool,
     pub use_language: Option<String>,
+    pub search_all_columns: bool,
 }
 
 #[pymethods]
-impl PyAugCanConfig {
+impl PyCandidateLocalSearchConfig {
     #[new]
     pub fn new(
         strsim: String,
         threshold: f64,
         use_column_name: bool,
         use_language: Option<String>,
+        search_all_columns: bool,
     ) -> Self {
         Self {
             strsim,
             threshold,
             use_column_name,
             use_language,
+            search_all_columns,
         }
     }
 }
 
-#[pyfunction(name = "augment_candidates")]
-pub fn py_augment_candidates<'t>(
+#[pyfunction(name = "candidate_local_search")]
+pub fn py_candidate_local_search<'t>(
     table: &LinkedTable,
     context: &'t mut PyAlgoContext,
-    cfg: &PyAugCanConfig,
+    cfg: &PyCandidateLocalSearchConfig,
 ) -> PyResult<LinkedTable> {
     let strsim: Box<dyn strsim::StrSim> = match cfg.strsim.as_str() {
         "levenshtein" => Box::new(strsim::Levenshtein::default()),
@@ -52,13 +55,14 @@ pub fn py_augment_candidates<'t>(
     let mut traversal: Box<dyn EntityTraversal + 't> =
         Box::new(IndexTraversal::from_context(&mut context.0));
 
-    augment_candidates(
+    candidate_local_search(
         table,
         &mut traversal,
         &strsim,
         cfg.threshold,
         cfg.use_column_name,
         cfg.use_language.as_ref(),
+        cfg.search_all_columns,
     )
     .map_err(into_pyerr)
 }
@@ -68,8 +72,8 @@ pub(crate) fn register(py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     m.add_submodule(submodule)?;
 
-    submodule.add_class::<PyAugCanConfig>()?;
-    submodule.add_function(wrap_pyfunction!(py_augment_candidates, submodule)?)?;
+    submodule.add_class::<PyCandidateLocalSearchConfig>()?;
+    submodule.add_function(wrap_pyfunction!(py_candidate_local_search, submodule)?)?;
 
     py.import("sys")?
         .getattr("modules")?

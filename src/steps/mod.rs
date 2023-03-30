@@ -1,2 +1,2 @@
-pub mod augmenting_candidates;
+pub mod candidate_local_search;
 pub mod python;
