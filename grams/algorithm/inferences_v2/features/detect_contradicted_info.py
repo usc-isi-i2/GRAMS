@@ -23,6 +23,7 @@ from kgdata.wikidata.models import (
 from kgdata.wikidata.models.wdvalue import WDValue, WDValueEntityId
 from sm.misc.fn_cache import CacheMethod
 from dataclasses import dataclass
+from loguru import logger
 
 
 @dataclass
@@ -159,7 +160,7 @@ class ContradictedInformationDetector:
                         {
                             "entity-type": "item",
                             "id": dgv.qnode_id,
-                            "numeric-id": dgv.qnode_id[1:],
+                            "numeric-id": int(dgv.qnode_id[1:]),
                         },
                     )
 
@@ -190,7 +191,18 @@ class ContradictedInformationDetector:
                         for eid in dgv.entity_ids
                         if dgv.entity_probs[eid] >= self.correct_entity_threshold
                     ]
+                elif isinstance(dgv, LiteralValueNode):
+                    # this can happens due to inconsistency in the KG.
+                    logger.warning(
+                        "Found a literal value {} for an object property {} -> {} in one of the entities: {}",
+                        str(dgv),
+                        inedge_predicate,
+                        outedge_predicate,
+                        ",".join([f"{e.label} ({e.id})" for e in dgu_ents]),
+                    )
+                    continue
                 else:
+                    # it throws error in a table -- check it out.
                     assert isinstance(dgv, EntityValueNode)
                     if dgv.qnode_prob >= self.correct_entity_threshold:
                         dgv_ent_ids = [dgv.qnode_id]
