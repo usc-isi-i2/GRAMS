@@ -1,11 +1,13 @@
 use hashbrown::{HashMap, HashSet};
 use kgdata::models::{Entity, Value};
 
+#[derive(Debug, Clone)]
 pub struct MatchedQualifier {
     pub qualifier: String,
     pub qualifier_index: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct MatchedStatement {
     pub property: String,
     pub statement_index: usize,

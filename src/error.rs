@@ -13,6 +13,9 @@ pub enum GramsError {
     InvalidConfigData(String),
 
     #[error("Integrity error - asking for an entity that isn't in the database: {0}")]
+    DBIntegrityError(String),
+
+    #[error("Generic integrity error: {0}")]
     IntegrityError(String),
 
     #[error(transparent)]

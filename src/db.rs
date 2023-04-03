@@ -78,7 +78,7 @@ impl GramsDB {
             let entity = self
                 .entities
                 .get(eid)?
-                .ok_or_else(|| GramsError::IntegrityError(eid.clone()))?;
+                .ok_or_else(|| GramsError::DBIntegrityError(eid.clone()))?;
             entities.insert(eid.to_owned(), entity);
         }
 
@@ -109,7 +109,7 @@ impl GramsDB {
                                 let next_entity = self
                                     .entities
                                     .get(&eid.id)?
-                                    .ok_or_else(|| GramsError::IntegrityError(eid.id.clone()))?;
+                                    .ok_or_else(|| GramsError::DBIntegrityError(eid.id.clone()))?;
                                 next_hop_entities.insert(eid.id.clone(), next_entity);
                             }
                         }
@@ -122,7 +122,7 @@ impl GramsDB {
                                     {
                                         let next_entity =
                                             self.entities.get(&eid.id)?.ok_or_else(|| {
-                                                GramsError::IntegrityError(eid.id.clone())
+                                                GramsError::DBIntegrityError(eid.id.clone())
                                             })?;
                                         next_hop_entities.insert(eid.id.clone(), next_entity);
                                     }
@@ -155,7 +155,7 @@ impl GramsDB {
                             let next_entity = self
                                 .entity_metadata
                                 .get(&eid.id)?
-                                .ok_or_else(|| GramsError::IntegrityError(eid.id.clone()))?;
+                                .ok_or_else(|| GramsError::DBIntegrityError(eid.id.clone()))?;
                             entity_metadata.insert(eid.id.clone(), next_entity);
                         }
                     }
@@ -166,7 +166,7 @@ impl GramsDB {
                                 if !entity_metadata.contains_key(&eid.id) {
                                     let next_entity =
                                         self.entity_metadata.get(&eid.id)?.ok_or_else(|| {
-                                            GramsError::IntegrityError(eid.id.clone())
+                                            GramsError::DBIntegrityError(eid.id.clone())
                                         })?;
                                     entity_metadata.insert(eid.id.clone(), next_entity);
                                 }

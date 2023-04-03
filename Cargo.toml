@@ -34,6 +34,7 @@ strsim = "0.10.0"
 rocksdb = "0.20.1"
 once_cell = "1.17.1"
 lapjv = "0.2.1"
+regex = "1.7.3"
 
 [dev-dependencies]
 rstest = "0.13.0"

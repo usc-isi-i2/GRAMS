@@ -4,6 +4,7 @@ pub mod db;
 pub mod error;
 pub mod helper;
 pub mod index;
+pub mod literal_matchers;
 pub mod steps;
 pub mod strsim;
 pub mod table;

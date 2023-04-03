@@ -21,6 +21,18 @@ impl JaroWinkler {
         }
     }
 
+    pub fn new(
+        threshold: Option<f64>,
+        scaling_factor: Option<f64>,
+        prefix_len: Option<usize>,
+    ) -> Self {
+        JaroWinkler {
+            threshold: threshold.unwrap_or(0.7),
+            scaling_factor: scaling_factor.unwrap_or(0.1),
+            prefix_len: prefix_len.unwrap_or(4),
+        }
+    }
+
     fn jaro_winkler(&self, s1: &[char], s2: &[char]) -> f64 {
         let mut jw_score = self.jaro_distance(s1, s2);
         if jw_score > self.threshold {
@@ -52,7 +64,11 @@ impl JaroWinkler {
         let mut common_chars = 0;
 
         for i in 0..s1.len() {
-            let low = (i - search_range).max(0);
+            let low = if i > search_range {
+                i - search_range
+            } else {
+                0
+            };
             let high = (i + search_range).min(s2.len() - 1);
             for j in low..=high {
                 if flags_s2[j] == false && s2[j] == s1[i] {
