@@ -16,7 +16,7 @@ import serde.prelude as serde
 from hugedict.prelude import CacheDict, Parallel
 from ream.actors.base import BaseActor
 from sm.misc.ray_helper import get_instance
-from timer import Timer
+from timer import watch_and_report
 from tqdm import tqdm
 
 from kgdata.wikidata.db import (
@@ -49,7 +49,7 @@ class GramsDB:
         # to avoid memory overflow
         self.autocached_entities: dict[Optional[str], Mapping[str, WDEntity]] = {}
 
-        with Timer().watch_and_report("init grams db"):
+        with watch_and_report("init grams db"):
             self.db = WikidataDB(data_dir)
             self.wdentities = self.db.wdentities
             self.wdentity_labels = self.db.wdentity_labels

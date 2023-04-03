@@ -2,6 +2,7 @@ pub mod context;
 pub mod datagraph;
 pub mod db;
 pub mod error;
+pub mod helper;
 pub mod index;
 pub mod steps;
 pub mod strsim;

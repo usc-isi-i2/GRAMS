@@ -4,10 +4,10 @@ use crate::error::GramsError;
 use crate::table::{CandidateEntityId, Link};
 use crate::{
     index::EntityTraversal,
-    strsim::StrSim,
+    strsim::StrSimWithTokenizer,
     table::{EntityId, LinkedTable},
 };
-use kgdata::models::Entity;
+use kgdata::models::EntityMetadata;
 
 /**
  * Adding more candidates to the table.
@@ -27,10 +27,10 @@ use kgdata::models::Entity;
  * @param language The language to use to match the cell value, None to use the default language, empty string to use all languages
  * @param search_all_columns If true, all columns will be used to find the candidates, otherwise, only columns that have at least one candidate entity will be used
  */
-pub fn candidate_local_search<'t0: 't1, 't1>(
+pub fn candidate_local_search<'t0: 't1, 't1, 't2, T, SS: StrSimWithTokenizer<T>>(
     table: &LinkedTable,
     entity_traversal: &'t1 mut Box<dyn EntityTraversal + 't0>,
-    strsim: &Box<dyn StrSim>,
+    strsim: &mut SS,
     threshold: f64,
     use_column_name: bool,
     language: Option<&String>,
@@ -59,7 +59,46 @@ pub fn candidate_local_search<'t0: 't1, 't1>(
             entity_columns.push(ci);
         }
     }
-    let mut tmp_strs = [String::new(), String::new()];
+    // mapping from column index => row index => queries
+    let cell2queries: Vec<Vec<Vec<T>>> = (0..ncols)
+        .map(|ci| {
+            if !entity_columns.contains(&ci) {
+                return Vec::new();
+            }
+
+            if use_column_name {
+                (0..nrows)
+                    .map(|ri| {
+                        let text = table.columns[ci].values[ri].trim();
+                        if text.is_empty() {
+                            return Vec::new();
+                        }
+
+                        let val = strsim.tokenize(text);
+                        if let Some(header) = &table.columns[ci].name {
+                            let valheader1 = strsim.tokenize(&format!(
+                                "{} {}",
+                                header.trim(),
+                                table.columns[ci].values[ri].trim()
+                            ));
+                            let valheader2 = strsim.tokenize(&format!(
+                                "{} {}",
+                                table.columns[ci].values[ri].trim(),
+                                header.trim()
+                            ));
+                            vec![valheader1, valheader2, val]
+                        } else {
+                            vec![val]
+                        }
+                    })
+                    .collect()
+            } else {
+                (0..nrows)
+                    .map(|ri| vec![strsim.tokenize(table.columns[ci].values[ri].trim())])
+                    .collect()
+            }
+        })
+        .collect();
 
     for ci in 0..ncols {
         for ri in 0..nrows {
@@ -74,29 +113,17 @@ pub fn candidate_local_search<'t0: 't1, 't1>(
                 .map(|c| c.id.0.as_str())
                 .collect();
 
-            let next_ents = entity_traversal.get_outgoing_entities(&entids);
+            let next_ents = entity_traversal.get_outgoing_entity_metadata(&entids);
 
             for &oci in &entity_columns {
                 if oci == ci {
                     continue;
                 }
 
-                let value = &table.columns[oci].values[ri].trim();
-                if value.is_empty() {
+                let queries = &cell2queries[oci][ri];
+                if queries.is_empty() {
                     continue;
                 }
-
-                let queries: Vec<&str> = if use_column_name {
-                    if let Some(header) = &table.columns[oci].name {
-                        tmp_strs[0] = format!("{} {}", header, value);
-                        tmp_strs[1] = format!("{} {}", value, header);
-                        vec![value, tmp_strs[0].trim(), tmp_strs[1].trim()]
-                    } else {
-                        vec![value]
-                    }
-                } else {
-                    vec![value]
-                };
 
                 // search for value in next_ents
                 let matched_entity_ids = if newtable.links[ri][oci].len() > 0 {
@@ -123,7 +150,7 @@ pub fn candidate_local_search<'t0: 't1, 't1>(
                     if newtable.links[ri][oci].len() == 0 {
                         newtable.links[ri][oci].push(Link {
                             start: 0,
-                            end: value.len(),
+                            end: table.columns[ci].values[ri].len(),
                             url: None,
                             entities: Vec::new(),
                             candidates: matched_entity_ids,
@@ -147,10 +174,10 @@ pub fn candidate_local_search<'t0: 't1, 't1>(
 /**
  * Search for the given queries if it matches any entities
  */
-pub fn search_text<'t>(
-    queries: &[&str],
-    entities: &[&'t Entity],
-    strsim: &Box<dyn StrSim>,
+pub fn search_text<'t, 't1, T, SS: StrSimWithTokenizer<T>>(
+    queries: &[T],
+    entities: &[&'t EntityMetadata],
+    strsim: &mut SS,
     threshold: f64,
     language: Option<&String>,
 ) -> Result<Vec<CandidateEntityId>, GramsError> {
@@ -209,15 +236,15 @@ pub fn search_text<'t>(
 }
 
 #[inline(always)]
-fn cal_max_score<'t, I: Iterator<Item = &'t String>>(
-    queries: &[&str],
+fn cal_max_score<'t, 't1, I: Iterator<Item = &'t String>, T, SS: StrSimWithTokenizer<T>>(
+    queries: &[T],
     keys: I,
-    strsim: &Box<dyn StrSim>,
+    strsim: &mut SS,
 ) -> Result<f64, GramsError> {
     let mut max_score = f64::NEG_INFINITY;
     for k in keys {
         for q in queries {
-            let score = strsim.similarity(k, q)?;
+            let score = strsim.similarity_pre_tok1(k, q)?;
             if score > max_score {
                 max_score = score;
             }
@@ -226,14 +253,14 @@ fn cal_max_score<'t, I: Iterator<Item = &'t String>>(
     return Ok(max_score);
 }
 
-fn cal_max_score_single_key(
-    queries: &[&str],
+fn cal_max_score_single_key<'t, T, SS: StrSimWithTokenizer<T>>(
+    queries: &[T],
     key: &String,
-    strsim: &Box<dyn StrSim>,
+    strsim: &mut SS,
 ) -> Result<f64, GramsError> {
     let mut max_score = f64::NEG_INFINITY;
     for q in queries {
-        let score = strsim.similarity(key, q)?;
+        let score = strsim.similarity_pre_tok1(key, q)?;
         if score > max_score {
             max_score = score;
         }

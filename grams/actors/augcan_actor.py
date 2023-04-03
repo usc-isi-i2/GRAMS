@@ -10,7 +10,7 @@ from osin.integrations.ream import OsinActor
 from ream.cache_helper import Cache
 from ream.dataset_helper import DatasetDict
 from sm_datasets.datasets import Datasets
-from timer import Timer
+from timer import watch_and_report
 
 import grams.core as gcore
 import grams.core.steps as gcoresteps
@@ -102,7 +102,7 @@ class AugCanActor(OsinActor[str, AugCanParams]):
 
     def evaluate(self, eval_args: EvalArgs):
         for dsquery in eval_args.dsqueries:
-            with Timer().watch_and_report(f"augment candidates {dsquery}"):
+            with watch_and_report(f"augment candidates {dsquery}"):
                 # self.run_dataset(dsquery)
                 self.check_rust_implementation(dsquery)
 
@@ -190,9 +190,9 @@ def check_rust_implementation(
 ):
     db = to_grams_db(db) if not isinstance(db, GramsDB) else db
 
-    with Timer().watch_and_report("rust"):
+    with watch_and_report("rust"):
         table1 = rust_augment_candidates(db.data_dir, example, params).table
-    with Timer().watch_and_report("python"):
+    with watch_and_report("python"):
         table2 = augment_candidates(
             db, example, getattr(StrSim, params.similarity), params
         ).table

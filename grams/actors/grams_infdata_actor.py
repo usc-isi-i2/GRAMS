@@ -1,7 +1,15 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
+from loguru import logger
+
+from osin.integrations.ream import OsinActor
+from ream.data_model_helper import NumpyDataModelContainer
+from ream.prelude import ActorVersion, Cache, DatasetDict, DatasetQuery
+
+from grams.actors.actor_helpers import EvalArgs
 from grams.actors.db_actor import GramsDB, GramsDBActor, to_grams_db
 from grams.actors.grams_preprocess_actor import GramsPreprocessActor
 from grams.algorithm.candidate_graph.cg_factory import CGFactory
@@ -9,6 +17,10 @@ from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.context import AlgoContext
 from grams.algorithm.data_graph.dg_config import DGConfigs
 from grams.algorithm.data_graph.dg_factory import DGFactory
+from grams.algorithm.inferences_v2.features.inf_feature import (
+    InfFeature,
+    InfFeatureExtractor,
+)
 from grams.algorithm.kg_index import KGObjectIndex, TraversalOption
 from grams.algorithm.literal_matchers.literal_match import (
     LiteralMatch,
@@ -16,22 +28,11 @@ from grams.algorithm.literal_matchers.literal_match import (
 )
 from grams.algorithm.literal_matchers.text_parser import TextParser, TextParserConfigs
 from grams.inputs.linked_table import LinkedTable
-from osin.integrations.ream import OsinActor
-from ream.data_model_helper import NumpyDataModelContainer
-from ream.prelude import (
-    ActorVersion,
-    Cache,
-    DatasetDict,
-    DatasetQuery,
-)
-from sm.misc.ray_helper import enhance_error_info, ray_map, ray_put
-from grams.algorithm.inferences_v2.features.inf_feature import (
-    InfFeature,
-    InfFeatureExtractor,
-)
+from sm.misc.ray_helper import enhance_error_info, ray_map, ray_put, track_runtime
+from timer import watch_and_report
 
-if TYPE_CHECKING:
-    from grams.actors.__main__ import EvalArgs
+
+logger = logger.bind(name=__name__)
 
 
 @dataclass
@@ -61,7 +62,7 @@ class InfDataDatasetDict(DatasetDict[list[InfData]]):
 
 
 class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
-    VERSION = ActorVersion.create(108, [InfFeatureExtractor])
+    VERSION = ActorVersion.create(109, [InfFeatureExtractor])
 
     def __init__(
         self,
@@ -127,6 +128,7 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
         return evalout
 
 
+# @track_runtime("2.id", "/data/binhvu/sm-dev/data/home/timetrack.sqlite")
 @enhance_error_info("2.id")
 def create_inference_data(
     db: Union[GramsDB, Path],
@@ -136,43 +138,58 @@ def create_inference_data(
 ):
     db = to_grams_db(db)
 
-    wdentity_ids, wdentities = db.get_table_entities(
-        table, params.data_graph.max_n_hop, verbose
-    )
-    wdentity_labels = db.get_table_entity_labels(
-        table, params.data_graph.max_n_hop, verbose
-    )
+    with watch_and_report(
+        "load data", preprint=True, print_fn=logger.debug, disable=not verbose
+    ):
+        wdentity_ids, wdentities = db.get_table_entities(
+            table, params.data_graph.max_n_hop, verbose
+        )
+        wdentity_labels = db.get_table_entity_labels(
+            table, params.data_graph.max_n_hop, verbose
+        )
     wdclasses = db.wdclasses.cache()
     wdprops = db.wdprops.cache()
 
-    kg_object_index = KGObjectIndex.from_entities(
-        list(wdentity_ids.intersection(wdentities.keys())),
-        wdentities,
-        wdprops,
-        n_hop=params.data_graph.max_n_hop,
-        traversal_option=TraversalOption.TransitiveOnly,
-    )
+    with watch_and_report(
+        "build index", preprint=True, print_fn=logger.debug, disable=not verbose
+    ):
+        kg_object_index = KGObjectIndex.from_entities(
+            list(wdentity_ids.intersection(wdentities.keys())),
+            wdentities,
+            wdprops,
+            n_hop=params.data_graph.max_n_hop,
+            traversal_option=TraversalOption.TransitiveOnly,
+        )
     text_parser = TextParser(params.text_parser)
     literal_match = LiteralMatch(wdentities, params.literal_matchers)
 
-    dg_factory = DGFactory(
-        wdentities,
-        wdprops,
-        text_parser,
-        literal_match,
-        params.data_graph,
-    )
-    dg = dg_factory.create_dg(
-        table, kg_object_index, max_n_hop=params.data_graph.max_n_hop
-    )
+    with watch_and_report(
+        "build data graph", preprint=True, print_fn=logger.debug, disable=not verbose
+    ):
+        dg_factory = DGFactory(
+            wdentities,
+            wdprops,
+            text_parser,
+            literal_match,
+            params.data_graph,
+        )
+        dg = dg_factory.create_dg(
+            table, kg_object_index, max_n_hop=params.data_graph.max_n_hop
+        )
 
-    cg_factory = CGFactory(
-        wdentities,
-        wdentity_labels,
-        wdclasses,
-        wdprops,
-    )
-    cg = cg_factory.create_cg(table, dg)
+    with watch_and_report(
+        "build candidate graph",
+        preprint=True,
+        print_fn=logger.debug,
+        disable=not verbose,
+    ):
+        cg_factory = CGFactory(
+            wdentities,
+            wdentity_labels,
+            wdclasses,
+            wdprops,
+        )
+        cg = cg_factory.create_cg(table, dg)
 
     context = AlgoContext(
         data_dir=db.data_dir,
@@ -185,4 +202,4 @@ def create_inference_data(
         wd_num_prop_stats=db.wd_numprop_stats,
     )
 
-    return cg, InfFeatureExtractor(context).extract(table, dg, cg)
+    return cg, InfFeatureExtractor(context).extract(table, dg, cg, verbose=verbose)

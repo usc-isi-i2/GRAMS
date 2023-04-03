@@ -43,28 +43,28 @@ pub fn py_candidate_local_search<'t>(
     context: &'t mut PyAlgoContext,
     cfg: &PyCandidateLocalSearchConfig,
 ) -> PyResult<LinkedTable> {
-    let strsim: Box<dyn strsim::StrSim> = match cfg.strsim.as_str() {
-        "levenshtein" => Box::new(strsim::Levenshtein::default()),
-        _ => {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "Invalid strsim",
-            ))
-        }
-    };
-
+    let mut char_tokenizer = strsim::CharacterTokenizer {};
     let mut traversal: Box<dyn EntityTraversal + 't> =
         Box::new(IndexTraversal::from_context(&mut context.0));
 
-    candidate_local_search(
-        table,
-        &mut traversal,
-        &strsim,
-        cfg.threshold,
-        cfg.use_column_name,
-        cfg.use_language.as_ref(),
-        cfg.search_all_columns,
-    )
-    .map_err(into_pyerr)
+    match cfg.strsim.as_str() {
+        "levenshtein" => candidate_local_search(
+            table,
+            &mut traversal,
+            &mut strsim::StrSimWithValueTokenizer::new(
+                &mut char_tokenizer,
+                strsim::Levenshtein::default(),
+            ),
+            cfg.threshold,
+            cfg.use_column_name,
+            cfg.use_language.as_ref(),
+            cfg.search_all_columns,
+        )
+        .map_err(into_pyerr),
+        _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "Invalid strsim",
+        )),
+    }
 }
 
 pub(crate) fn register(py: Python<'_>, m: &PyModule) -> PyResult<()> {

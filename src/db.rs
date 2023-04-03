@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use hashbrown::{HashMap, HashSet};
 use kgdata::{
-    db::{open_entity_db, ReadonlyRocksDBDict},
-    models::{Entity, Value},
+    db::{open_entity_db, open_entity_metadata_db, ReadonlyRocksDBDict},
+    models::{Entity, EntityMetadata, Value},
 };
 
 use crate::{
@@ -21,6 +21,7 @@ static DB_INSTANCE: OnceCell<Py<GramsDB>> = OnceCell::new();
 pub struct GramsDB {
     pub datadir: PathBuf,
     entities: ReadonlyRocksDBDict<String, Entity>,
+    entity_metadata: ReadonlyRocksDBDict<String, EntityMetadata>,
 }
 
 impl std::fmt::Debug for GramsDB {
@@ -36,6 +37,9 @@ impl GramsDB {
         let datadir = PathBuf::from(datadir);
         Ok(Self {
             entities: open_entity_db(datadir.join("wdentities.db").as_os_str())?,
+            entity_metadata: open_entity_metadata_db(
+                datadir.join("wdentity_metadata.db").as_os_str(),
+            )?,
             datadir,
         })
     }
@@ -68,7 +72,7 @@ impl GramsDB {
         &self,
         entity_ids: &[String],
         n_hop: usize,
-    ) -> Result<HashMap<String, Entity>, GramsError> {
+    ) -> Result<(HashMap<String, Entity>, HashMap<String, EntityMetadata>), GramsError> {
         let mut entities = HashMap::new();
         for eid in entity_ids {
             let entity = self
@@ -79,7 +83,8 @@ impl GramsDB {
         }
 
         if n_hop == 1 {
-            return Ok(entities);
+            let entity_metadata = self.get_entity_metadata(&entities)?;
+            return Ok((entities, entity_metadata));
         }
 
         let mut next_hop_entities: HashMap<String, Entity>;
@@ -133,7 +138,45 @@ impl GramsDB {
             current_hop_entities = next_hop_entities;
         }
         entities.extend(current_hop_entities.into_iter());
-        Ok(entities)
+        let entity_metadata = self.get_entity_metadata(&entities)?;
+        Ok((entities, entity_metadata))
+    }
+
+    fn get_entity_metadata(
+        &self,
+        entities: &HashMap<String, Entity>,
+    ) -> Result<HashMap<String, EntityMetadata>, GramsError> {
+        let mut entity_metadata = HashMap::with_capacity(entities.len());
+        for ent in entities.values() {
+            for stmts in ent.props.values() {
+                for stmt in stmts {
+                    if let Value::EntityId(eid) = &stmt.value {
+                        if !entity_metadata.contains_key(&eid.id) {
+                            let next_entity = self
+                                .entity_metadata
+                                .get(&eid.id)?
+                                .ok_or_else(|| GramsError::IntegrityError(eid.id.clone()))?;
+                            entity_metadata.insert(eid.id.clone(), next_entity);
+                        }
+                    }
+
+                    for qvals in stmt.qualifiers.values() {
+                        for qval in qvals {
+                            if let Value::EntityId(eid) = &qval {
+                                if !entity_metadata.contains_key(&eid.id) {
+                                    let next_entity =
+                                        self.entity_metadata.get(&eid.id)?.ok_or_else(|| {
+                                            GramsError::IntegrityError(eid.id.clone())
+                                        })?;
+                                    entity_metadata.insert(eid.id.clone(), next_entity);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(entity_metadata)
     }
 }
 
@@ -170,8 +213,13 @@ impl GramsDB {
 
     pub fn get_algo_context(&self, table: &LinkedTable, n_hop: usize) -> PyResult<PyAlgoContext> {
         let entity_ids = self.get_table_entity_ids(table);
-        let entities = self.get_entities(&entity_ids, n_hop).map_err(into_pyerr)?;
+        let (entities, entity_metadata) =
+            self.get_entities(&entity_ids, n_hop).map_err(into_pyerr)?;
 
-        Ok(PyAlgoContext(AlgoContext::new(entity_ids, entities)))
+        Ok(PyAlgoContext(AlgoContext::new(
+            entity_ids,
+            entities,
+            entity_metadata,
+        )))
     }
 }

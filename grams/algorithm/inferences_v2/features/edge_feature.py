@@ -1,5 +1,10 @@
 from __future__ import annotations
+
 import numpy as np
+from nptyping import Bool, Float64, Int32, NDArray, Shape
+from ream.data_model_helper import NumpyDataModel
+from timer import watch_and_report
+from tqdm.auto import tqdm
 
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
@@ -17,13 +22,11 @@ from grams.algorithm.inferences_v2.features.detect_contradicted_info import (
 from grams.algorithm.inferences_v2.features.func_dependency import (
     FunctionalDependencyDetector,
 )
-from grams.algorithm.inferences_v2.features.helper import MISSING_VALUE, IDMap
-from grams.inputs.linked_table import LinkedTable
-from nptyping import Bool, Float64, Int32, NDArray, Shape
-from ream.data_model_helper import NumpyDataModel
 from grams.algorithm.inferences_v2.features.graph_traversal_helper import (
     GraphTraversalHelper,
 )
+from grams.algorithm.inferences_v2.features.helper import MISSING_VALUE, IDMap
+from grams.inputs.linked_table import LinkedTable
 from sm.misc.fn_cache import CacheMethod
 
 
@@ -127,12 +130,18 @@ class EdgeFeatureExtractor:
             # TODO: store is_qualifier in the CGEdge
             is_qualifier.append(outedge.predicate != inedge.predicate)
 
-        freq_over_row = self.FREQ_OVER_ROW(rels)
-        freq_over_ent_row = self.FREQ_OVER_ENT_ROW(rels)
-        freq_over_pos_rel = self.FREQ_OVER_POS_REL(rels)
-        freq_unmatch_over_ent_row = self.FREQ_UNMATCH_OVER_ENT_ROW(rels)
-        freq_unmatch_over_pos_rel = self.FREQ_UNMATCH_OVER_POS_REL(rels)
-        not_func_dependency = self.NOT_FUNC_DEPENDENCY(rels)
+        with watch_and_report("freq over row", preprint=True):
+            freq_over_row = self.FREQ_OVER_ROW(rels)
+        with watch_and_report("freq over ent row", preprint=True):
+            freq_over_ent_row = self.FREQ_OVER_ENT_ROW(rels)
+        with watch_and_report("freq over pos rel", preprint=True):
+            freq_over_pos_rel = self.FREQ_OVER_POS_REL(rels)
+        with watch_and_report("freq unmatch over ent row", preprint=True):
+            freq_unmatch_over_ent_row = self.FREQ_UNMATCH_OVER_ENT_ROW(rels)
+        with watch_and_report("freq unmatch over pos rel", preprint=True):
+            freq_unmatch_over_pos_rel = self.FREQ_UNMATCH_OVER_POS_REL(rels)
+        with watch_and_report("not func dependency", preprint=True):
+            not_func_dependency = self.NOT_FUNC_DEPENDENCY(rels)
 
         return EdgeFeature(
             source=np.array(source, dtype=np.int32),
@@ -180,7 +189,7 @@ class EdgeFeatureExtractor:
         tmp = {}
         max_possible_links = {}
 
-        for reli, (s, inedge, outedge) in enumerate(rels):
+        for reli, (s, inedge, outedge) in enumerate(tqdm(rels)):
             freq = self.get_rel_freq(s, outedge)
             n_possible_links = self.get_unmatch_discovered_links(
                 s, inedge, outedge
@@ -214,7 +223,7 @@ class EdgeFeatureExtractor:
         self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]
     ):
         output = []
-        for s, inedge, outedge in rels:
+        for s, inedge, outedge in tqdm(rels):
             max_pos_ent_rows = self.get_maximum_possible_ent_links_between_two_nodes(
                 s, inedge, outedge
             )
@@ -234,7 +243,7 @@ class EdgeFeatureExtractor:
         tmp = {}
         max_possible_links = {}
 
-        for reli, (s, inedge, outedge) in enumerate(rels):
+        for reli, (s, inedge, outedge) in enumerate(tqdm(rels)):
             n_unmatch_links = len(
                 self.contradicted_info_detector.get_contradicted_information(
                     s, inedge, outedge

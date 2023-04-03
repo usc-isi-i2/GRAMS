@@ -78,6 +78,7 @@ class NodeFeatureExtractor:
         context: AlgoContext,
         sim_fn: Optional[Callable[[str, str], float]] = None,
         graph_helper: Optional[GraphHelper] = None,
+        auto_merge_qnodes: bool = False,
     ):
         self.idmap = idmap
         self.table = table
@@ -85,6 +86,7 @@ class NodeFeatureExtractor:
         self.dg = dg
         self.context = context
 
+        self.auto_merge_qnodes = auto_merge_qnodes
         self.wdentities = context.wdentities
         self.wdclasses = context.wdclasses
         self.wdprops = context.wdprops
@@ -492,32 +494,31 @@ class NodeFeatureExtractor:
         we should go even higher order
         """
         assert cell.id not in cell2qnodes
-        if len(cell.entity_ids) > 1:
+        if self.auto_merge_qnodes:
             # attempt to merge qnodes (spatial) if they are contained in each other
             # we should go even higher order
             ignore_qnodes = set()
-            for q0_id in cell.entity_ids:
-                q0 = self.wdentities[q0_id]
-                vals = {
-                    stmt.value.as_entity_id_safe()
-                    for p in self.HIERARCHY_PROPS
-                    for stmt in q0.props.get(p, [])
-                }
-                for q1_id in cell.entity_ids:
-                    if q0_id == q1_id:
-                        continue
-                    if q1_id in vals:
-                        # q0 is inside q1, ignore q1
-                        ignore_qnodes.add(q1_id)
+            if len(cell.entity_ids) > 1:
+                for q0_id in cell.entity_ids:
+                    q0 = self.wdentities[q0_id]
+                    vals = {
+                        stmt.value.as_entity_id_safe()
+                        for p in self.HIERARCHY_PROPS
+                        for stmt in q0.props.get(p, [])
+                    }
+                    for q1_id in cell.entity_ids:
+                        if q0_id == q1_id:
+                            continue
+                        if q1_id in vals:
+                            # q0 is inside q1, ignore q1
+                            ignore_qnodes.add(q1_id)
             qnode_lst = [
                 self.wdentities[q_id]
                 for q_id in cell.entity_ids
                 if q_id not in ignore_qnodes
             ]
-        elif len(cell.entity_ids) > 0:
-            qnode_lst = [self.wdentities[cell.entity_ids[0]]]
         else:
-            qnode_lst = []
+            qnode_lst = [self.wdentities[q_id] for q_id in cell.entity_ids]
 
         qnode2prob = {}
         for link in self.table.links[cell.row][cell.column]:

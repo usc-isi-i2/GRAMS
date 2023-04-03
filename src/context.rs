@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use kgdata::models::Entity;
+use kgdata::models::{Entity, EntityMetadata};
 
 use pyo3::prelude::*;
 
@@ -12,14 +12,20 @@ pub struct PyAlgoContext(pub AlgoContext);
 pub struct AlgoContext {
     pub entity_ids: Vec<String>,
     pub entities: HashMap<String, Entity>,
+    pub entity_metadata: HashMap<String, EntityMetadata>,
     pub index_object1hop: Option<ObjectHop1Index>,
 }
 
 impl AlgoContext {
-    pub fn new(entity_ids: Vec<String>, entities: HashMap<String, Entity>) -> Self {
+    pub fn new(
+        entity_ids: Vec<String>,
+        entities: HashMap<String, Entity>,
+        entity_metadata: HashMap<String, EntityMetadata>,
+    ) -> Self {
         Self {
             entity_ids,
             entities,
+            entity_metadata,
             index_object1hop: None,
         }
     }

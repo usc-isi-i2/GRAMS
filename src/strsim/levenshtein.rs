@@ -1,17 +1,15 @@
+use super::{StrSim, StrSimWithTokenizer};
+use crate::error::GramsError;
+use anyhow::Result;
 use hashbrown::HashMap;
 
-use crate::error::GramsError;
-
-use super::StrSim;
-use anyhow::Result;
-
 pub struct Levenshtein {
-    pub insertion: HashMap<char, f32>,
-    pub insertion_default: f32,
-    pub deletion: HashMap<char, f32>,
-    pub deletion_default: f32,
-    pub substitution: HashMap<char, HashMap<char, f32>>,
-    pub substitution_default: f32,
+    pub insertion: HashMap<char, f64>,
+    pub insertion_default: f64,
+    pub deletion: HashMap<char, f64>,
+    pub deletion_default: f64,
+    pub substitution: HashMap<char, HashMap<char, f64>>,
+    pub substitution_default: f64,
     pub lowerbound: f64,
 }
 
@@ -28,7 +26,7 @@ impl Levenshtein {
         }
     }
 
-    pub fn compute_max_cost(&self, chars: &[char]) -> f32 {
+    pub fn compute_max_cost(&self, chars: &[char]) -> f64 {
         chars
             .iter()
             .map(|c| {
@@ -53,7 +51,7 @@ impl Levenshtein {
             .sum()
     }
 
-    pub fn estimate_min_char_cost(&self, chars: &[char]) -> f32 {
+    pub fn estimate_min_char_cost(&self, chars: &[char]) -> f64 {
         chars
             .iter()
             .map(|c| {
@@ -81,14 +79,14 @@ impl Levenshtein {
 
     /// The Levenshtein distance between two words is the minimum number of single-character edits (insertions,
     /// deletions or substitutions) required to change one word into the other.
-    pub fn distance(&self, s1: &[char], s2: &[char]) -> f32 {
+    pub fn distance(&self, s1: &[char], s2: &[char]) -> f64 {
         let n1 = s1.len();
         let n2 = s2.len();
         if n1 == 0 && n2 == 0 {
             return 0.0;
         }
 
-        let mut dp: Vec<Vec<f32>> = vec![vec![0.0; n2 + 1]; n1 + 1];
+        let mut dp: Vec<Vec<f64>> = vec![vec![0.0; n2 + 1]; n1 + 1];
         for i in 0..=n1 {
             for j in 0..=n2 {
                 if i == 0 && j == 0 {
@@ -128,19 +126,14 @@ impl Levenshtein {
         }
         return dp[n1][n2];
     }
-}
 
-impl StrSim for Levenshtein {
     /**
      * Compute the Levenshtein similarity between two strings as
      * 1 - (levenshtein_distance / max_cost(key, query)).
      *
      * Directly translated from RLTK's implementation.
      */
-    fn similarity(&self, key: &str, query: &str) -> Result<f64, GramsError> {
-        let s1: Vec<char> = key.chars().collect();
-        let s2: Vec<char> = query.chars().collect();
-
+    pub fn similarity(&self, s1: &[char], s2: &[char]) -> Result<f64, GramsError> {
         let max_cost = self.compute_max_cost(&s1).max(self.compute_max_cost(&s2)) as f64;
         let min_lev: f64;
 
@@ -181,5 +174,11 @@ impl StrSim for Levenshtein {
             return Ok(0.0);
         }
         Ok(lev_sim)
+    }
+}
+
+impl StrSim<Vec<char>> for Levenshtein {
+    fn similarity_pre_tok2(&self, s1: &Vec<char>, s2: &Vec<char>) -> Result<f64, GramsError> {
+        self.similarity(s1, s2)
     }
 }

@@ -21,6 +21,7 @@ from grams.algorithm.inferences_v2.features.node_feature import (
     NodeFeatureExtractor,
 )
 from grams.inputs.linked_table import LinkedTable
+from loguru import logger
 from nptyping import Bool, Float32, Float64, Int32, NDArray, Shape
 from ream.data_model_helper import (
     NumpyDataModel,
@@ -28,6 +29,9 @@ from ream.data_model_helper import (
     NumpyDataModelHelper,
 )
 import serde.pickle
+from timer import watch_and_report
+
+logger = logger.bind(name=__name__)
 
 
 @dataclass
@@ -41,7 +45,7 @@ class InfFeature(NumpyDataModelContainer):
 class InfFeatureExtractor:
     """Extracting features in a candidate graph."""
 
-    VERSION = 106
+    VERSION = 107
 
     def __init__(self, context: AlgoContext):
         self.context = context
@@ -51,6 +55,7 @@ class InfFeatureExtractor:
         table: LinkedTable,
         dg: DGGraph,
         cg: CGGraph,
+        verbose: bool = False,
     ) -> InfFeature:
         idmap = IDMap()
 
@@ -76,9 +81,33 @@ class InfFeatureExtractor:
         for c in node_feat_extractor.get_cantypes():
             idmap.add(c)
 
+        with watch_and_report(
+            "extract edge feature",
+            print_fn=logger.debug,
+            preprint=True,
+            disable=not verbose,
+        ):
+            edge_features = edge_feat_extractor.extract()
+
+        with watch_and_report(
+            "extract node feature",
+            print_fn=logger.debug,
+            preprint=True,
+            disable=not verbose,
+        ):
+
+            node_features = node_feat_extractor.extract()
+        with watch_and_report(
+            "extract misc feature",
+            print_fn=logger.debug,
+            preprint=True,
+            disable=not verbose,
+        ):
+            misc_features = misc_feat_extractor.extract()
+
         return InfFeature(
             idmap=idmap,
-            edge_features=edge_feat_extractor.extract(),
-            node_features=node_feat_extractor.extract(),
-            misc_features=misc_feat_extractor.extract(),
+            edge_features=edge_features,
+            node_features=node_features,
+            misc_features=misc_features,
         )
