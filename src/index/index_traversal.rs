@@ -49,12 +49,12 @@ impl<'t> EntityTraversal for IndexTraversal<'t> {
         &'t1 mut self,
         source: &str,
         target: &str,
-    ) -> Box<dyn Iterator<Item = &'t1 MatchedStatement> + 't1> {
+    ) -> core::slice::Iter<'t1, MatchedStatement> {
         if let Some(targets) = self.index.index.get(source) {
             if let Some(props) = targets.get(target) {
-                return Box::new(props.iter());
+                return props.iter();
             }
         }
-        return Box::new(std::iter::empty::<&MatchedStatement>());
+        return [].iter();
     }
 }

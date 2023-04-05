@@ -1,11 +1,11 @@
 use anyhow::Result;
-use grams::strsim::{CharacterTokenizer, JaroWinkler, SeqStrSim, StrSimWithTokenizer};
+use grams::strsim::{MongeElkan, SeqStrSim, StrSimWithTokenizer, WhitespaceCharSeqTokenizer};
 use std::str;
 
 #[test]
 fn test_similarity() -> Result<()> {
-    let mut tokenizer = CharacterTokenizer {};
-    let mut strsim = SeqStrSim::new(&mut tokenizer, JaroWinkler::default())?;
+    let mut tokenizer = WhitespaceCharSeqTokenizer {};
+    let mut strsim = SeqStrSim::new(&mut tokenizer, MongeElkan::default())?;
 
     let testcases = [
         ("MARTHA", "MARHTA", 0.9611111111111111),

@@ -1,8 +1,11 @@
-use super::{StrSim, StrSimWithTokenizer};
+use super::{ExpectTokenizerType, StrSim, TokenizerType};
 use crate::error::GramsError;
 use anyhow::Result;
+use derive_more::Display;
 use hashbrown::HashMap;
 
+#[derive(Display)]
+#[display(fmt = "Levenshtein")]
 pub struct Levenshtein {
     pub insertion: HashMap<char, f64>,
     pub insertion_default: f64,
@@ -174,6 +177,12 @@ impl Levenshtein {
             return Ok(0.0);
         }
         Ok(lev_sim)
+    }
+}
+
+impl ExpectTokenizerType for Levenshtein {
+    fn get_expected_tokenizer_type(&self) -> TokenizerType {
+        TokenizerType::Seq(Box::new(None))
     }
 }
 

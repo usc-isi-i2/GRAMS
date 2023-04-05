@@ -1,13 +1,11 @@
 use anyhow::Result;
-use grams::strsim::{
-    CharacterTokenizer, Levenshtein, StrSimWithTokenizer, StrSimWithValueTokenizer,
-};
+use grams::strsim::{CharacterTokenizer, Levenshtein, SeqStrSim, StrSimWithTokenizer};
 use std::str;
 
 #[test]
 fn test_similarity() -> Result<()> {
     let mut tokenizer = CharacterTokenizer {};
-    let mut strsim = StrSimWithValueTokenizer::new(&mut tokenizer, Levenshtein::default());
+    let mut strsim = SeqStrSim::new(&mut tokenizer, Levenshtein::default())?;
 
     let testcases = [("abc", "def", 0.0), ("aaa", "aaa", 1.0)];
     for (k, q, sim) in testcases {

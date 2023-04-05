@@ -15,7 +15,11 @@ pub struct MatchedStatement {
     pub qualifiers: Vec<MatchedQualifier>,
 }
 
+/// An index that storing target entities that an entity can reach and how to reach them.
 pub struct ObjectHop1Index {
+    /// Mapping from source entity to target entities and their associated list of matched statements that the
+    /// target entities are discovered from. A target entity can be appeared in multiple matched statements with
+    /// same or different properties, or same or different qualifiers.
     pub index: HashMap<String, HashMap<String, Vec<MatchedStatement>>>,
 }
 

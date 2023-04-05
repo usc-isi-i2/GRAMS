@@ -1,14 +1,18 @@
 use crate::error::GramsError;
 
-use super::{JaroWinkler, StrSim};
+use super::{ExpectTokenizerType, JaroWinkler, StrSim, TokenizerType};
+use derive_more::Display;
 
+#[derive(Display)]
+#[display(fmt = "MongeElkan")]
 pub struct MongeElkan<S: StrSim<Vec<char>>> {
     pub strsim: S,
     // This is for early exit. If the similarity is not possible to satisfy this value,
     // the function returns immediately with the return value 0.0. Defaults to None.
     pub lower_bound: f64,
 }
-
+#[derive(Display)]
+#[display(fmt = "SymmetricMongeElkan")]
 pub struct SymmetricMongeElkan<S: StrSim<Vec<char>>>(MongeElkan<S>);
 
 impl MongeElkan<JaroWinkler> {
@@ -103,5 +107,17 @@ impl<S: StrSim<Vec<char>>> StrSim<Vec<Vec<char>>> for SymmetricMongeElkan<S> {
         bag2: &Vec<Vec<char>>,
     ) -> Result<f64, GramsError> {
         self.0.symmetric_similarity(bag1, bag2)
+    }
+}
+
+impl<S: StrSim<Vec<char>> + ExpectTokenizerType> ExpectTokenizerType for MongeElkan<S> {
+    fn get_expected_tokenizer_type(&self) -> TokenizerType {
+        TokenizerType::Seq(Box::new(Some(self.strsim.get_expected_tokenizer_type())))
+    }
+}
+
+impl<S: StrSim<Vec<char>> + ExpectTokenizerType> ExpectTokenizerType for SymmetricMongeElkan<S> {
+    fn get_expected_tokenizer_type(&self) -> TokenizerType {
+        TokenizerType::Seq(Box::new(Some(self.0.strsim.get_expected_tokenizer_type())))
     }
 }

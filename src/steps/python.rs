@@ -51,10 +51,8 @@ pub fn py_candidate_local_search<'t>(
         "levenshtein" => candidate_local_search(
             table,
             &mut traversal,
-            &mut strsim::StrSimWithValueTokenizer::new(
-                &mut char_tokenizer,
-                strsim::Levenshtein::default(),
-            ),
+            &mut strsim::SeqStrSim::new(&mut char_tokenizer, strsim::Levenshtein::default())
+                .map_err(into_pyerr)?,
             cfg.threshold,
             cfg.use_column_name,
             cfg.use_language.as_ref(),

@@ -1,19 +1,25 @@
-mod hybrid_jaccard;
+pub mod hybrid_jaccard;
+mod jaro;
 mod jaro_winkler;
 mod levenshtein;
 mod monge_elkan;
-mod strsim_wrapper;
 mod tokenizers;
+mod wrapped_strsim;
+
 use anyhow::Result;
 
 use crate::error::GramsError;
 use crate::helper::ReturnKind;
 
+pub use self::hybrid_jaccard::HybridJaccard;
+pub use self::jaro::Jaro;
 pub use self::jaro_winkler::JaroWinkler;
 pub use self::levenshtein::Levenshtein;
 pub use self::monge_elkan::{MongeElkan, SymmetricMongeElkan};
-pub use self::strsim_wrapper::{StrSimWithRefTokenizer, StrSimWithValueTokenizer};
-pub use self::tokenizers::{CachedWhitespaceTokenizer, CharacterTokenizer, WhitespaceTokenizer};
+pub use self::tokenizers::{
+    CachedWhitespaceTokenizer, CharacterTokenizer, WhitespaceCharSeqTokenizer, WhitespaceTokenizer,
+};
+pub use self::wrapped_strsim::SeqStrSim;
 
 pub trait StrSim<T> {
     /** Calculate the similarity with both key and query has already``` been pre-tokenized */
@@ -22,6 +28,10 @@ pub trait StrSim<T> {
         tokenized_key: &T,
         tokenized_query: &T,
     ) -> Result<f64, GramsError>;
+}
+
+pub trait ExpectTokenizerType {
+    fn get_expected_tokenizer_type(&self) -> TokenizerType;
 }
 
 pub trait StrSimWithTokenizer<T>: StrSim<T> {
@@ -52,9 +62,44 @@ pub trait StrSimWithTokenizer<T>: StrSim<T> {
     fn tokenize_list(&mut self, strs: &[&str]) -> Vec<T>;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenizerType {
+    Seq(Box<Option<TokenizerType>>),
+    Set(Box<Option<TokenizerType>>),
+}
+
+impl TokenizerType {
+    fn is_outer_seq(&self) -> bool {
+        match self {
+            TokenizerType::Seq(_) => true,
+            TokenizerType::Set(_) => false,
+        }
+    }
+
+    #[inline]
+    fn is_outer_set(&self) -> bool {
+        !self.is_outer_seq()
+    }
+
+    fn has_nested(&self) -> bool {
+        match self {
+            TokenizerType::Seq(inner) => inner.is_some(),
+            TokenizerType::Set(inner) => inner.is_some(),
+        }
+    }
+
+    fn get_nested(&self) -> &Option<TokenizerType> {
+        match self {
+            TokenizerType::Seq(inner) => inner.as_ref(),
+            TokenizerType::Set(inner) => inner.as_ref(),
+        }
+    }
+}
+
 pub trait Tokenizer<T> {
     type Return: for<'t> ReturnKind<'t, T>;
 
+    fn is_compatible(&self, tok_type: &TokenizerType) -> bool;
     fn tokenize<'t>(&'t mut self, s: &str) -> <Self::Return as ReturnKind<'t, T>>::Type;
     fn tokenize_pair<'t>(
         &'t mut self,
@@ -77,6 +122,10 @@ pub trait Tokenizer<T> {
 
 impl<'t, T: Sized + 't> ReturnKind<'t, T> for Vec<char> {
     type Type = Vec<char>;
+}
+
+impl<'t, T: Sized + 't> ReturnKind<'t, T> for Vec<Vec<char>> {
+    type Type = Vec<Vec<char>>;
 }
 
 impl<'t, T: Sized + 't> ReturnKind<'t, T> for Vec<String> {

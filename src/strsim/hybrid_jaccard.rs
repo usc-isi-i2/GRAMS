@@ -1,10 +1,14 @@
 use crate::error::GramsError;
-use lapjv::{lapjv, Matrix};
+use lapjv::lapjv;
+use ndarray::{concatenate, Array2, Axis};
 
-use super::{JaroWinkler, StrSim};
+use super::{ExpectTokenizerType, JaroWinkler, StrSim, TokenizerType};
 use anyhow::Result;
+use derive_more::Display;
 
-pub struct HybridJaccard<S: StrSim<Vec<char>>> {
+#[derive(Display)]
+#[display(fmt = "HybridJaccard")]
+pub struct HybridJaccard<S: StrSim<Vec<char>> + ExpectTokenizerType> {
     pub threshold: f64,
     pub lower_bound: f64,
     pub strsim: S,
@@ -20,7 +24,7 @@ impl HybridJaccard<JaroWinkler> {
     }
 }
 
-impl<S: StrSim<Vec<char>>> HybridJaccard<S> {
+impl<S: StrSim<Vec<char>> + ExpectTokenizerType> HybridJaccard<S> {
     pub fn new(strsim: S, threshold: Option<f64>, lower_bound: Option<f64>) -> Self {
         HybridJaccard {
             threshold: threshold.unwrap_or(0.5),
@@ -35,13 +39,11 @@ impl<S: StrSim<Vec<char>>> HybridJaccard<S> {
         mut set2: &'t Vec<Vec<char>>,
     ) -> Result<f64, GramsError> {
         if set1.len() > set2.len() {
-            let tmp = set1;
-            set1 = set2;
-            set2 = tmp;
+            (set1, set2) = (set2, set1);
         }
         let total_num_matches = set1.len();
 
-        let mut matching_score = Matrix::from_elem((set1.len(), set2.len()), 1.0);
+        let mut matching_score = Array2::from_elem((set1.len(), set2.len()), 1.0);
         let mut row_max: Vec<f64> = vec![0.0; set1.len()];
 
         for (i, s1) in set1.iter().enumerate() {
@@ -51,7 +53,8 @@ impl<S: StrSim<Vec<char>>> HybridJaccard<S> {
                     score = 0.0;
                 }
                 row_max[i] = row_max[i].max(score);
-                matching_score[[i, j]] = 1.0 - score // munkres finds out the smallest element
+                // matching_score[[i, j]] = 1.0 - score // munkres finds out the smallest element
+                matching_score[[i, j]] = score
             }
 
             if self.lower_bound > 0.0 {
@@ -65,16 +68,7 @@ impl<S: StrSim<Vec<char>>> HybridJaccard<S> {
             }
         }
 
-        // run linear_sum_assignment, finds the min score (max similarity) for each row
-        let result = lapjv(&matching_score).unwrap();
-        let row_idx = result.0;
-        let col_idx = result.1;
-
-        // recover scores
-        let mut score_sum = 0.0;
-        for (ri, ci) in row_idx.into_iter().zip(col_idx) {
-            score_sum += 1.0 - matching_score[[ri, ci]];
-        }
+        let score_sum = find_max_lap_score(&matching_score);
 
         if set1.len() + set2.len() - total_num_matches == 0 {
             return Ok(1.0);
@@ -130,12 +124,86 @@ impl<S: StrSim<Vec<char>>> HybridJaccard<S> {
     // }
 }
 
-impl<S: StrSim<Vec<char>>> StrSim<Vec<Vec<char>>> for HybridJaccard<S> {
+impl<S: StrSim<Vec<char>> + ExpectTokenizerType> StrSim<Vec<Vec<char>>> for HybridJaccard<S> {
     fn similarity_pre_tok2(
         &self,
         set1: &Vec<Vec<char>>,
         set2: &Vec<Vec<char>>,
     ) -> Result<f64, GramsError> {
         self.similarity(set1, set2)
+    }
+}
+
+impl<S: StrSim<Vec<char>> + ExpectTokenizerType> ExpectTokenizerType for HybridJaccard<S> {
+    fn get_expected_tokenizer_type(&self) -> TokenizerType {
+        TokenizerType::Set(Box::new(Some(self.strsim.get_expected_tokenizer_type())))
+    }
+}
+
+pub fn find_max_lap_score(matrix: &Array2<f64>) -> f64 {
+    let (nrows, ncols) = {
+        let shp = matrix.shape();
+        (shp[0], shp[1])
+    };
+
+    if nrows == ncols {
+        let (rows, cols) = lapjv(matrix).unwrap();
+        let mut score = 0.0;
+        for (i, j) in rows.into_iter().zip(cols) {
+            score += matrix[[i, j]];
+        }
+        return score;
+    }
+
+    let sq_matrix = if nrows < ncols {
+        let pad = Array2::zeros((ncols - nrows, ncols));
+        concatenate(Axis(0), &[matrix.view(), pad.view()]).unwrap()
+    } else {
+        let pad = Array2::zeros((nrows, nrows - ncols));
+        concatenate(Axis(1), &[matrix.view(), pad.view()]).unwrap()
+    };
+
+    let (rows, cols) = lapjv(&sq_matrix).unwrap();
+    let mut score = 0.0;
+    for (i, j) in rows.into_iter().zip(cols) {
+        score += sq_matrix[[i, j]];
+    }
+    score
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct SimScore(f64);
+
+impl Eq for SimScore {}
+
+impl Ord for SimScore {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl num_traits::identities::Zero for SimScore {
+    fn zero() -> Self {
+        SimScore(0.0)
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0 == 0.0
+    }
+}
+
+impl std::ops::Add for SimScore {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        SimScore(self.0 + rhs.0)
+    }
+}
+
+impl std::ops::Sub for SimScore {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        SimScore(self.0 - rhs.0)
     }
 }

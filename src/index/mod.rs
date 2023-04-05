@@ -3,7 +3,7 @@ mod index_traversal;
 mod object_hop1_index;
 // mod vanila_traversal;
 
-use kgdata::models::{Entity, EntityMetadata};
+use kgdata::models::EntityMetadata;
 
 pub use self::index_traversal::IndexTraversal;
 pub use self::object_hop1_index::{MatchedStatement, ObjectHop1Index};
@@ -18,5 +18,5 @@ pub trait EntityTraversal {
         &'t1 mut self,
         source_id: &str,
         target_id: &str,
-    ) -> Box<dyn Iterator<Item = &'t1 MatchedStatement> + 't1>;
+    ) -> core::slice::Iter<'t1, MatchedStatement>;
 }

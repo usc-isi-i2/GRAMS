@@ -15,7 +15,7 @@ impl SingleTypeMatcher for MonolingualTextExactTest {
         &self,
         query: &ParsedTextRepr,
         key: &Value,
-        context: &AlgoContext,
+        _context: &AlgoContext,
     ) -> Result<(bool, f64), GramsError> {
         if key.as_monolingual_text().unwrap().text.trim() == &query.normed_string {
             Ok((true, 1.0))

@@ -1,11 +1,20 @@
-use super::Tokenizer;
+use super::{Tokenizer, TokenizerType};
 use crate::helper::{ByReference, ByValue};
+use derive_more::Display;
 use hashbrown::HashMap;
 use itertools::Itertools;
 
+#[derive(Display)]
+#[display(fmt = "CharacterTokenizer")]
 pub struct CharacterTokenizer;
 
+#[derive(Display)]
+#[display(fmt = "WhitespaceTokenizer")]
 pub struct WhitespaceTokenizer;
+
+#[derive(Display)]
+#[display(fmt = "WhitespaceCharSeqTokenizer")]
+pub struct WhitespaceCharSeqTokenizer;
 
 pub struct CachedWhitespaceTokenizer {
     cache: HashMap<String, Vec<String>>,
@@ -14,6 +23,11 @@ pub struct CachedWhitespaceTokenizer {
 
 impl Tokenizer<Vec<char>> for CharacterTokenizer {
     type Return = ByValue;
+
+    fn is_compatible(&self, tok_type: &TokenizerType) -> bool {
+        !tok_type.has_nested()
+    }
+
     fn tokenize<'t>(&'t mut self, s: &str) -> Vec<char> {
         s.chars().collect()
     }
@@ -34,6 +48,10 @@ impl Tokenizer<Vec<char>> for CharacterTokenizer {
 impl Tokenizer<Vec<String>> for WhitespaceTokenizer {
     type Return = ByValue;
 
+    fn is_compatible(&self, tok_type: &TokenizerType) -> bool {
+        !tok_type.has_nested()
+    }
+
     fn tokenize<'t>(&'t mut self, s: &str) -> Vec<String> {
         s.split_whitespace().map(|s| s.to_owned()).collect()
     }
@@ -47,8 +65,8 @@ impl Tokenizer<Vec<String>> for WhitespaceTokenizer {
 
     fn unique_tokenize<'t>(&'t mut self, s: &str) -> Vec<String> {
         s.split_whitespace()
-            .map(|s| s.to_owned())
             .unique()
+            .map(|s| s.to_owned())
             .collect()
     }
 
@@ -59,13 +77,67 @@ impl Tokenizer<Vec<String>> for WhitespaceTokenizer {
     ) -> (Vec<String>, Vec<String>) {
         let key_tokens: Vec<_> = key
             .split_whitespace()
-            .map(|s| s.to_owned())
             .unique()
+            .map(|s| s.to_owned())
             .collect();
         let query_tokens: Vec<_> = query
             .split_whitespace()
-            .map(|s| s.to_owned())
             .unique()
+            .map(|s| s.to_owned())
+            .collect();
+
+        (key_tokens, query_tokens)
+    }
+}
+
+impl Tokenizer<Vec<Vec<char>>> for WhitespaceCharSeqTokenizer {
+    type Return = ByValue;
+
+    fn is_compatible(&self, tok_type: &TokenizerType) -> bool {
+        if let Some(nested_tok_type) = tok_type.get_nested() {
+            nested_tok_type.is_outer_seq()
+        } else {
+            false
+        }
+    }
+
+    fn tokenize<'t>(&'t mut self, s: &str) -> Vec<Vec<char>> {
+        s.split_whitespace().map(|s| s.chars().collect()).collect()
+    }
+
+    fn tokenize_pair<'t>(&'t mut self, key: &str, query: &str) -> (Vec<Vec<char>>, Vec<Vec<char>>) {
+        (
+            key.split_whitespace()
+                .map(|s| s.chars().collect())
+                .collect(),
+            query
+                .split_whitespace()
+                .map(|s| s.chars().collect())
+                .collect(),
+        )
+    }
+
+    fn unique_tokenize<'t>(&'t mut self, s: &str) -> Vec<Vec<char>> {
+        s.split_whitespace()
+            .unique()
+            .map(|s| s.chars().collect())
+            .collect()
+    }
+
+    fn unique_tokenize_pair<'t>(
+        &'t mut self,
+        key: &str,
+        query: &str,
+    ) -> (Vec<Vec<char>>, Vec<Vec<char>>) {
+        let key_tokens: Vec<_> = key
+            .split_whitespace()
+            .unique()
+            .map(|s| s.chars().collect())
+            .collect();
+        let query_tokens: Vec<_> = query
+            .split_whitespace()
+            .unique()
+            .map(|s| s.chars().collect())
             .collect();
 
         (key_tokens, query_tokens)
@@ -74,6 +146,10 @@ impl Tokenizer<Vec<String>> for WhitespaceTokenizer {
 
 impl Tokenizer<Vec<String>> for CachedWhitespaceTokenizer {
     type Return = ByReference;
+
+    fn is_compatible(&self, tok_type: &TokenizerType) -> bool {
+        !tok_type.has_nested()
+    }
 
     fn tokenize<'t>(&'t mut self, s: &str) -> &'t Vec<String> {
         if !self.cache.contains_key(s) {
@@ -113,8 +189,8 @@ impl Tokenizer<Vec<String>> for CachedWhitespaceTokenizer {
             self.unique_cache.insert(
                 s.to_owned(),
                 s.split_whitespace()
-                    .map(|s| s.to_owned())
                     .unique()
+                    .map(|s| s.to_owned())
                     .collect(),
             );
         }
@@ -131,8 +207,8 @@ impl Tokenizer<Vec<String>> for CachedWhitespaceTokenizer {
             self.unique_cache.insert(
                 key.to_owned(),
                 key.split_whitespace()
-                    .map(|s| s.to_owned())
                     .unique()
+                    .map(|s| s.to_owned())
                     .collect(),
             );
         }
@@ -142,8 +218,8 @@ impl Tokenizer<Vec<String>> for CachedWhitespaceTokenizer {
                 query.to_owned(),
                 query
                     .split_whitespace()
-                    .map(|s| s.to_owned())
                     .unique()
+                    .map(|s| s.to_owned())
                     .collect(),
             );
         }

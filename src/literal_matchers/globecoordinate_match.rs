@@ -13,9 +13,9 @@ impl SingleTypeMatcher for GlobeCoordinateTest {
 
     fn compare(
         &self,
-        query: &ParsedTextRepr,
-        key: &Value,
-        context: &AlgoContext,
+        _query: &ParsedTextRepr,
+        _key: &Value,
+        _context: &AlgoContext,
     ) -> Result<(bool, f64), GramsError> {
         Ok((false, 0.0))
     }
