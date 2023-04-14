@@ -35,6 +35,9 @@ pub enum GramsError {
     /// PyO3 error
     #[error(transparent)]
     PyErr(#[from] pyo3::PyErr),
+
+    #[error(transparent)]
+    LSAPErr(#[from] lsap::LSAPError),
 }
 
 pub fn into_pyerr<E: Into<GramsError>>(err: E) -> PyErr {

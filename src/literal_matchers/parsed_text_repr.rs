@@ -1,5 +1,9 @@
+use pyo3::prelude::*;
+
 /// A struct for storing parsing results of a text literal
 /// for literal matching.
+#[pyclass(module = "grams.core.literal_matchers", name = "ParsedTextRepr")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParsedTextRepr {
     pub origin: String,
     pub normed_string: String,
@@ -7,6 +11,7 @@ pub struct ParsedTextRepr {
     pub datetime: Option<ParsedDatetimeRepr>,
 }
 
+#[pyclass(module = "grams.core.literal_matchers", name = "ParsedDatetimeRepr")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedDatetimeRepr {
     pub year: Option<i64>,
@@ -17,6 +22,8 @@ pub struct ParsedDatetimeRepr {
     pub second: Option<i64>,
 }
 
+#[pyclass(module = "grams.core.literal_matchers", name = "ParsedNumberRepr")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParsedNumberRepr {
     pub number: f64,
     pub number_string: String,

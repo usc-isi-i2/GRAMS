@@ -1,5 +1,6 @@
 use hashbrown::{HashMap, HashSet};
 use kgdata::models::Entity;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     context::AlgoContext,
@@ -9,12 +10,14 @@ use crate::{
     table::LinkedTable,
 };
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MatchedQualifier {
     pub qualifier: String,
     pub qualifier_index: usize,
     pub matched_score: f64,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MatchedStatement {
     pub property: String,
     pub statement_index: usize,
@@ -23,6 +26,7 @@ pub struct MatchedStatement {
 }
 
 /// The relationships of an entity that are matched with other values in the table
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MatchedEntRel {
     /// the source entity of which contains found relationships
     pub source_entity_id: String,
@@ -31,6 +35,7 @@ pub struct MatchedEntRel {
 }
 
 /// Potential relationships between two nodes
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PotentialRelationships {
     /// source node id (either cell or an entity), this is not entity id
     pub source_id: usize,
@@ -40,15 +45,18 @@ pub struct PotentialRelationships {
     pub rels: Vec<MatchedEntRel>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CellNode {
     pub row: usize,
     pub col: usize,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct EntityNode {
     pub entity_id: String,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum Node {
     Cell(CellNode),
     Entity(EntityNode),
@@ -94,14 +102,14 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
     pub fn match_data(
         table: &LinkedTable,
         table_cells: &Vec<Vec<ParsedTextRepr>>,
-        context: &mut AlgoContext,
+        context: &AlgoContext,
         entity_traversal: &mut ET,
         literal_matcher: &LiteralMatcher,
         ignored_columns: &Vec<usize>,
         ignored_props: &HashSet<String>,
         allow_same_ent_search: bool,
         use_context: bool,
-    ) -> Result<(), GramsError> {
+    ) -> Result<(Vec<Node>, Vec<PotentialRelationships>), GramsError> {
         let (nrows, ncols) = table.shape();
         let mut nodes = Vec::with_capacity(nrows * ncols);
         let mut edges = vec![];
@@ -195,7 +203,7 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
             }
         }
 
-        Ok(())
+        Ok((nodes, edges))
     }
 
     /// Search for any connections between two objects (texts, cells, or entities). This function is a re-implementation of `kg_path_discovery` in Python.

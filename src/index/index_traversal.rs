@@ -15,8 +15,7 @@ pub struct IndexTraversal<'t> {
 }
 
 impl<'t> IndexTraversal<'t> {
-    pub fn from_context(context: &'t mut AlgoContext) -> Self {
-        context.init_object_1hop_index();
+    pub fn from_context(context: &'t AlgoContext) -> Self {
         Self {
             entities: &context.entities,
             entity_metadata: &context.entity_metadata,

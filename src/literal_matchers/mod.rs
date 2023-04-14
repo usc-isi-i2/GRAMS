@@ -12,7 +12,9 @@ pub mod parsed_text_repr;
 pub mod quantity_match;
 pub mod string_match;
 pub mod time_match;
+use pyo3::prelude::*;
 
+#[pyclass(module = "grams.core.literal_matchers", name = "LiteralMatcherConfig")]
 pub struct LiteralMatcherConfig {
     pub string: String,
     pub quantity: String,
@@ -21,6 +23,13 @@ pub struct LiteralMatcherConfig {
     pub monolingual_text: String,
     pub entity: String,
 }
+
+#[pyclass(
+    module = "grams.core.literal_matchers",
+    name = "LiteralMatcher",
+    unsendable
+)]
+pub struct PyLiteralMatchers(pub LiteralMatcher);
 
 pub struct LiteralMatcher {
     pub string_matcher: Box<dyn SingleTypeMatcher>,

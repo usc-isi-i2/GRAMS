@@ -760,8 +760,8 @@ dependencies = [
  "hashbrown 0.13.2",
  "itertools",
  "kgdata",
- "lapjv",
  "log",
+ "lsap",
  "maplit",
  "ndarray",
  "num-traits",
@@ -951,16 +951,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lapjv"
-version = "0.2.1"
-source = "git+https://github.com/binh-vu/lapjv-rust.git#9032e5904e02e340420b446356261c5fc2c257c6"
-dependencies = [
- "log",
- "ndarray",
- "num-traits",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1043,6 +1033,15 @@ checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
  "value-bag",
+]
+
+[[package]]
+name = "lsap"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68f4e260c26278f22a66a40b147d6e37ba24c6528210f11226c5ad6de567a774"
+dependencies = [
+ "derive_more",
 ]
 
 [[package]]

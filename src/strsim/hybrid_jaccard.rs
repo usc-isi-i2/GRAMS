@@ -1,10 +1,10 @@
 use crate::error::GramsError;
-use lapjv::lapjv;
 use ndarray::{concatenate, Array2, Axis};
 
 use super::{ExpectTokenizerType, JaroWinkler, StrSim, TokenizerType};
 use anyhow::Result;
 use derive_more::Display;
+use lsap::get_assigned_cost;
 
 #[derive(Display)]
 #[display(fmt = "HybridJaccard")]
@@ -42,8 +42,8 @@ impl<S: StrSim<Vec<char>> + ExpectTokenizerType> HybridJaccard<S> {
             (set1, set2) = (set2, set1);
         }
         let total_num_matches = set1.len();
-
-        let mut matching_score = Array2::from_elem((set1.len(), set2.len()), 1.0);
+        let mut matching_score = vec![1.0; set1.len() * set2.len()];
+        // let mut matching_score = Array2::from_elem((set1.len(), set2.len()), 1.0);
         let mut row_max: Vec<f64> = vec![0.0; set1.len()];
 
         for (i, s1) in set1.iter().enumerate() {
@@ -54,7 +54,8 @@ impl<S: StrSim<Vec<char>> + ExpectTokenizerType> HybridJaccard<S> {
                 }
                 row_max[i] = row_max[i].max(score);
                 // matching_score[[i, j]] = 1.0 - score // munkres finds out the smallest element
-                matching_score[[i, j]] = score
+                // matching_score[[i, j]] = score
+                matching_score[i * set2.len() + j] = score
             }
 
             if self.lower_bound > 0.0 {
@@ -68,7 +69,7 @@ impl<S: StrSim<Vec<char>> + ExpectTokenizerType> HybridJaccard<S> {
             }
         }
 
-        let score_sum = find_max_lap_score(&matching_score);
+        let score_sum = get_assigned_cost(set1.len(), set2.len(), &matching_score, true)?;
 
         if set1.len() + set2.len() - total_num_matches == 0 {
             return Ok(1.0);
@@ -138,37 +139,6 @@ impl<S: StrSim<Vec<char>> + ExpectTokenizerType> ExpectTokenizerType for HybridJ
     fn get_expected_tokenizer_type(&self) -> TokenizerType {
         TokenizerType::Set(Box::new(Some(self.strsim.get_expected_tokenizer_type())))
     }
-}
-
-pub fn find_max_lap_score(matrix: &Array2<f64>) -> f64 {
-    let (nrows, ncols) = {
-        let shp = matrix.shape();
-        (shp[0], shp[1])
-    };
-
-    if nrows == ncols {
-        let (rows, cols) = lapjv(matrix).unwrap();
-        let mut score = 0.0;
-        for (i, j) in rows.into_iter().zip(cols) {
-            score += matrix[[i, j]];
-        }
-        return score;
-    }
-
-    let sq_matrix = if nrows < ncols {
-        let pad = Array2::zeros((ncols - nrows, ncols));
-        concatenate(Axis(0), &[matrix.view(), pad.view()]).unwrap()
-    } else {
-        let pad = Array2::zeros((nrows, nrows - ncols));
-        concatenate(Axis(1), &[matrix.view(), pad.view()]).unwrap()
-    };
-
-    let (rows, cols) = lapjv(&sq_matrix).unwrap();
-    let mut score = 0.0;
-    for (i, j) in rows.into_iter().zip(cols) {
-        score += sq_matrix[[i, j]];
-    }
-    score
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
