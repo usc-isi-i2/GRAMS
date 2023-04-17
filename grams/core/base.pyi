@@ -1,0 +1,13 @@
+from __future__ import annotations
+from typing import Generic, Optional, TypeVar
+from grams.core import AlgoContext
+from grams.core.literal_matchers import LiteralMatcher, ParsedTextRepr
+from grams.core.table import LinkedTable
+
+I = TypeVar("I")
+
+class RustVecIter(Generic[I]):
+    def __iter__(self) -> RustVecIter[I]: ...
+    def __next__(self) -> I: ...
+    def __len__(self) -> int: ...
+    def __getitem__(self, index: int) -> I: ...

@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString, Tag
 from grams.html_table_parser.context_extractor import ContextExtractor, Tree
-from grams.inputs.context import Linebreak, Text
+from rsoup.python.models.context import Linebreak, Text
 
 
 class E:

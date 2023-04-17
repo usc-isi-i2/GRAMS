@@ -4,7 +4,7 @@ from grams.algorithm.inferences.psl_lib import PSLModel, RuleContainer
 from pslpython.predicate import Predicate
 from pslpython.model import ModelError
 from pslpython.rule import Rule
-from tests.algorithm.conftest import norm_psl_output
+from tests.python.algorithm.conftest import norm_psl_output
 
 
 def test_parameters(acquaintance_model: PSLModel):

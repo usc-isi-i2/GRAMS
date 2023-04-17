@@ -220,7 +220,7 @@ class LinkedTable(FullTable):
 
         return Matrix(links)
 
-    def to_rust_table(self) -> gcore.LinkedTable:
+    def to_rust(self) -> gcore.LinkedTable:
         def to_col(col: Column) -> gcore.Column:
             values = []
             for v in col.values:

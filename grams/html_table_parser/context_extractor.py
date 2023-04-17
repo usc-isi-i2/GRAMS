@@ -16,7 +16,7 @@ from typing import (
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString, Tag
 from dataclasses import dataclass, field
-from grams.inputs.context import Attribute, Text, Linebreak, ContentHierarchy
+from rsoup.python.models.context import Attribute, Text, Linebreak, ContentHierarchy
 
 
 @dataclass

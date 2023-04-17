@@ -51,3 +51,63 @@ impl ParsedDatetimeRepr {
             && self.second.is_none()
     }
 }
+
+#[pymethods]
+impl ParsedTextRepr {
+    #[new]
+    fn new(
+        origin: String,
+        normed_string: String,
+        number: Option<ParsedNumberRepr>,
+        datetime: Option<ParsedDatetimeRepr>,
+    ) -> Self {
+        Self {
+            origin,
+            normed_string,
+            number,
+            datetime,
+        }
+    }
+}
+
+#[pymethods]
+impl ParsedNumberRepr {
+    #[new]
+    fn new(
+        number: f64,
+        number_string: String,
+        is_integer: bool,
+        unit: Option<String>,
+        prob: Option<f64>,
+    ) -> Self {
+        Self {
+            number,
+            number_string,
+            is_integer,
+            unit,
+            prob,
+        }
+    }
+}
+
+#[pymethods]
+impl ParsedDatetimeRepr {
+    #[new]
+    fn new(
+        year: Option<i64>,
+        month: Option<i64>,
+        day: Option<i64>,
+        hour: Option<i64>,
+        minute: Option<i64>,
+        second: Option<i64>,
+    ) -> Self {
+        Self {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+        }
+    }
+}

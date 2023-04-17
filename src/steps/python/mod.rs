@@ -7,10 +7,13 @@ use crate::context::PyAlgoContext;
 use crate::error::into_pyerr;
 use crate::index::{EntityTraversal, IndexTraversal};
 use crate::literal_matchers::parsed_text_repr::ParsedTextRepr;
-use crate::literal_matchers::PyLiteralMatchers;
+use crate::literal_matchers::PyLiteralMatcher;
 use crate::strsim;
 use crate::table::{Link, LinkedTable};
 use postcard::{from_bytes, to_allocvec};
+
+#[macro_use]
+mod data_matching;
 
 #[pyclass(module = "grams.core.steps", name = "CandidateLocalSearchConfig")]
 pub struct PyCandidateLocalSearchConfig {
@@ -70,57 +73,6 @@ pub fn py_candidate_local_search<'t>(
     }
 }
 
-#[pyclass(module = "grams.core.steps", name = "PyDataMatchesResult")]
-pub struct PyDataMatchesResult {
-    nodes: Vec<Node>,
-    edges: Vec<PotentialRelationships>,
-}
-
-#[pymethods]
-impl PyDataMatchesResult {
-    pub fn save(&self, file: &str) -> PyResult<()> {
-        let out = to_allocvec(&(&self.nodes, &self.edges)).map_err(into_pyerr)?;
-        std::fs::write(file, out).map_err(into_pyerr)
-    }
-
-    #[staticmethod]
-    pub fn load(file: &str) -> PyResult<PyDataMatchesResult> {
-        let (nodes, edges) = from_bytes::<(Vec<Node>, Vec<PotentialRelationships>)>(
-            &std::fs::read(file).map_err(into_pyerr)?,
-        )
-        .map_err(into_pyerr)?;
-        Ok(PyDataMatchesResult { nodes, edges })
-    }
-}
-
-#[pyfunction(name = "data_matching")]
-pub fn py_data_matching(
-    table: &LinkedTable,
-    table_cells: Vec<Vec<ParsedTextRepr>>,
-    context: &mut PyAlgoContext,
-    literal_matcher: &PyLiteralMatchers,
-    ignored_columns: Vec<usize>,
-    ignored_props: Vec<String>,
-    allow_same_ent_search: bool,
-    use_context: bool,
-) -> PyResult<PyDataMatchesResult> {
-    context.0.init_object_1hop_index();
-    let mut traversal = IndexTraversal::from_context(&context.0);
-    let (nodes, edges) = DataMatching::match_data(
-        table,
-        &table_cells,
-        &context.0,
-        &mut traversal,
-        &literal_matcher.0,
-        &ignored_columns,
-        &HashSet::from_iter(ignored_props),
-        allow_same_ent_search,
-        use_context,
-    )
-    .map_err(into_pyerr)?;
-    Ok(PyDataMatchesResult { nodes, edges })
-}
-
 pub(crate) fn register(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     let submodule = PyModule::new(py, "steps")?;
 
@@ -128,7 +80,7 @@ pub(crate) fn register(py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     submodule.add_class::<PyCandidateLocalSearchConfig>()?;
     submodule.add_function(wrap_pyfunction!(py_candidate_local_search, submodule)?)?;
-    submodule.add_function(wrap_pyfunction!(py_data_matching, submodule)?)?;
+    data_matching::register(py, &submodule)?;
 
     py.import("sys")?
         .getattr("modules")?

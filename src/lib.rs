@@ -5,6 +5,7 @@ pub mod error;
 pub mod helper;
 pub mod index;
 pub mod literal_matchers;
+pub mod macros;
 pub mod steps;
 pub mod strsim;
 pub mod table;
@@ -30,6 +31,7 @@ fn core(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     table::register(py, m)?;
     datagraph::python::register(py, m)?;
     steps::python::register(py, m)?;
+    literal_matchers::python::register(py, m)?;
 
     Ok(())
 }

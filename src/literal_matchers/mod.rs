@@ -1,10 +1,13 @@
 use kgdata::models::Value;
 
-use crate::{context::AlgoContext, error::GramsError};
+use crate::{
+    context::AlgoContext,
+    error::{into_pyerr, GramsError},
+};
 
 use self::parsed_text_repr::ParsedTextRepr;
 use anyhow::Result;
-
+use pyo3::prelude::*;
 pub mod entity_match;
 pub mod globecoordinate_match;
 pub mod monolingual_text_match;
@@ -12,7 +15,6 @@ pub mod parsed_text_repr;
 pub mod quantity_match;
 pub mod string_match;
 pub mod time_match;
-use pyo3::prelude::*;
 
 #[pyclass(module = "grams.core.literal_matchers", name = "LiteralMatcherConfig")]
 pub struct LiteralMatcherConfig {
@@ -24,12 +26,42 @@ pub struct LiteralMatcherConfig {
     pub entity: String,
 }
 
+#[pymethods]
+impl LiteralMatcherConfig {
+    #[new]
+    fn new(
+        string: String,
+        quantity: String,
+        globecoordinate: String,
+        time: String,
+        monolingual_text: String,
+        entity: String,
+    ) -> Self {
+        Self {
+            string,
+            quantity,
+            globecoordinate,
+            time,
+            monolingual_text,
+            entity,
+        }
+    }
+}
+
 #[pyclass(
     module = "grams.core.literal_matchers",
     name = "LiteralMatcher",
     unsendable
 )]
-pub struct PyLiteralMatchers(pub LiteralMatcher);
+pub struct PyLiteralMatcher(pub LiteralMatcher);
+
+#[pymethods]
+impl PyLiteralMatcher {
+    #[new]
+    pub fn new(cfg: &LiteralMatcherConfig) -> PyResult<Self> {
+        Ok(Self(LiteralMatcher::new(cfg).map_err(into_pyerr)?))
+    }
+}
 
 pub struct LiteralMatcher {
     pub string_matcher: Box<dyn SingleTypeMatcher>,
@@ -41,48 +73,56 @@ pub struct LiteralMatcher {
 }
 
 impl LiteralMatcher {
-    pub fn new(cfg: LiteralMatcherConfig) -> Result<Self, GramsError> {
-        let string_matcher = match cfg.string.as_str() {
+    pub fn new(cfg: &LiteralMatcherConfig) -> Result<Self, GramsError> {
+        let string_matcher: Box<dyn SingleTypeMatcher> = match cfg.string.as_str() {
             "string_exact_test" => Box::new(self::string_match::StringExactTest),
+            "always_fail_test" => Box::new(AlwaysFailTest),
             _ => Err(GramsError::InvalidConfigData(format!(
                 "Invalid string matcher: {}",
                 cfg.string
             )))?,
         };
-        let monolingual_text_matcher = match cfg.monolingual_text.as_str() {
-            "monolingual_exact_test" => {
-                Box::new(self::monolingual_text_match::MonolingualTextExactTest)
-            }
-            _ => Err(GramsError::InvalidConfigData(format!(
-                "Invalid monolingual_text matcher: {}",
-                cfg.monolingual_text
-            )))?,
-        };
-        let quantity_matcher = match cfg.quantity.as_str() {
+        let monolingual_text_matcher: Box<dyn SingleTypeMatcher> =
+            match cfg.monolingual_text.as_str() {
+                "monolingual_exact_test" => {
+                    Box::new(self::monolingual_text_match::MonolingualTextExactTest)
+                }
+                "always_fail_test" => Box::new(AlwaysFailTest),
+                _ => Err(GramsError::InvalidConfigData(format!(
+                    "Invalid monolingual_text matcher: {}",
+                    cfg.monolingual_text
+                )))?,
+            };
+        let quantity_matcher: Box<dyn SingleTypeMatcher> = match cfg.quantity.as_str() {
             "quantity_test" => Box::new(self::quantity_match::QuantityTest),
+            "always_fail_test" => Box::new(AlwaysFailTest),
             _ => Err(GramsError::InvalidConfigData(format!(
                 "Invalid quantity matcher: {}",
                 cfg.quantity
             )))?,
         };
-        let time_matcher = match cfg.time.as_str() {
+        let time_matcher: Box<dyn SingleTypeMatcher> = match cfg.time.as_str() {
             "time_test" => Box::new(self::time_match::TimeTest::default()),
+            "always_fail_test" => Box::new(AlwaysFailTest),
             _ => Err(GramsError::InvalidConfigData(format!(
                 "Invalid time matcher: {}",
                 cfg.time
             )))?,
         };
-        let globecoordinate_matcher = match cfg.globecoordinate.as_str() {
+        let globecoordinate_matcher: Box<dyn SingleTypeMatcher> = match cfg.globecoordinate.as_str()
+        {
             "globecoordinate_test" => Box::new(self::globecoordinate_match::GlobeCoordinateTest),
+            "always_fail_test" => Box::new(AlwaysFailTest),
             _ => Err(GramsError::InvalidConfigData(format!(
                 "Invalid globecoordinate matcher: {}",
                 cfg.globecoordinate
             )))?,
         };
-        let entity_matcher = match cfg.entity.as_str() {
+        let entity_matcher: Box<dyn SingleTypeMatcher> = match cfg.entity.as_str() {
             "entity_similarity_test" => {
                 Box::new(self::entity_match::EntitySimilarityTest::default())
             }
+            "always_fail_test" => Box::new(AlwaysFailTest),
             _ => Err(GramsError::InvalidConfigData(format!(
                 "Invalid entity matcher: {}",
                 cfg.entity
@@ -136,4 +176,46 @@ pub trait SingleTypeMatcher {
         key: &Value,
         context: &AlgoContext,
     ) -> Result<(bool, f64), GramsError>;
+}
+
+pub struct AlwaysFailTest;
+
+impl SingleTypeMatcher for AlwaysFailTest {
+    fn get_name(&self) -> &'static str {
+        "always_fail_test"
+    }
+
+    fn compare(
+        &self,
+        query: &ParsedTextRepr,
+        key: &Value,
+        context: &AlgoContext,
+    ) -> Result<(bool, f64), GramsError> {
+        Ok((false, 0.0))
+    }
+}
+
+pub(crate) mod python {
+    use pyo3::prelude::*;
+
+    use super::parsed_text_repr::{ParsedDatetimeRepr, ParsedNumberRepr};
+    use super::{LiteralMatcherConfig, ParsedTextRepr, PyLiteralMatcher};
+
+    pub(crate) fn register(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+        let submodule = PyModule::new(py, "literal_matchers")?;
+
+        m.add_submodule(submodule)?;
+
+        submodule.add_class::<LiteralMatcherConfig>()?;
+        submodule.add_class::<PyLiteralMatcher>()?;
+        submodule.add_class::<ParsedTextRepr>()?;
+        submodule.add_class::<ParsedNumberRepr>()?;
+        submodule.add_class::<ParsedDatetimeRepr>()?;
+
+        py.import("sys")?
+            .getattr("modules")?
+            .set_item("grams.core.literal_matchers", submodule)?;
+
+        Ok(())
+    }
 }

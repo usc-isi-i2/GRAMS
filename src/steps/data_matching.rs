@@ -1,5 +1,6 @@
 use hashbrown::{HashMap, HashSet};
 use kgdata::models::Entity;
+use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -10,6 +11,7 @@ use crate::{
     table::LinkedTable,
 };
 
+#[pyclass(module = "grams.core.steps.data_matching", name = "MatchedQualifier")]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MatchedQualifier {
     pub qualifier: String,
@@ -17,6 +19,7 @@ pub struct MatchedQualifier {
     pub matched_score: f64,
 }
 
+#[pyclass(module = "grams.core.steps.data_matching", name = "MatchedStatement")]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MatchedStatement {
     pub property: String,
@@ -26,6 +29,7 @@ pub struct MatchedStatement {
 }
 
 /// The relationships of an entity that are matched with other values in the table
+#[pyclass(module = "grams.core.steps.data_matching", name = "MatchedEntRel")]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MatchedEntRel {
     /// the source entity of which contains found relationships
@@ -35,6 +39,10 @@ pub struct MatchedEntRel {
 }
 
 /// Potential relationships between two nodes
+#[pyclass(
+    module = "grams.core.steps.data_matching",
+    name = "PotentialRelationships"
+)]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PotentialRelationships {
     /// source node id (either cell or an entity), this is not entity id
@@ -45,14 +53,19 @@ pub struct PotentialRelationships {
     pub rels: Vec<MatchedEntRel>,
 }
 
+#[pyclass(module = "grams.core.steps.data_matching", name = "CellNode")]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CellNode {
+    #[pyo3(get)]
     pub row: usize,
+    #[pyo3(get)]
     pub col: usize,
 }
 
+#[pyclass(module = "grams.core.steps.data_matching", name = "EntityNode")]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct EntityNode {
+    #[pyo3(get)]
     pub entity_id: String,
 }
 
@@ -148,6 +161,8 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
+
+        println!("cell2entities {:?}", cell2entities);
 
         let mut data_matching = DataMatching {
             context,

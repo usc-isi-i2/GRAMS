@@ -1,17 +1,18 @@
 from __future__ import annotations
+
 import copy
+import re
 from dataclasses import dataclass
 from operator import itemgetter
-from urllib.parse import urlparse, unquote_plus
-from grams.inputs.context import ContentHierarchy
-from kgdata.wikipedia.misc import get_title_from_url
+from typing import Callable, Dict, List, Mapping, Optional
+from urllib.parse import unquote_plus, urlparse
 
-import requests, re, pandas as pd
+import pandas as pd
+import requests
 from bs4 import BeautifulSoup
-from bs4.element import Tag, NavigableString
-from typing import Callable, List, Dict, Mapping, Optional
+from bs4.element import NavigableString, Tag
+from rsoup.python.models.context import ContentHierarchy
 
-from sm.prelude import I, M
 import grams.inputs as GI
 from grams.config import DATA_DIR
 from grams.html_table_parser.parsing_exception import (
@@ -19,6 +20,8 @@ from grams.html_table_parser.parsing_exception import (
     InvalidColumnSpanException,
     OverlapSpanException,
 )
+from kgdata.wikipedia.misc import get_title_from_url
+from sm.prelude import I, M
 
 
 @dataclass

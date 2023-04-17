@@ -142,7 +142,7 @@ def rust_augment_candidates(
     gcore.GramsDB.init(str(data_dir))
     cdb = gcore.GramsDB.get_instance()
 
-    newtable = example.table.to_rust_table()
+    newtable = example.table.to_rust()
     context = cdb.get_algo_context(newtable, n_hop=2)
     newtable = gcoresteps.candidate_local_search(newtable, context, cfg)
 

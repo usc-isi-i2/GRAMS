@@ -4,7 +4,7 @@ from numparser.fsm.parser import DEFAULT_NOT_UNITS
 from dataclasses import dataclass, field
 from datetime import datetime, MINYEAR
 from typing import Optional
-
+import grams.core.literal_matchers as gcore_literal_matchers
 import ftfy
 from dateutil.parser import parse as dt_parse, ParserError
 from numparser import ParsedNumber, FSMParser
@@ -30,6 +30,22 @@ class ParsedTextRepr:
     normed_string: str
     number: Optional[ParsedNumber]
     datetime: Optional[ParsedDatetimeRepr]
+
+    def to_rust(self) -> gcore_literal_matchers.ParsedTextRepr:
+        return gcore_literal_matchers.ParsedTextRepr(
+            self.origin,
+            self.normed_string,
+            None
+            if self.number is None
+            else gcore_literal_matchers.ParsedNumberRepr(
+                self.number.number,
+                self.number.number_string,
+                isinstance(self.number.number, int),
+                self.number.unit,
+                self.number.prob,
+            ),
+            None if self.datetime is None else self.datetime.to_rust(),
+        )
 
 
 @dataclass
@@ -59,6 +75,16 @@ class ParsedDatetimeRepr:
             and self.hour is None
             and self.minute is None
             and self.second is None
+        )
+
+    def to_rust(self) -> gcore_literal_matchers.ParsedDatetimeRepr:
+        return gcore_literal_matchers.ParsedDatetimeRepr(
+            self.year,
+            self.month,
+            self.day,
+            self.hour,
+            self.minute,
+            self.second,
         )
 
 

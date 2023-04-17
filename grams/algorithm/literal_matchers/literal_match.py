@@ -2,6 +2,7 @@ from typing import List, Mapping, Tuple, Callable, Dict, Union
 from grams.algorithm.literal_matchers.text_parser import (
     ParsedTextRepr,
 )
+import grams.core.literal_matchers as gcore_matcher
 from kgdata.wikidata.models import WDValue, WDValueType, WDEntity
 from grams.algorithm.literal_matchers.string_match import (
     string_exact_test,
@@ -32,6 +33,22 @@ class LiteralMatchConfigs:
         default=".monolingual_exact_test", metadata={"help": ""}
     )
     ENTITY: str = field(default="", metadata={"help": ""})
+
+    def to_rust(self) -> gcore_matcher.LiteralMatcherConfig:
+        def py2ru(ident):
+            if ident == "":
+                return "always_fail_test"
+            assert ident.startswith("."), ident
+            return ident[1:]
+
+        return gcore_matcher.LiteralMatcherConfig(
+            py2ru(self.STRING),
+            py2ru(self.QUANTITY),
+            py2ru(self.GLOBECOORDINATE),
+            py2ru(self.TIME),
+            py2ru(self.MONOLINGUAL_TEXT),
+            py2ru(self.ENTITY),
+        )
 
 
 class LiteralMatch:
