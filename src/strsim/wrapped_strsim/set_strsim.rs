@@ -22,6 +22,7 @@ impl<
         TK: Tokenizer<T, Return = ByValue> + Display,
     > SetStrSim<'t, T, SS, TK>
 {
+    #[allow(dead_code)]
     pub fn new(tokenizer: &'t mut TK, strsim: SS) -> Result<Self, GramsError> {
         let expect_tok_type = strsim.get_expected_tokenizer_type();
         if !tokenizer.is_compatible(&expect_tok_type) || !expect_tok_type.is_outer_set() {

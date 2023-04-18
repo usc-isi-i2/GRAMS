@@ -1,19 +1,13 @@
-use hashbrown::HashSet;
 use pyo3::prelude::*;
 
 use super::candidate_local_search::candidate_local_search;
-use super::data_matching::{DataMatching, Node, PotentialRelationships};
 use crate::context::PyAlgoContext;
 use crate::error::into_pyerr;
 use crate::index::{EntityTraversal, IndexTraversal};
-use crate::literal_matchers::parsed_text_repr::ParsedTextRepr;
-use crate::literal_matchers::PyLiteralMatcher;
 use crate::strsim;
-use crate::table::{Link, LinkedTable};
-use postcard::{from_bytes, to_allocvec};
+use crate::table::LinkedTable;
 
-#[macro_use]
-mod data_matching;
+pub mod data_matching;
 
 #[pyclass(module = "grams.core.steps", name = "CandidateLocalSearchConfig")]
 pub struct PyCandidateLocalSearchConfig {

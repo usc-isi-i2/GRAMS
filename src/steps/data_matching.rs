@@ -1,3 +1,4 @@
+use derive_more::Display;
 use hashbrown::{HashMap, HashSet};
 use kgdata::models::Entity;
 use pyo3::prelude::*;
@@ -28,6 +29,51 @@ pub struct MatchedStatement {
     pub qualifier_matched_scores: Vec<MatchedQualifier>,
 }
 
+impl MatchedStatement {
+    pub fn merge(&mut self, another: MatchedStatement) -> Result<(), GramsError> {
+        if self.property != another.property || self.statement_index != another.statement_index {
+            return Err(GramsError::InvalidInputData(
+                "Cannot merge two MatchedStatement with different property or statement_index"
+                    .to_owned(),
+            ));
+        }
+        match self.property_matched_score {
+            None => self.property_matched_score = another.property_matched_score,
+            Some(s) => {
+                if let Some(s2) = another.property_matched_score {
+                    self.property_matched_score = Some(s.max(s2));
+                }
+            }
+        }
+
+        let mut tasks = Vec::new();
+        let mut update_score = Vec::new();
+
+        {
+            let mut key2qual = HashMap::with_capacity(self.qualifier_matched_scores.len());
+            for (i, q) in self.qualifier_matched_scores.iter().enumerate() {
+                key2qual.insert((&q.qualifier, q.qualifier_index), i);
+            }
+
+            for q in another.qualifier_matched_scores {
+                if let Some(&i) = key2qual.get(&(&q.qualifier, q.qualifier_index)) {
+                    if self.qualifier_matched_scores[i].matched_score < q.matched_score {
+                        update_score.push((i, q.matched_score));
+                    }
+                } else {
+                    tasks.push(q);
+                }
+            }
+        }
+
+        self.qualifier_matched_scores.extend(tasks);
+        for (i, score) in update_score {
+            self.qualifier_matched_scores[i].matched_score = score;
+        }
+        Ok(())
+    }
+}
+
 /// The relationships of an entity that are matched with other values in the table
 #[pyclass(module = "grams.core.steps.data_matching", name = "MatchedEntRel")]
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -54,7 +100,8 @@ pub struct PotentialRelationships {
 }
 
 #[pyclass(module = "grams.core.steps.data_matching", name = "CellNode")]
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Display, Clone, PartialEq, Eq, Hash)]
+#[display(fmt = "{}-{}", row, col)]
 pub struct CellNode {
     #[pyo3(get)]
     pub row: usize,
@@ -87,6 +134,7 @@ pub struct DataMatching<'t, ET: EntityTraversal> {
     literal_matcher: &'t LiteralMatcher,
 
     /// The columns to ignore
+    #[allow(dead_code)]
     ignored_columns: &'t Vec<usize>,
 
     /// The properties to ignore and not used during **literal** matching
@@ -96,6 +144,7 @@ pub struct DataMatching<'t, ET: EntityTraversal> {
     allow_same_ent_search: bool,
 
     /// whether we use context entities in the search
+    #[allow(dead_code)]
     use_context: bool,
 }
 
@@ -128,7 +177,7 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
         let mut edges = vec![];
 
         let search_columns = (0..ncols)
-            .filter(|ci| ignored_columns.contains(ci))
+            .filter(|ci| !ignored_columns.contains(ci))
             .collect::<Vec<_>>();
 
         for ri in 0..nrows {
@@ -162,8 +211,6 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
             })
             .collect::<Vec<_>>();
 
-        println!("cell2entities {:?}", cell2entities);
-
         let mut data_matching = DataMatching {
             context,
             entity_traversal,
@@ -176,9 +223,9 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
 
         for &ci in &search_columns {
             let target_search_columns = search_columns
-                .clone()
-                .into_iter()
-                .filter(|&cj| ci != cj)
+                .iter()
+                .filter(|&cj| ci < *cj)
+                .map(|&cj| cj)
                 .collect::<Vec<_>>();
 
             for ri in 0..nrows {
@@ -233,17 +280,61 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
         bidirection: bool,
         output: &mut Vec<PotentialRelationships>,
     ) -> Result<(), GramsError> {
-        let mut rels = Vec::new();
+        let mut rels: Vec<MatchedEntRel> = Vec::new();
         for source_entity in source_entities {
+            let mut matched_stmts = Vec::new();
             for target_ent in target_entities {
                 if !self.allow_same_ent_search && source_entity.id == target_ent.id {
                     continue;
                 }
-                self.match_entity_pair(source_entity, target_ent, &mut rels);
+                self.match_entity_pair(source_entity, target_ent, &mut matched_stmts);
             }
+            let found_n_pairs = matched_stmts.len();
             if let Some(target_cell) = target_cell {
-                self.match_entity_text_pair(source_entity, target_cell, &mut rels)?;
+                self.match_entity_text_pair(source_entity, target_cell, &mut matched_stmts)?;
             }
+
+            // resolve duplicated rels as literal match can overlap with entity exact match
+            if found_n_pairs < matched_stmts.len() {
+                let (new_text_pair, dup) = {
+                    let mut ps2rel: HashMap<(&String, usize), usize> =
+                        HashMap::with_capacity(found_n_pairs);
+                    for i in 0..found_n_pairs {
+                        let key = (&matched_stmts[i].property, matched_stmts[i].statement_index);
+                        ps2rel.insert(key, i);
+                    }
+
+                    let mut new_text_pair = Vec::with_capacity(matched_stmts.len() - found_n_pairs);
+                    let mut dup = false;
+                    for i in found_n_pairs..matched_stmts.len() {
+                        let key = (&matched_stmts[i].property, matched_stmts[i].statement_index);
+                        if let Some(&j) = ps2rel.get(&key) {
+                            new_text_pair.push(j);
+                            dup = true;
+                        } else {
+                            new_text_pair.push(i);
+                        }
+                    }
+                    (new_text_pair, dup)
+                };
+
+                if dup {
+                    let newstmts = matched_stmts.drain(found_n_pairs..).collect::<Vec<_>>();
+                    for (i, stmt) in newstmts.into_iter().enumerate() {
+                        let j = new_text_pair[i];
+                        if j < found_n_pairs {
+                            matched_stmts[j].merge(stmt)?;
+                        } else {
+                            matched_stmts.push(stmt);
+                        }
+                    }
+                }
+            }
+
+            rels.push(MatchedEntRel {
+                source_entity_id: source_entity.id.clone(),
+                statements: matched_stmts,
+            })
         }
 
         if rels.len() > 0 {
@@ -278,12 +369,13 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
         &mut self,
         source: &Entity,
         target: &Entity,
-        output: &mut Vec<MatchedEntRel>,
+        output: &mut Vec<MatchedStatement>,
     ) {
-        let statements = self
+        for ms in self
             .entity_traversal
             .iter_props_by_entity(&source.id, &target.id)
-            .map(|ms| MatchedStatement {
+        {
+            output.push(MatchedStatement {
                 property: ms.property.clone(),
                 statement_index: ms.statement_index,
                 property_matched_score: if ms.is_property_matched {
@@ -300,28 +392,18 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
                         matched_score: 1.0,
                     })
                     .collect(),
-            })
-            .collect::<Vec<_>>();
-
-        if statements.len() == 0 {
-            return;
+            });
         }
-
-        output.push(MatchedEntRel {
-            source_entity_id: source.id.clone(),
-            statements,
-        });
     }
 
-    /// Search for any connections between an entity and a text. This function is a re-implementation of `_path_object_search_v2` in Python.
+    /// Search for any connections between an entity and a text. This function is a re-implementation of `_path_value_search` in Python.
     #[inline(always)]
     fn match_entity_text_pair(
         &mut self,
         source_entity: &Entity,
         target_cell: &ParsedTextRepr,
-        output: &mut Vec<MatchedEntRel>,
+        output: &mut Vec<MatchedStatement>,
     ) -> Result<(), GramsError> {
-        let mut matched_statements = Vec::new();
         for (p, stmts) in source_entity.props.iter() {
             if self.ignored_props.contains(p) {
                 continue;
@@ -353,20 +435,15 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
                     }
                 }
 
-                matched_statements.push(MatchedStatement {
-                    property: p.clone(),
-                    statement_index: stmt_i,
-                    property_matched_score,
-                    qualifier_matched_scores,
-                });
+                if property_matched_score.is_some() || qualifier_matched_scores.len() > 0 {
+                    output.push(MatchedStatement {
+                        property: p.clone(),
+                        statement_index: stmt_i,
+                        property_matched_score,
+                        qualifier_matched_scores,
+                    });
+                }
             }
-        }
-
-        if matched_statements.len() > 0 {
-            output.push(MatchedEntRel {
-                source_entity_id: source_entity.id.clone(),
-                statements: matched_statements,
-            });
         }
 
         Ok(())

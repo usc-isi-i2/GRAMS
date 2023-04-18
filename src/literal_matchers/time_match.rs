@@ -35,7 +35,7 @@ impl SingleTypeMatcher for TimeTest {
         &self,
         query: &ParsedTextRepr,
         key: &Value,
-        context: &AlgoContext,
+        _context: &AlgoContext,
     ) -> Result<(bool, f64), GramsError> {
         let celldt = match &query.datetime {
             Some(dt) => dt,

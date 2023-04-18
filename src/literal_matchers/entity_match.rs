@@ -74,7 +74,7 @@ impl SingleTypeMatcher for EntitySimilarityTest {
                 queries
                     .iter()
                     .map(|q| string_match_similarity(lbl, q, &self.strsim))
-                    .filter(|(m, s)| *m)
+                    .filter(|(m, _s)| *m)
                     .max_by(|x, y| x.1.partial_cmp(&y.1).unwrap())
             })
             .filter(|x| x.is_some() && x.unwrap().0)

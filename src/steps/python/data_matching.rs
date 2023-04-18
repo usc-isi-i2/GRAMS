@@ -1,7 +1,6 @@
 use hashbrown::HashSet;
 use pyo3::prelude::*;
 
-use super::super::candidate_local_search::candidate_local_search;
 use super::super::data_matching::{DataMatching, Node, PotentialRelationships};
 use crate::context::PyAlgoContext;
 use crate::error::into_pyerr;
@@ -9,11 +8,9 @@ use crate::index::IndexTraversal;
 use crate::literal_matchers::parsed_text_repr::ParsedTextRepr;
 use crate::literal_matchers::PyLiteralMatcher;
 use crate::macros::unsafe_update_view_lifetime_signature;
-use crate::steps::data_matching::{
-    CellNode, EntityNode, MatchedEntRel, MatchedQualifier, MatchedStatement,
-};
-use crate::table::{Link, LinkedTable};
-use crate::{pyiter, pyview, strsim};
+use crate::steps::data_matching::{CellNode, MatchedEntRel, MatchedQualifier, MatchedStatement};
+use crate::table::LinkedTable;
+use crate::{pyiter, pyview};
 use postcard::{from_bytes, to_allocvec};
 
 #[pyfunction(name = "matching")]
@@ -45,20 +42,21 @@ pub fn matching(
 }
 
 #[pyclass(module = "grams.core.steps.data_matching", name = "DataMatchesResult")]
+#[derive(Debug)]
 pub struct PyDataMatchesResult {
-    nodes: Vec<Node>,
-    edges: Vec<PotentialRelationships>,
+    pub nodes: Vec<Node>,
+    pub edges: Vec<PotentialRelationships>,
 }
 
 #[pymethods]
 impl PyDataMatchesResult {
-    fn save(&self, file: &str) -> PyResult<()> {
+    pub fn save(&self, file: &str) -> PyResult<()> {
         let out = to_allocvec(&(&self.nodes, &self.edges)).map_err(into_pyerr)?;
         std::fs::write(file, out).map_err(into_pyerr)
     }
 
     #[staticmethod]
-    fn load(file: &str) -> PyResult<PyDataMatchesResult> {
+    pub fn load(file: &str) -> PyResult<PyDataMatchesResult> {
         let (nodes, edges) = from_bytes::<(Vec<Node>, Vec<PotentialRelationships>)>(
             &std::fs::read(file).map_err(into_pyerr)?,
         )
@@ -66,35 +64,35 @@ impl PyDataMatchesResult {
         Ok(PyDataMatchesResult { nodes, edges })
     }
 
-    fn is_cell_node(&self, idx: usize) -> bool {
+    pub fn is_cell_node(&self, idx: usize) -> bool {
         match self.nodes[idx] {
             Node::Cell(_) => true,
             _ => false,
         }
     }
 
-    fn is_entity_node(&self, idx: usize) -> bool {
+    pub fn is_entity_node(&self, idx: usize) -> bool {
         match self.nodes[idx] {
             Node::Entity(_) => true,
             _ => false,
         }
     }
 
-    fn get_cell_node(&self, idx: usize) -> PyResult<CellNode> {
+    pub fn get_cell_node(&self, idx: usize) -> PyResult<CellNode> {
         match &self.nodes[idx] {
             Node::Cell(cell) => Ok(cell.clone()),
             _ => Err(pyo3::exceptions::PyTypeError::new_err("Not a cell node")),
         }
     }
 
-    fn get_entity_node(&self, idx: usize) -> PyResult<&String> {
+    pub fn get_entity_node(&self, idx: usize) -> PyResult<&String> {
         match &self.nodes[idx] {
             Node::Entity(entity) => Ok(&entity.entity_id),
             _ => Err(pyo3::exceptions::PyTypeError::new_err("Not an entity node")),
         }
     }
 
-    fn iter_rels(&self) -> PotentialRelationshipsVecView {
+    pub fn iter_rels(&self) -> PotentialRelationshipsVecView {
         PotentialRelationshipsVecView::new(&self.edges)
     }
 }

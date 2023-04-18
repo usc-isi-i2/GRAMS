@@ -1,5 +1,4 @@
 use crate::error::GramsError;
-use ndarray::{concatenate, Array2, Axis};
 
 use super::{ExpectTokenizerType, JaroWinkler, StrSim, TokenizerType};
 use anyhow::Result;

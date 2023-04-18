@@ -15,7 +15,7 @@ impl SingleTypeMatcher for QuantityTest {
         &self,
         query: &ParsedTextRepr,
         key: &Value,
-        context: &AlgoContext,
+        _context: &AlgoContext,
     ) -> Result<(bool, f64), GramsError> {
         let num = match &query.number {
             None => return Ok((false, 0.0)),

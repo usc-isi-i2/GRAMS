@@ -76,6 +76,7 @@ impl TokenizerType {
         }
     }
 
+    #[allow(dead_code)]
     #[inline]
     fn is_outer_set(&self) -> bool {
         !self.is_outer_seq()

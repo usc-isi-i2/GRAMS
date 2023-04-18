@@ -15,7 +15,7 @@ impl SingleTypeMatcher for StringExactTest {
         &self,
         query: &ParsedTextRepr,
         key: &Value,
-        context: &AlgoContext,
+        _context: &AlgoContext,
     ) -> Result<(bool, f64), GramsError> {
         if key.as_string().unwrap().trim() == &query.normed_string {
             Ok((true, 1.0))
