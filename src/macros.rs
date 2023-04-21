@@ -89,6 +89,45 @@ macro_rules! pyview {
     };
 }
 
+#[macro_export]
+macro_rules! pywrap {
+    ($wrapper:ident (module = $module:literal, name = $name:literal, cls = $clsname:ident) {
+        $(
+            $(c($cel:ident: $cty:ty))?
+            $(r($rel:ident: $rty:ty))?
+            $(iter($itervec:ident { $iel:ident: $ity:ty }))?
+        ),*
+    }) => {
+        #[pyclass(module = $module, name = $name)]
+        pub struct $wrapname(pub $clsname);
+
+        #[pymethods]
+        impl $wrapname {
+            $(
+                $(
+                    #[getter]
+                    fn $cel(&self) -> $cty {
+                        self.0.$cel
+                    }
+                )?
+
+                $(
+                    #[getter]
+                    fn $rel(&self) -> &$rty {
+                        &self.0.$rel
+                    }
+                )?
+
+                $(
+                    fn $itervec(&self) -> $ity {
+                        <$ity>::new(&self.0.$iel)
+                    }
+                )?
+            )*
+        }
+    };
+}
+
 /// Change signature of a reference from temporary to static. This is unsafe and
 /// only be used for temporary views that drop immediately after use.
 pub fn unsafe_update_view_lifetime_signature<T: ?Sized>(val: &T) -> &'static T {

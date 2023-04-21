@@ -1,11 +1,16 @@
 from __future__ import annotations
-
+from grams.algorithm.inferences_v2.features.rust_feature_extractor import (
+    RustFeatureExtractor,
+)
+from kgdata.wikidata.db import WikidataDB
+import grams.core as gcore
 import numpy as np
 from nptyping import Bool, Float64, Int32, NDArray, Shape
 from ream.data_model_helper import NumpyDataModel
+from ream.helper import profile_fn
 from timer import watch_and_report
 from tqdm.auto import tqdm
-
+from grams.core.table import LinkedTable as RustLinkedTable
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEdge,
@@ -84,6 +89,10 @@ class EdgeFeatureExtractor:
         cg: CGGraph,
         dg: DGGraph,
         context: AlgoContext,
+        rust_db: gcore.GramsDB,
+        rust_table: RustLinkedTable,
+        rust_context: gcore.AlgoContext,
+        verbose: bool,
     ):
         self.idmap = idmap
         self.table = table
@@ -94,11 +103,20 @@ class EdgeFeatureExtractor:
         self.wdprops = context.wdprops
         self.wdentities = context.wdentities
 
+        self.rustextractor = RustFeatureExtractor(
+            rust_table, dg, cg, rust_context, rust_db
+        )
+
         self.traversal = GraphTraversalHelper(table, cg, dg)
         self.contradicted_info_detector = ContradictedInformationDetector(
-            correct_entity_threshold=0.8, traversal=self.traversal, context=context
+            correct_entity_threshold=0.8,
+            traversal=self.traversal,
+            context=context,
+            rustextractor=self.rustextractor,
         )
         self.functional_dependency_detector = FunctionalDependencyDetector(table)
+        self.verbose = verbose
+        self._mancache = {}  # manual cache
 
     def extract(
         self,
@@ -130,17 +148,27 @@ class EdgeFeatureExtractor:
             # TODO: store is_qualifier in the CGEdge
             is_qualifier.append(outedge.predicate != inedge.predicate)
 
-        with watch_and_report("freq over row", preprint=True):
+        with watch_and_report("freq over row", preprint=True, disable=not self.verbose):
             freq_over_row = self.FREQ_OVER_ROW(rels)
-        with watch_and_report("freq over ent row", preprint=True):
+        with watch_and_report(
+            "freq over ent row", preprint=True, disable=not self.verbose
+        ):
             freq_over_ent_row = self.FREQ_OVER_ENT_ROW(rels)
-        with watch_and_report("freq over pos rel", preprint=True):
+        with watch_and_report(
+            "freq over pos rel", preprint=True, disable=not self.verbose
+        ):
             freq_over_pos_rel = self.FREQ_OVER_POS_REL(rels)
-        with watch_and_report("freq unmatch over ent row", preprint=True):
+        with watch_and_report(
+            "freq unmatch over ent row", preprint=True, disable=not self.verbose
+        ):
             freq_unmatch_over_ent_row = self.FREQ_UNMATCH_OVER_ENT_ROW(rels)
-        with watch_and_report("freq unmatch over pos rel", preprint=True):
+        with watch_and_report(
+            "freq unmatch over pos rel", preprint=True, disable=not self.verbose
+        ):
             freq_unmatch_over_pos_rel = self.FREQ_UNMATCH_OVER_POS_REL(rels)
-        with watch_and_report("not func dependency", preprint=True):
+        with watch_and_report(
+            "not func dependency", preprint=True, disable=not self.verbose
+        ):
             not_func_dependency = self.NOT_FUNC_DEPENDENCY(rels)
 
         return EdgeFeature(
@@ -189,7 +217,7 @@ class EdgeFeatureExtractor:
         tmp = {}
         max_possible_links = {}
 
-        for reli, (s, inedge, outedge) in enumerate(tqdm(rels)):
+        for reli, (s, inedge, outedge) in enumerate(rels):
             freq = self.get_rel_freq(s, outedge)
             n_possible_links = self.get_unmatch_discovered_links(
                 s, inedge, outedge
@@ -223,11 +251,11 @@ class EdgeFeatureExtractor:
         self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]
     ):
         output = []
-        for s, inedge, outedge in tqdm(rels):
+        for s, inedge, outedge in tqdm(rels, disable=not self.verbose):
             max_pos_ent_rows = self.get_maximum_possible_ent_links_between_two_nodes(
                 s, inedge, outedge
             )
-            n_unmatch_links = len(
+            n_unmatch_links = (
                 self.contradicted_info_detector.get_contradicted_information(
                     s, inedge, outedge
                 )
@@ -243,8 +271,10 @@ class EdgeFeatureExtractor:
         tmp = {}
         max_possible_links = {}
 
-        for reli, (s, inedge, outedge) in enumerate(tqdm(rels)):
-            n_unmatch_links = len(
+        for reli, (s, inedge, outedge) in enumerate(
+            tqdm(rels, disable=not self.verbose)
+        ):
+            n_unmatch_links = (
                 self.contradicted_info_detector.get_contradicted_information(
                     s, inedge, outedge
                 )
@@ -304,7 +334,8 @@ class EdgeFeatureExtractor:
     @CacheMethod.cache(CacheMethod.two_object_args)
     def get_rel_freq(self, s: CGStatementNode, outedge: CGEdge):
         """Get frequency of the link, which is sum of links all rows between two nodes.
-        This is weighted count so we should not use this for calculating the number of links"""
+        This is weighted count so we should not use this for calculating the number of links
+        """
         # sum_prob = {}
         # for (source_flow, target_flow), dgstmt2provenances in s.flow.items():
         #     # the flow does not go through this outedge
@@ -337,8 +368,28 @@ class EdgeFeatureExtractor:
         #         sum_prob += max(provenances, key=attrgetter("prob")).prob
         return sum_prob
 
-    @CacheMethod.cache(CacheMethod.three_object_args)
     def get_maximum_possible_ent_links_between_two_nodes(
+        self, s: CGStatementNode, inedge: CGEdge, outedge: CGEdge
+    ):
+        key = (
+            "maximum_possible_ent_links_between_two_nodes",
+            s.id,
+            inedge.id,
+            outedge.id,
+        )
+        if key not in self._mancache:
+            self._mancache[
+                key
+            ] = self.get_maximum_possible_ent_links_between_two_nodes_real(
+                s, inedge, outedge
+            )
+        return self._mancache[key]
+
+    # @CacheMethod.cache(CacheMethod.three_object_args)
+    # @profile_fn(
+    #     outfile="/tmp/get_maximum_possible_ent_links_between_two_nodes_real.prof"
+    # )
+    def get_maximum_possible_ent_links_between_two_nodes_real(
         self, s: CGStatementNode, inedge: CGEdge, outedge: CGEdge
     ):
         """Find the maximum possible links between two nodes (ignore the possible predicates):
@@ -407,8 +458,20 @@ class EdgeFeatureExtractor:
 
         return n_rows - n_null_entities
 
-    @CacheMethod.cache(CacheMethod.three_object_args)
     def get_unmatch_discovered_links(
+        self, s: CGStatementNode, inedge: CGEdge, outedge: CGEdge
+    ):
+        key = ("unmatch_discovered_links", s.id, inedge.id, outedge.id)
+        if key not in self._mancache:
+            out2 = self.rustextractor.get_unmatch_discovered_links(s, inedge, outedge)
+            # out1 = self.get_unmatch_discovered_links_real(s, inedge, outedge)
+            # assert out1 == out2, f"{out1} != {out2}"
+            self._mancache[key] = out2
+        return self._mancache[key]
+
+    # @CacheMethod.cache(CacheMethod.three_object_args)
+    # @profile_fn(outfile="/tmp/unmatch_discovered_links_real.prof")
+    def get_unmatch_discovered_links_real(
         self, s: CGStatementNode, inedge: CGEdge, outedge: CGEdge
     ):
         """Get number of discovered links that don't match due to value differences. This function do not count if:

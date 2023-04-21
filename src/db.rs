@@ -1,9 +1,13 @@
-use std::path::PathBuf;
+use std::{borrow::Borrow, path::PathBuf};
 
 use hashbrown::{HashMap, HashSet};
 use kgdata::{
-    db::{open_entity_db, open_entity_metadata_db, ReadonlyRocksDBDict},
-    models::{Entity, EntityMetadata, Value},
+    db::{
+        open_entity_db, open_entity_link_db, open_entity_metadata_db, open_property_db,
+        ReadonlyRocksDBDict,
+    },
+    error::KGDataError,
+    models::{Entity, EntityLink, EntityMetadata, Property, Value},
 };
 
 use crate::{
@@ -20,8 +24,10 @@ static DB_INSTANCE: OnceCell<Py<GramsDB>> = OnceCell::new();
 #[pyclass(module = "grams.core", subclass)]
 pub struct GramsDB {
     pub datadir: PathBuf,
-    entities: ReadonlyRocksDBDict<String, Entity>,
-    entity_metadata: ReadonlyRocksDBDict<String, EntityMetadata>,
+    pub entities: ReadonlyRocksDBDict<String, Entity>,
+    pub entity_metadata: ReadonlyRocksDBDict<String, EntityMetadata>,
+    pub entity_link: ReadonlyRocksDBDict<String, EntityLink>,
+    pub props: ReadonlyRocksDBDict<String, Property>,
 }
 
 impl std::fmt::Debug for GramsDB {
@@ -40,8 +46,18 @@ impl GramsDB {
             entity_metadata: open_entity_metadata_db(
                 datadir.join("wdentity_metadata.db").as_os_str(),
             )?,
+            entity_link: open_entity_link_db(datadir.join("wdentity_wikilinks.db").as_os_str())?,
+            props: open_property_db(datadir.join("wdprops.db").as_os_str())?,
             datadir,
         })
+    }
+
+    pub fn open_entity_link_db(
+        &self,
+    ) -> Result<ReadonlyRocksDBDict<String, EntityLink>, GramsError> {
+        Ok(open_entity_link_db(
+            self.datadir.join("wdentity_wikilinks.db").as_os_str(),
+        )?)
     }
 
     fn get_table_entity_ids(&self, table: &LinkedTable) -> Vec<String> {
@@ -221,5 +237,37 @@ impl GramsDB {
             entities,
             entity_metadata,
         )))
+    }
+}
+
+pub struct CacheRocksDBDict<V>
+where
+    V: 'static,
+{
+    db: ReadonlyRocksDBDict<String, V>,
+    cache: HashMap<String, Option<V>>,
+}
+
+impl<V> CacheRocksDBDict<V>
+where
+    V: 'static,
+{
+    pub fn new(db: ReadonlyRocksDBDict<String, V>) -> Self {
+        Self {
+            db,
+            cache: HashMap::new(),
+        }
+    }
+
+    pub fn get(&mut self, key: &str) -> Result<Option<&V>, KGDataError> {
+        if !self.cache.contains_key(key) {
+            self.cache.insert(key.to_owned(), self.db.get(key)?);
+        }
+
+        Ok(self.cache[key].as_ref())
+    }
+
+    fn contains_key(&self, key: &str) -> Result<bool, KGDataError> {
+        Ok(self.cache.contains_key(key) || self.db.contains_key(key)?)
     }
 }

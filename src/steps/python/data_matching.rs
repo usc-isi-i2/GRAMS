@@ -7,10 +7,10 @@ use crate::error::into_pyerr;
 use crate::index::IndexTraversal;
 use crate::literal_matchers::parsed_text_repr::ParsedTextRepr;
 use crate::literal_matchers::PyLiteralMatcher;
-use crate::macros::unsafe_update_view_lifetime_signature;
 use crate::steps::data_matching::{CellNode, MatchedEntRel, MatchedQualifier, MatchedStatement};
 use crate::table::LinkedTable;
-use crate::{pyiter, pyview};
+use kgdata::macros::unsafe_update_view_lifetime_signature;
+use kgdata::{pyiter, pyview};
 use postcard::{from_bytes, to_allocvec};
 
 #[pyfunction(name = "matching")]
@@ -62,6 +62,10 @@ impl PyDataMatchesResult {
         )
         .map_err(into_pyerr)?;
         Ok(PyDataMatchesResult { nodes, edges })
+    }
+
+    pub fn get_n_nodes(&self) -> usize {
+        return self.nodes.len();
     }
 
     pub fn is_cell_node(&self, idx: usize) -> bool {

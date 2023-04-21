@@ -1,19 +1,23 @@
 use kgdata::models::Value;
+use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+#[pyclass(module = "grams.core.datagraph", name = "EdgeFlowSource")]
 #[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub struct EdgeFlowSource {
     pub source_id: String,
     pub predicate: String,
 }
 
+#[pyclass(module = "grams.core.datagraph", name = "EdgeFlowTarget")]
 #[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub struct EdgeFlowTarget {
     pub target_id: String,
     pub predicate: String,
 }
 
+#[pyclass(module = "grams.core.datagraph", name = "StatementNode")]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StatementNode {
     pub id: String,
@@ -30,6 +34,7 @@ pub struct StatementNode {
     pub flow: HashMap<(EdgeFlowSource, EdgeFlowTarget), Vec<FlowProvenance>>,
 }
 
+#[pyclass(module = "grams.core.datagraph", name = "LiteralMatchingFuncArg")]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LiteralMatchingFuncArg {
     pub func: String,
@@ -42,6 +47,7 @@ pub enum LinkGenMethod {
     FromLiteralMatchingFunc(LiteralMatchingFuncArg),
 }
 
+#[pyclass(module = "grams.core.datagraph", name = "FlowProvenance")]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FlowProvenance {
     pub gen_method: LinkGenMethod,

@@ -30,6 +30,8 @@ from ream.data_model_helper import (
 )
 import serde.pickle
 from timer import watch_and_report
+import grams.core as gcore
+from grams.core.table import LinkedTable as RustLinkedTable
 
 logger = logger.bind(name=__name__)
 
@@ -47,19 +49,37 @@ class InfFeatureExtractor:
 
     VERSION = 107
 
-    def __init__(self, context: AlgoContext):
+    def __init__(
+        self,
+        context: AlgoContext,
+        rust_context: gcore.AlgoContext,
+        rust_db: gcore.GramsDB,
+    ):
         self.context = context
+        self.rust_context = rust_context
+        self.rust_db = rust_db
 
     def extract(
         self,
         table: LinkedTable,
+        rust_table: RustLinkedTable,
         dg: DGGraph,
         cg: CGGraph,
         verbose: bool = False,
     ) -> InfFeature:
         idmap = IDMap()
 
-        edge_feat_extractor = EdgeFeatureExtractor(idmap, table, cg, dg, self.context)
+        edge_feat_extractor = EdgeFeatureExtractor(
+            idmap,
+            table,
+            cg,
+            dg,
+            self.context,
+            self.rust_db,
+            rust_table,
+            self.rust_context,
+            verbose,
+        )
         node_feat_extractor = NodeFeatureExtractor(idmap, table, cg, dg, self.context)
         misc_feat_extractor = MiscFeatureExtractor(
             idmap,
@@ -95,7 +115,6 @@ class InfFeatureExtractor:
             preprint=True,
             disable=not verbose,
         ):
-
             node_features = node_feat_extractor.extract()
         with watch_and_report(
             "extract misc feature",

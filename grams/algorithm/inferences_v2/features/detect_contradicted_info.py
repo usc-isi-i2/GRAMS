@@ -17,10 +17,14 @@ from grams.algorithm.candidate_graph.cg_graph import (
     CGEdge,
     CGStatementNode,
 )
+from grams.algorithm.inferences_v2.features.rust_feature_extractor import (
+    RustFeatureExtractor,
+)
 from kgdata.wikidata.models import (
     WDEntity,
 )
 from kgdata.wikidata.models.wdvalue import WDValue, WDValueEntityId
+from ream.helper import profile_fn
 from sm.misc.fn_cache import CacheMethod
 from dataclasses import dataclass
 from loguru import logger
@@ -48,6 +52,7 @@ class ContradictedInformationDetector:
         correct_entity_threshold: float,
         traversal: GraphTraversalHelper,
         context: AlgoContext,
+        rustextractor: RustFeatureExtractor,
     ):
         self.correct_entity_threshold = correct_entity_threshold
         self.wdentities = context.wdentities
@@ -56,9 +61,30 @@ class ContradictedInformationDetector:
         self.dg = traversal.dg
         self.traversal = traversal
         self.missing_info_detector = MissingInformationDetector(context)
+        self.rustextractor = rustextractor
+        self._mancache = {}
 
-    @CacheMethod.cache(CacheMethod.three_object_args)
     def get_contradicted_information(
+        self, s: CGStatementNode, inedge: CGEdge, outedge: CGEdge
+    ) -> int:
+        key = (
+            "get_contradicted_information",
+            s.id,
+            inedge.id,
+            outedge.id,
+        )
+        if key not in self._mancache:
+            out2 = self.rustextractor.get_len_contradicted_information(
+                s, inedge, outedge, self.correct_entity_threshold
+            )
+            # out1 = len(self.get_contradicted_information_real(s, inedge, outedge))
+            # assert out1 == out2, f"{out1} != {out2}"
+            self._mancache[key] = out2
+        return self._mancache[key]
+
+    # @CacheMethod.cache(CacheMethod.three_object_args)
+    # @profile_fn(outfile="/tmp/get_contradicted_information_real.prof")
+    def get_contradicted_information_real(
         self, s: CGStatementNode, inedge: CGEdge, outedge: CGEdge
     ) -> list[ContradictedInformation]:
         """Get the DG pairs that may contain contradicted information with the relationship inedge -> s -> outedge

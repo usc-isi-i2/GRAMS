@@ -1,7 +1,8 @@
 from typing import Mapping, Optional, Set, Union
+from grams.algorithm.literal_matchers.literal_match import LiteralMatchConfigs
 
 from tqdm import tqdm
-
+import grams.core as gcore
 from grams.algorithm.data_graph.dg_graph import (
     CellNode,
     ContextSpan,
@@ -14,9 +15,12 @@ from grams.algorithm.data_graph.dg_graph import (
     DGPathNodeEntity,
     DGPathNodeLiteralValue,
     DGPathNodeStatement,
+    DGStatementID,
     EdgeFlowSource,
     EdgeFlowTarget,
     EntityValueNode,
+    FlowProvenance,
+    LinkGenMethod,
     LiteralValueNode,
     Span,
     StatementNode,
@@ -775,3 +779,245 @@ class DGFactory:
                             matches.append(DGPath(sequence=hop1_seq + hop2_seq))
 
         return matches
+
+
+def create_dg(
+    table: LinkedTable,
+    context,  #: gcore.AlgoContext,
+    wdentities: Mapping[str, WDEntity],
+    wdprops: Mapping[str, WDProperty],
+    text_parser: TextParser,
+    literal_matcher_cfg: LiteralMatchConfigs,
+    cfg: DGConfigs,
+):
+    nrows, ncols = table.shape()
+    cells = [
+        [text_parser.parse(table.table[ri, ci]).to_rust() for ci in range(ncols)]
+        for ri in range(nrows)
+    ]
+    literal_matcher = gcore.literal_matchers.LiteralMatcher(
+        literal_matcher_cfg.to_rust()
+    )
+    matches = gcore.steps.data_matching.matching(
+        table.to_rust(),
+        cells,
+        context,
+        literal_matcher,
+        [],
+        ["P31"],
+        cfg.ALLOW_SAME_ENT_SEARCH,
+        cfg.USE_CONTEXT,
+    )
+
+    dg = DGGraph()
+    dg_nodeids = []
+    for i in range(matches.get_n_nodes()):
+        if matches.is_cell_node(i):
+            rustcellnode = matches.get_cell_node(i)
+            # =====================================================
+            cell_qnodes = {
+                candidate.entity_id
+                for link in table.links[rustcellnode.row][rustcellnode.col]
+                for candidate in link.candidates
+            }
+            cell_qnode_spans = {}
+            cell_qnode_scores = {}
+            for link in table.links[rustcellnode.row][rustcellnode.col]:
+                if len(link.candidates) > 0:
+                    for can in link.candidates:
+                        if can.entity_id not in cell_qnode_spans:
+                            cell_qnode_spans[can.entity_id] = []
+                        cell_qnode_spans[can.entity_id].append(
+                            Span(link.start, link.end)
+                        )
+                        cell_qnode_scores[can.entity_id] = can.probability
+
+            assert all(
+                len(spans) == len({s.to_tuple() for s in spans})
+                for spans in cell_qnode_spans.values()
+            )
+            # =====================================================
+
+            node = CellNode(
+                id=CellNode.get_id(rustcellnode.row, rustcellnode.col),
+                value=table.table[rustcellnode.row, rustcellnode.col],
+                column=rustcellnode.col,
+                row=rustcellnode.row,
+                entity_ids=list(cell_qnodes),
+                entity_spans=cell_qnode_spans,
+                entity_probs=cell_qnode_scores,
+            )
+            dg.add_node(node)
+        else:
+            rustentnode = matches.get_entity_node(i)
+            node = EntityValueNode(
+                id=DGPathNodeEntity(rustentnode.entity_id).get_id(),
+                qnode_id=rustentnode.entity_id,
+                qnode_prob=1.0,
+                context_span=None,
+            )
+            dg.add_node(node)
+        dg_nodeids.append(node.id)
+
+    # add paths to the graph
+    for rels in matches.iter_rels():
+        uid = dg_nodeids[rels.source_id]
+        vid = dg_nodeids[rels.target_id]
+
+        for rel in rels.iter_rels():
+            for stmt in rel.iter_statements():
+                stmt_property = stmt.property
+                sid = DGStatementID(
+                    rel.source_entity_id, stmt_property, stmt.statement_index
+                ).get_id()
+                if not dg.has_node(sid):
+                    dg.add_node(
+                        StatementNode(
+                            id=sid,
+                            qnode_id=rel.source_entity_id,
+                            predicate=stmt_property,
+                            is_in_kg=True,
+                            forward_flow={},
+                            reversed_flow={},
+                            flow={},
+                        )
+                    )
+
+                if not dg.has_edge_between_nodes(uid, sid, stmt_property):
+                    dg.add_edge(
+                        DGEdge(
+                            id=-1,  # will be assigned later
+                            source=uid,
+                            target=sid,
+                            predicate=stmt_property,
+                            is_qualifier=False,
+                            is_inferred=False,
+                        )
+                    )
+
+                snode = dg.get_statement_node(sid)
+                edge_source = EdgeFlowSource(uid, stmt_property)
+
+                if stmt.property_matched_score is not None:
+                    # we have a matched property
+                    if not dg.has_edge_between_nodes(sid, vid, stmt_property):
+                        dg.add_edge(
+                            DGEdge(
+                                id=-1,  # will be assigned later
+                                source=sid,
+                                target=vid,
+                                predicate=stmt_property,
+                                is_qualifier=False,
+                                is_inferred=False,
+                            )
+                        )
+
+                    edge_target = EdgeFlowTarget(vid, stmt_property)
+                    # TODO: determine the provenance
+                    snode.track_provenance(
+                        edge_source,
+                        edge_target,
+                        [
+                            FlowProvenance(
+                                gen_method=LinkGenMethod.FromWikidataLink,
+                                gen_method_arg={"value_index": stmt.statement_index},
+                                prob=stmt.property_matched_score,
+                            )
+                        ],
+                    )
+                else:
+                    # we do not have a matched property, so we need to add a new node
+                    # to represent the property's value
+                    stmt_value = (
+                        wdentities[rel.source_entity_id]
+                        .props[stmt_property][stmt.statement_index]
+                        .value
+                    )
+
+                    if stmt_value.is_entity_id(stmt_value):
+                        target_entid = stmt_value.as_entity_id()
+                        target_id = DGPathNodeEntity(target_entid).get_id()
+                        if not dg.has_node(target_id):
+                            dg.add_node(
+                                EntityValueNode(
+                                    id=target_id,
+                                    qnode_id=target_entid,
+                                    # the prob of this node should depend on the how it is generated, but since we won't discover
+                                    # the link between this node and other node, having the prob 1.0 is fine (we should only this prob. later
+                                    # in discovering unmatched links)
+                                    qnode_prob=1.0,
+                                    context_span=None,
+                                )
+                            )
+                    else:
+                        target_id = DGPathNodeLiteralValue(stmt_value).get_id()
+                        if not dg.has_node(target_id):
+                            dg.add_node(
+                                LiteralValueNode(
+                                    id=target_id,
+                                    value=stmt_value,
+                                    context_span=None,
+                                )
+                            )
+
+                    if not dg.has_edge_between_nodes(sid, target_id, stmt_property):
+                        dg.add_edge(
+                            DGEdge(
+                                id=-1,  # will be assigned later
+                                source=sid,
+                                target=target_id,
+                                predicate=stmt_property,
+                                is_qualifier=False,
+                                is_inferred=False,
+                            )
+                        )
+                    edge_target = EdgeFlowTarget(target_id, stmt_property)
+                    # TODO: determine the provenance
+                    snode.track_provenance(
+                        edge_source,
+                        edge_target,
+                        [
+                            FlowProvenance(
+                                gen_method=LinkGenMethod.FromWikidataLink,
+                                gen_method_arg={"value_index": stmt.statement_index},
+                                prob=1.0,
+                            )
+                        ],
+                    )
+
+                for qual in stmt.iter_qualifier_matched_scores():
+                    qual_qualifier = qual.qualifier
+                    if not dg.has_edge_between_nodes(sid, vid, qual_qualifier):
+                        dg.add_edge(
+                            DGEdge(
+                                id=-1,  # will be assigned later
+                                source=sid,
+                                target=vid,
+                                predicate=qual_qualifier,
+                                is_qualifier=True,
+                                is_inferred=False,
+                            )
+                        )
+                        edge_target = EdgeFlowTarget(vid, qual_qualifier)
+                        # TODO: determine the provenance
+                        snode.track_provenance(
+                            edge_source,
+                            edge_target,
+                            [
+                                FlowProvenance(
+                                    gen_method=LinkGenMethod.FromWikidataLink,
+                                    gen_method_arg={
+                                        "value_index": qual.qualifier_index
+                                    },
+                                    prob=qual.matched_score,
+                                )
+                            ],
+                        )
+
+    KGInference(dg, wdentities, wdprops).infer_subproperty().kg_transitive_inference()
+
+    # pruning unnecessary paths
+    if cfg.PRUNE_REDUNDANT_ENT:
+        DGPruning(dg, cfg).prune_hidden_entities()
+
+    return dg

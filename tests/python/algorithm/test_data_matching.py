@@ -10,7 +10,7 @@ import grams.core.steps as gcore_steps
 import grams.core.literal_matchers as gcore_matcher
 from grams.inputs import LinkedTable
 import pytest
-from sm.dataset import Example
+from sm.dataset import Example, FullTable
 from sm_datasets.datasets import Datasets
 
 from scripts.config import HOME_DIR, DATA_DIR
@@ -22,7 +22,8 @@ def wt250():
 
 
 @pytest.fixture()
-def tbl(resource_dir: Path):
+def tbl(wt250: list[Example[FullTable]], resource_dir: Path):
+    return LinkedTable.from_full_table(wt250[173].table)
     return LinkedTable.from_csv_file(
         resource_dir / "data_matching/list_of_highest_mountains.csv"
     )
@@ -53,4 +54,5 @@ def test_data_matching(tbl: LinkedTable):
     )
 
     it = g.iter_rels()
+    print(len(it))
     assert len(it) > 0

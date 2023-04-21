@@ -22,6 +22,16 @@ impl LinkedTable {
             (self.columns[0].values.len(), self.columns.len())
         }
     }
+
+    #[inline]
+    pub fn n_rows(&self) -> usize {
+        self.links.len()
+    }
+
+    #[inline]
+    pub fn n_cols(&self) -> usize {
+        self.columns.len()
+    }
 }
 
 #[pyclass(module = "grams.core.table", name = "Context")]

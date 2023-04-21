@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 from loguru import logger
-
+import grams.core as gcore
+import grams.core.steps as gcore_steps
+import grams.core.literal_matchers as gcore_matcher
 from osin.integrations.ream import OsinActor
 from ream.data_model_helper import NumpyDataModelContainer
 from ream.prelude import ActorVersion, Cache, DatasetDict, DatasetQuery
@@ -16,7 +18,7 @@ from grams.algorithm.candidate_graph.cg_factory import CGFactory
 from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.context import AlgoContext
 from grams.algorithm.data_graph.dg_config import DGConfigs
-from grams.algorithm.data_graph.dg_factory import DGFactory
+from grams.algorithm.data_graph.dg_factory import DGFactory, create_dg
 from grams.algorithm.inferences_v2.features.inf_feature import (
     InfFeature,
     InfFeatureExtractor,
@@ -134,7 +136,7 @@ def create_inference_data(
     db: Union[GramsDB, Path],
     params: GramsInfDataParams,
     table: LinkedTable,
-    verbose: bool = True,
+    verbose: bool = False,
 ):
     db = to_grams_db(db)
 
@@ -162,6 +164,52 @@ def create_inference_data(
         )
     text_parser = TextParser(params.text_parser)
     literal_match = LiteralMatch(wdentities, params.literal_matchers)
+
+    with watch_and_report(
+        "build rust context", preprint=True, print_fn=logger.debug, disable=not verbose
+    ):
+        gcore.GramsDB.init(str(db.data_dir))
+        rust_db = gcore.GramsDB.get_instance()
+        rust_table = table.to_rust()
+        rust_context = rust_db.get_algo_context(rust_table, n_hop=1)
+
+    # nrows, ncols = table.shape()
+    # rcells = [
+    #     [text_parser.parse(table.table[ri, ci]).to_rust() for ci in range(ncols)]
+    #     for ri in range(nrows)
+    # ]
+    # literal_matcher = gcore_matcher.LiteralMatcher(params.literal_matchers.to_rust())
+    # with watch_and_report(
+    #     "build data graph in rust",
+    #     preprint=True,
+    #     print_fn=logger.debug,
+    #     disable=not verbose,
+    # ):
+    #     g = gcore_steps.data_matching.matching(
+    #         rtable,
+    #         rcells,
+    #         context,
+    #         literal_matcher,
+    #         [],
+    #         ["P31"],
+    #         allow_same_ent_search=False,
+    #         use_context=True,
+    #     )
+    # with watch_and_report(
+    #     "build data graph in rust2",
+    #     preprint=True,
+    #     print_fn=logger.debug,
+    #     disable=not verbose,
+    # ):
+    #     dg1 = create_dg(
+    #         table,
+    #         context,
+    #         wdentities,
+    #         wdprops,
+    #         text_parser,
+    #         params.literal_matchers,
+    #         params.data_graph,
+    #     )
 
     with watch_and_report(
         "build data graph", preprint=True, print_fn=logger.debug, disable=not verbose
@@ -202,4 +250,13 @@ def create_inference_data(
         wd_num_prop_stats=db.wd_numprop_stats,
     )
 
-    return cg, InfFeatureExtractor(context).extract(table, dg, cg, verbose=verbose)
+    # from ream.helper import profile
+    # with profile(engine="cprofile"):
+    feats = InfFeatureExtractor(context, rust_context, rust_db).extract(
+        table, rust_table, dg, cg, verbose=verbose
+    )
+    return cg, feats
+
+
+def rust_create_inference_data(db: Union[GramsDB, Path]):
+    pass

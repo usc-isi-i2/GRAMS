@@ -18,6 +18,12 @@ pub enum GramsError {
     #[error("Generic integrity error: {0}")]
     IntegrityError(String),
 
+    #[error("Logic error: {0}")]
+    LogicError(String),
+
+    #[error("Invalid arguments: {0}")]
+    InvalidArgument(String),
+
     #[error(transparent)]
     PostcardError(#[from] postcard::Error),
 

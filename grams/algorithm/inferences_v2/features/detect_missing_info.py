@@ -7,7 +7,7 @@ from kgdata.wikidata.models.wdvalue import WDValueKind
 class MissingInformationDetector:
     def __init__(self, context: AlgoContext):
         self.context = context
-        self.wdentity_wikilinks = context.wdentity_wikilinks
+        self.wdentity_wikilinks = context.wdentity_wikilinks.cache()
 
     def is_missing_object_info(
         self, ent: WDEntity, property: str, qualifier: str, value: str
