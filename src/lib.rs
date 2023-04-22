@@ -37,6 +37,6 @@ fn core(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     steps::python::register(py, m)?;
     literal_matchers::python::register(py, m)?;
     features::register(py, m)?;
-
+    strsim::register(py, m)?;
     Ok(())
 }

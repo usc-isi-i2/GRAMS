@@ -18,6 +18,11 @@ fn test_similarity() -> Result<()> {
             str::from_utf8(b"Ls\xc3\xa1l\xc3\xb3").unwrap(),
             0.8900000000000001,
         ),
+        (
+            "United Kingdom",
+            "Sengenia (United Kingdom)",
+            0.5054761904761905,
+        ),
     ];
     for (k, q, sim) in testcases {
         assert_relative_eq!(strsim.similarity(k, q).unwrap(), sim);

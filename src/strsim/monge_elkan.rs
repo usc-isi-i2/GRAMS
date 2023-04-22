@@ -13,7 +13,7 @@ pub struct MongeElkan<S: StrSim<Vec<char>>> {
 }
 #[derive(Display)]
 #[display(fmt = "SymmetricMongeElkan")]
-pub struct SymmetricMongeElkan<S: StrSim<Vec<char>>>(MongeElkan<S>);
+pub struct SymmetricMongeElkan<S: StrSim<Vec<char>>>(pub MongeElkan<S>);
 
 impl MongeElkan<JaroWinkler> {
     pub fn default() -> Self {

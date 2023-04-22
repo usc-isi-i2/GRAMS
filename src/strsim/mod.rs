@@ -3,23 +3,24 @@ mod jaro;
 mod jaro_winkler;
 mod levenshtein;
 mod monge_elkan;
+mod python;
 mod tokenizers;
 mod wrapped_strsim;
 
 use anyhow::Result;
-
-use crate::error::GramsError;
-use crate::helper::ReturnKind;
 
 pub use self::hybrid_jaccard::HybridJaccard;
 pub use self::jaro::Jaro;
 pub use self::jaro_winkler::JaroWinkler;
 pub use self::levenshtein::Levenshtein;
 pub use self::monge_elkan::{MongeElkan, SymmetricMongeElkan};
+pub(crate) use self::python::register;
 pub use self::tokenizers::{
     CachedWhitespaceTokenizer, CharacterTokenizer, WhitespaceCharSeqTokenizer, WhitespaceTokenizer,
 };
 pub use self::wrapped_strsim::SeqStrSim;
+use crate::error::GramsError;
+use crate::helper::ReturnKind;
 
 pub trait StrSim<T> {
     /** Calculate the similarity with both key and query has already``` been pre-tokenized */
