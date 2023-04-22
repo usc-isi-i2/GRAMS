@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, path::PathBuf};
+use std::path::PathBuf;
 
 use hashbrown::{HashMap, HashSet};
 use kgdata::{
@@ -265,9 +265,5 @@ where
         }
 
         Ok(self.cache[key].as_ref())
-    }
-
-    fn contains_key(&self, key: &str) -> Result<bool, KGDataError> {
-        Ok(self.cache.contains_key(key) || self.db.contains_key(key)?)
     }
 }

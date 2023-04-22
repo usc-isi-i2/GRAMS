@@ -14,7 +14,7 @@ use super::{
 
 #[pyclass(module = "grams.core.features", name = "FeatureExtractorContext")]
 struct PyFeatureExtractorContext {
-    table: Py<LinkedTable>,
+    // table: Py<LinkedTable>,
     db: Py<GramsDB>,
     context: Py<PyAlgoContext>,
     dg: super::dgproxy::DGProxy,
@@ -35,7 +35,7 @@ impl PyFeatureExtractorContext {
         let dg = super::dgproxy::DGProxy::new(&table.as_ref(py).borrow(), nodes, cg2dg);
         let cache = FeatureExtractorCache::new(&db.as_ref(py).borrow()).map_err(into_pyerr)?;
         Ok(PyFeatureExtractorContext {
-            table,
+            // table,
             db,
             dg,
             context,
@@ -53,7 +53,7 @@ impl PyFeatureExtractorContext {
         outedge: &CGEdge,
     ) -> PyResult<usize> {
         let mut context = FeatureExtractorContext {
-            table: &self.table.as_ref(py).borrow(),
+            // table: &self.table.as_ref(py).borrow(),
             db: &self.db.as_ref(py).borrow(),
             context: &mut self.context.as_ref(py).borrow_mut().0,
             dg: &mut self.dg,
@@ -106,7 +106,7 @@ impl PyFeatureExtractorContext {
         correct_entity_threshold: f64,
     ) -> PyResult<Vec<ContradictedInformation>> {
         let mut context = FeatureExtractorContext {
-            table: &self.table.as_ref(py).borrow(),
+            // table: &self.table.as_ref(py).borrow(),
             db: &self.db.as_ref(py).borrow(),
             context: &mut self.context.as_ref(py).borrow_mut().0,
             dg: &mut self.dg,

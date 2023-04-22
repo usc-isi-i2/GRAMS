@@ -1,16 +1,12 @@
 use crate::{
-    cangraph::{CGEdge, CGNode, CGNodeId, CGStatementNode},
-    context::AlgoContext,
+    cangraph::{CGEdge, CGNode, CGStatementNode},
     datagraph::{
-        node::{CellNode, DGNode, DGNodeId},
+        node::{DGNode, DGNodeId},
         python::graphview::PyDGNode,
     },
-    db::GramsDB,
-    error::GramsError,
     table::LinkedTable,
 };
-use hashbrown::{HashMap, HashSet};
-use pyo3::prelude::*;
+use hashbrown::HashSet;
 
 pub struct DGProxy {
     // shape of the table (number of rows, number of columns)

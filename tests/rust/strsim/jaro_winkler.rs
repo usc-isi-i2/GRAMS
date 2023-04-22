@@ -21,9 +21,23 @@ fn test_similarity() -> Result<()> {
         (
             "United Kingdom",
             "Sengenia (United Kingdom)",
-            0.5054761904761905,
+            0.7342857142857143,
         ),
+        (
+            "United",
+            "UK",
+            0.5555555555555555, // if threshold is 0.7, otherwise check the testcases below
+        ),
+        ("United Kingdom", "", 0.0),
+        ("", "United Kingdom", 0.0),
+        ("", "", 1.0),
     ];
+    for (k, q, sim) in testcases {
+        assert_relative_eq!(strsim.similarity(k, q).unwrap(), sim);
+    }
+
+    let mut strsim = SeqStrSim::new(&mut tokenizer, JaroWinkler::new(Some(0.0), None, None))?;
+    let testcases = [("United", "UK", 0.5999999999999999)];
     for (k, q, sim) in testcases {
         assert_relative_eq!(strsim.similarity(k, q).unwrap(), sim);
     }

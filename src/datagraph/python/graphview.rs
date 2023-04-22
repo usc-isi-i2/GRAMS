@@ -1,9 +1,7 @@
-use crate::datagraph::node::{CellNode, ContextSpan, EntityValueNode, LiteralValueNode, Span};
+use crate::datagraph::node::{CellNode, EntityValueNode, LiteralValueNode};
 use crate::datagraph::statement::StatementNode;
 use crate::datagraph::{node::DGNode, DGraph};
 use crate::error::into_pyerr;
-use hashbrown::HashMap;
-use kgdata::models::python::value::PyValue;
 use postcard::{from_bytes, to_allocvec};
 use pyo3::{prelude::*, types::PyBytes};
 

@@ -21,6 +21,7 @@ pub struct PyCandidateLocalSearchConfig {
 #[pymethods]
 impl PyCandidateLocalSearchConfig {
     #[new]
+    #[pyo3(signature = (strsim, threshold, use_column_name, use_language, search_all_columns))]
     pub fn new(
         strsim: String,
         threshold: f64,

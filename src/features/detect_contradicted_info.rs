@@ -1,17 +1,14 @@
 use crate::{
-    cangraph::{CGEdge, CGNode, CGNodeId, CGStatementNode},
-    context::AlgoContext,
-    datagraph::node::{CellNode, DGNode, DGNodeId},
-    db::{CacheRocksDBDict, GramsDB},
+    cangraph::{CGEdge, CGNode, CGStatementNode},
+    datagraph::node::{DGNode, DGNodeId},
+    db::CacheRocksDBDict,
     error::GramsError,
-    table::LinkedTable,
 };
-use hashbrown::{HashMap, HashSet};
 use kgdata::models::{Entity, EntityLink, Value};
 use log::warn;
 use pyo3::prelude::*;
 
-use super::{does_ent_have_data, FeatureExtractorCache, FeatureExtractorContext};
+use super::{does_ent_have_data, FeatureExtractorContext};
 
 /// Get the **number** of DG pairs that may contain contradicted information with the relationship inedge -> s -> outedge
 ///
@@ -103,7 +100,7 @@ pub fn get_contradicted_information(
                         None
                     }
                 },
-                DGNode::EntityValue(entity) => {
+                DGNode::EntityValue(_entity) => {
                     // we do have this case that data predicate such as P2561
                     // that values link to entity value, we do not handle it for now so
                     // we set the value to None so it is skipped
@@ -280,10 +277,10 @@ pub fn get_contradicted_information(
 }
 
 fn is_missing_data_info(
-    ent: &Entity,
-    property: &str,
-    qualifier: &str,
-    value: &str,
+    _ent: &Entity,
+    _property: &str,
+    _qualifier: &str,
+    _value: &str,
     // context: &FeatureExtractorContext,
 ) -> bool {
     // TODO: implement this via infobox search
@@ -292,8 +289,8 @@ fn is_missing_data_info(
 
 fn is_missing_object_info(
     ent: &Entity,
-    property: &str,
-    qualifier: &str,
+    _property: &str,
+    _qualifier: &str,
     target_ent_id: &str,
     // cache: &mut FeatureExtractorCache,
     entity_links: &mut CacheRocksDBDict<EntityLink>,

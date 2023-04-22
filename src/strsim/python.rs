@@ -3,7 +3,7 @@ use pyo3::prelude::*;
 use crate::error::into_pyerr;
 
 use super::{
-    CharacterTokenizer, HybridJaccard, JaroWinkler, Levenshtein, MongeElkan, StrSim,
+    CharacterTokenizer, HybridJaccard, Jaro, JaroWinkler, Levenshtein, MongeElkan, StrSim,
     SymmetricMongeElkan, Tokenizer, WhitespaceCharSeqTokenizer,
 };
 
@@ -66,10 +66,28 @@ pub fn levenshtein_similarity(key: &VecChar, query: &VecChar) -> PyResult<f64> {
 }
 
 #[pyfunction]
-pub fn jaro_winkler_similarity(key: &VecChar, query: &VecChar) -> PyResult<f64> {
-    JaroWinkler::default()
+pub fn jaro_similarity(key: &VecChar, query: &VecChar) -> PyResult<f64> {
+    (Jaro {})
         .similarity_pre_tok2(&key.0, &query.0)
         .map_err(into_pyerr)
+}
+
+#[pyfunction]
+#[pyo3(signature = (key, query, threshold = 0.7, scaling_factor = 0.1, prefix_len = 4))]
+pub fn jaro_winkler_similarity(
+    key: &VecChar,
+    query: &VecChar,
+    threshold: f64,
+    scaling_factor: f64,
+    prefix_len: usize,
+) -> PyResult<f64> {
+    (JaroWinkler {
+        threshold,
+        scaling_factor,
+        prefix_len,
+    })
+    .similarity_pre_tok2(&key.0, &query.0)
+    .map_err(into_pyerr)
 }
 
 #[pyfunction]
@@ -95,6 +113,7 @@ pub(crate) fn register(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     submodule.add_class::<PyCharacterTokenizer>()?;
     submodule.add_class::<VecVecChar>()?;
     submodule.add_function(wrap_pyfunction!(levenshtein_similarity, m)?)?;
+    submodule.add_function(wrap_pyfunction!(jaro_similarity, m)?)?;
     submodule.add_function(wrap_pyfunction!(jaro_winkler_similarity, m)?)?;
     submodule.add_function(wrap_pyfunction!(monge_elkan_similarity, m)?)?;
     submodule.add_function(wrap_pyfunction!(symmetric_monge_elkan_similarity, m)?)?;

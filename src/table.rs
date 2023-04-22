@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 pub struct LinkedTable {
     #[pyo3(get)]
     pub id: String,
-    #[pyo3(get)]
     pub links: Vec<Vec<Vec<Link>>>,
     #[pyo3(get)]
     pub columns: Vec<Column>,
@@ -125,6 +124,7 @@ impl LinkedTable {
 #[pymethods]
 impl Context {
     #[new]
+    #[pyo3(signature = (page_title, page_url, page_entities))]
     pub fn new(
         page_title: Option<String>,
         page_url: Option<String>,
@@ -141,6 +141,7 @@ impl Context {
 #[pymethods]
 impl Link {
     #[new]
+    #[pyo3(signature = (start, end, url, entities, candidates))]
     pub fn new(
         start: usize,
         end: usize,
@@ -182,6 +183,7 @@ impl CandidateEntityId {
 #[pymethods]
 impl Column {
     #[new]
+    #[pyo3(signature = (index, name, values))]
     pub fn new(index: usize, name: Option<String>, values: Vec<String>) -> Self {
         Self {
             index,

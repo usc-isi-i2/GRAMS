@@ -1,14 +1,12 @@
 use crate::{
     cangraph::{CGEdge, CGNode, CGNodeId, CGStatementNode},
     context::AlgoContext,
-    datagraph::node::{CellNode, DGNode, DGNodeId},
+    datagraph::node::{DGNode, DGNodeId},
     db::{CacheRocksDBDict, GramsDB},
     error::GramsError,
-    table::LinkedTable,
 };
 use hashbrown::{HashMap, HashSet};
-use kgdata::models::{Entity, EntityLink, Value};
-use pyo3::prelude::*;
+use kgdata::models::{Entity, EntityLink};
 
 mod detect_contradicted_info;
 mod dgproxy;
@@ -18,7 +16,7 @@ use self::detect_contradicted_info::{get_contradicted_information, ContradictedI
 pub(crate) use self::python::register;
 
 pub struct FeatureExtractorContext<'t> {
-    table: &'t LinkedTable,
+    // table: &'t LinkedTable,
     db: &'t GramsDB,
     context: &'t mut AlgoContext,
     dg: &'t dgproxy::DGProxy,

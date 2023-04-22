@@ -12,6 +12,13 @@ pub struct Jaro;
 impl Jaro {
     pub fn similarity(s1: &[char], s2: &[char]) -> f64 {
         let max_len = s1.len().max(s2.len());
+
+        if max_len == 0 {
+            return 1.0;
+        } else if s1.len() == 0 || s2.len() == 0 {
+            return 0.0;
+        }
+
         let search_range = ((max_len / 2) - 1).max(0); // equal floor(max_len as f64 / 2) - 1;
 
         let mut flags_s1 = vec![false; s1.len()];
