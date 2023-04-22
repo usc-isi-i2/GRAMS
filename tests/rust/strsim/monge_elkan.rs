@@ -19,6 +19,12 @@ fn test_similarity() -> Result<()> {
             0.8900000000000001,
         ),
         ("United Kingdom", "UK", 0.5515873015873015),
+        (
+            // extra space will be ignored during tokenization
+            "distrito electoral  de la Cámara de los Comunes",
+            "United Kingdom",
+            0.17278439153439154,
+        ),
     ];
     for (k, q, sim) in testcases {
         assert_relative_eq!(strsim.similarity(k, q).unwrap(), sim);
