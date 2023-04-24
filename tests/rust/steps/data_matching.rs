@@ -1,14 +1,14 @@
-use std::{error::Error, fs::File, path::Path};
-
-use super::{get_table_cells, load_table};
+use super::{db, get_table_cells, load_table};
 use grams::{
     db::GramsDB,
     literal_matchers::{LiteralMatcherConfig, PyLiteralMatcher},
     steps::{data_matching::CellNode, python::data_matching::matching},
 };
 use itertools::Itertools;
+use rstest::*;
 use serde::{Deserialize, Deserializer};
 use std::collections::{HashMap, HashSet};
+use std::{error::Error, fs::File, path::Path, path::PathBuf};
 
 #[derive(Debug, Deserialize)]
 struct GoldMatches {
@@ -18,8 +18,8 @@ struct GoldMatches {
     target: CellNode,
     entity: String,
     property: String,
-    #[serde(deserialize_with = "split_int_commasep")]
-    statements: Vec<usize>,
+    #[serde(deserialize_with = "split_commasep")]
+    statements: Vec<String>,
     #[serde(deserialize_with = "split_commasep")]
     qualifiers: Vec<String>,
 }
@@ -47,16 +47,6 @@ where
     Ok(s.split(",")
         .map(|x| x.to_owned())
         .filter(|x| x.len() > 0)
-        .collect::<Vec<_>>())
-}
-
-fn split_int_commasep<'de, D>(deserializer: D) -> Result<Vec<usize>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: &str = Deserialize::deserialize(deserializer)?;
-    Ok(s.split(",")
-        .map(|x| x.parse::<usize>().unwrap())
         .collect::<Vec<_>>())
 }
 
@@ -88,21 +78,29 @@ fn read_matches(
     matches
 }
 
-#[test]
-fn test_matching() -> Result<(), Box<dyn Error>> {
-    let table_file = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/resources/data_matching/list_of_highest_mountains.csv");
+#[fixture]
+fn test_data_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/resources/data_matching")
+}
+
+#[rstest]
+#[case("list_of_highest_mountains.csv", true)]
+#[case("Miss_Heritage_2014.csv", false)]
+fn test_matching(
+    db: GramsDB,
+    test_data_dir: PathBuf,
+    #[case] table_name: PathBuf,
+    #[case] enable_entity_matching: bool,
+) -> Result<(), Box<dyn Error>> {
+    let table = load_table(&test_data_dir.join(&table_name).as_path())?;
+    let cells = get_table_cells(&table);
     let gold_matches = read_matches(
-        table_file
-            .parent()
-            .unwrap()
-            .join("list_of_highest_mountains.matches.tsv")
+        &test_data_dir
+            .join(table_name.to_str().unwrap().replace(".csv", ".matches.tsv"))
             .as_path(),
         b'\t',
     );
 
-    let table = load_table(table_file.as_path())?;
-    let db = GramsDB::new("/Users/rook/workspace/sm-dev/data/home/databases")?;
     let mut context = db.get_algo_context(&table, 1)?;
     let literal_matcher = PyLiteralMatcher::new(&LiteralMatcherConfig {
         string: "string_exact_test".to_owned(),
@@ -110,10 +108,13 @@ fn test_matching() -> Result<(), Box<dyn Error>> {
         quantity: "quantity_test".to_owned(),
         time: "time_test".to_owned(),
         globecoordinate: "globecoordinate_test".to_owned(),
-        entity: "entity_similarity_test".to_owned(),
+        entity: if enable_entity_matching {
+            "entity_similarity_test".to_owned()
+        } else {
+            "always_fail_test".to_owned()
+        },
     })?;
 
-    let cells = get_table_cells(&table);
     let matches = matching(
         &table,
         cells,
@@ -155,7 +156,11 @@ fn test_matching() -> Result<(), Box<dyn Error>> {
                     let keyl2 = (rel.source_entity_id.clone(), stmt.property.clone());
                     (
                         keyl2,
-                        stmt.statement_index,
+                        if stmt.property_matched_score.is_some() {
+                            stmt.statement_index.to_string()
+                        } else {
+                            format!("[{}]", stmt.statement_index)
+                        },
                         stmt.qualifier_matched_scores
                             .iter()
                             .map(|x| x.qualifier.clone())

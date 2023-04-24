@@ -1,27 +1,34 @@
 pub mod data_matching;
+
+use rstest::*;
+
 use std::{error::Error, fs::File, path::Path};
 
 use grams::{
+    db::GramsDB,
     literal_matchers::parsed_text_repr::{ParsedNumberRepr, ParsedTextRepr},
     table::{CandidateEntityId, Column, Context, EntityId, Link, LinkedTable},
 };
 
 fn read_csv(file: &str, delimiter: u8) -> Vec<Vec<String>> {
-    let file = File::open(file).unwrap();
-    let mut reader = csv::ReaderBuilder::new()
-        .delimiter(delimiter)
-        .has_headers(false)
-        .from_reader(file);
-    reader
-        .records()
-        .map(|result| {
-            result
-                .unwrap()
-                .iter()
-                .map(|x| x.to_owned())
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>()
+    if let Ok(file) = File::open(file) {
+        let mut reader = csv::ReaderBuilder::new()
+            .delimiter(delimiter)
+            .has_headers(false)
+            .from_reader(file);
+        reader
+            .records()
+            .map(|result| {
+                result
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    } else {
+        panic!("File not found: {}", file)
+    }
 }
 
 /// Load table from files
@@ -101,4 +108,9 @@ fn get_table_cells(table: &LinkedTable) -> Vec<Vec<ParsedTextRepr>> {
         cells.push(row_cells);
     }
     cells
+}
+
+#[fixture]
+pub fn db() -> GramsDB {
+    GramsDB::new("/Users/rook/workspace/sm-dev/data/home/databases").unwrap()
 }

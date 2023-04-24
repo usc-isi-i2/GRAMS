@@ -331,10 +331,12 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
                 }
             }
 
-            rels.push(MatchedEntRel {
-                source_entity_id: source_entity.id.clone(),
-                statements: matched_stmts,
-            })
+            if matched_stmts.len() > 0 {
+                rels.push(MatchedEntRel {
+                    source_entity_id: source_entity.id.clone(),
+                    statements: matched_stmts,
+                });
+            }
         }
 
         if rels.len() > 0 {
@@ -375,6 +377,10 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
             .entity_traversal
             .iter_props_by_entity(&source.id, &target.id)
         {
+            if self.ignored_props.contains(&ms.property) {
+                continue;
+            }
+
             output.push(MatchedStatement {
                 property: ms.property.clone(),
                 statement_index: ms.statement_index,
