@@ -173,7 +173,7 @@ class PSLModel:
         provenance: str = "",
     ):
         self.set_data(observations, targets, truth or {}, force_setall)
-
+        error = None
         for _ in range(3):
             try:
                 resp = self.model.infer(
@@ -198,12 +198,13 @@ class PSLModel:
                 # )
                 non_recoverable_error = False
                 self.log_errors(e)
+                error = e
                 if not retry or non_recoverable_error:
                     raise
 
             logger.info("Retry PSL inference...")
         else:
-            raise ModelError("PSL inference failed")
+            raise ModelError("PSL inference failed: " + str(error))
 
         if cleanup_tempdir:
             shutil.rmtree(self.temp_dir)
@@ -212,7 +213,12 @@ class PSLModel:
         for p, df in resp.items():
             psize = len(p._types)
             output[p.name()] = {
-                tuple((r[i] for i in range(psize))): r["truth"]
+                tuple(
+                    (
+                        int(r[i]) if isinstance(r[i], float) else r[i]
+                        for i in range(psize)
+                    )
+                ): r["truth"]
                 for _, r in df.iterrows()
             }
         return output

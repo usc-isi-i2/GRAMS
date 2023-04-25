@@ -18,7 +18,7 @@ from grams.algorithm.candidate_graph.cg_factory import CGFactory
 from grams.algorithm.candidate_graph.cg_graph import CGGraph
 from grams.algorithm.context import AlgoContext
 from grams.algorithm.data_graph.dg_config import DGConfigs
-from grams.algorithm.data_graph.dg_factory import DGFactory, create_dg
+from grams.algorithm.data_graph.dg_factory import DGFactory, assert_dg_equal, create_dg
 from grams.algorithm.inferences_v2.features.inf_feature import (
     InfFeature,
     InfFeatureExtractor,
@@ -99,12 +99,14 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
         for name, ds in dsdict.items():
             newds = ray_map(
                 create_inference_data,
-                [(dbref, paramref, ex.table) for ex in ds],
+                [(dbref, paramref, ex.table) for ex in ds][:50],
                 desc=f"Creating inference data",
                 verbose=True,
                 using_ray=using_ray,
+                # using_ray=False,
                 is_func_remote=False,
             )
+            assert False
 
             id2cg = {}
             for ex, (cg, feat) in zip(ds, newds):
@@ -195,21 +197,22 @@ def create_inference_data(
     #         allow_same_ent_search=False,
     #         use_context=True,
     #     )
-    # with watch_and_report(
-    #     "build data graph in rust2",
-    #     preprint=True,
-    #     print_fn=logger.debug,
-    #     disable=not verbose,
-    # ):
-    #     dg1 = create_dg(
-    #         table,
-    #         context,
-    #         wdentities,
-    #         wdprops,
-    #         text_parser,
-    #         params.literal_matchers,
-    #         params.data_graph,
-    #     )
+    with watch_and_report(
+        "build data graph in rust2",
+        preprint=True,
+        print_fn=logger.debug,
+        disable=not verbose,
+    ):
+        dg1 = create_dg(
+            table,
+            rust_table,
+            rust_context,
+            wdentities,
+            wdprops,
+            text_parser,
+            params.literal_matchers,
+            params.data_graph,
+        )
 
     with watch_and_report(
         "build data graph", preprint=True, print_fn=logger.debug, disable=not verbose
@@ -224,6 +227,8 @@ def create_inference_data(
         dg = dg_factory.create_dg(
             table, kg_object_index, max_n_hop=params.data_graph.max_n_hop
         )
+
+    assert_dg_equal(table.id, dg, dg1)
 
     with watch_and_report(
         "build candidate graph",

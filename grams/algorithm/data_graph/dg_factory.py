@@ -1,8 +1,10 @@
 from typing import Mapping, Optional, Set, Union
 from grams.algorithm.literal_matchers.literal_match import LiteralMatchConfigs
+from kgdata.wikidata.models.wdvalue import WDValueKind
 
 from tqdm import tqdm
 import grams.core as gcore
+from grams.core.table import LinkedTable as gcore_LinkedTable
 from grams.algorithm.data_graph.dg_graph import (
     CellNode,
     ContextSpan,
@@ -234,9 +236,10 @@ class DGFactory:
         #                 if v.is_cell and v.column == 1:
         #                     print(uid, sid, vid, eid, e2)
 
-        KGInference(
-            dg, self.wdentities, self.wdprops
-        ).infer_subproperty().kg_transitive_inference()
+        if self.cfg.RUN_INFERENCE:
+            KGInference(
+                dg, self.wdentities, self.wdprops
+            ).infer_subproperty().kg_transitive_inference()
 
         # pruning unnecessary paths
         if self.cfg.PRUNE_REDUNDANT_ENT:
@@ -314,7 +317,9 @@ class DGFactory:
             # count.stop()
 
             # count = timer.start("literal discovery")
-            for newpath in self._path_value_search(n1, self.textparser.parse(v_value)):
+            for newpath in self._path_value_search(
+                n1, self.textparser.parse(v_value), v_qnodes
+            ):
                 newpath.sequence.insert(0, DGPathExistingNode(u.id))
                 if isinstance(newpath.sequence[-1], DGPathEdge):
                     newpath.sequence.append(DGPathExistingNode(v.id))
@@ -333,12 +338,13 @@ class DGFactory:
 
         return paths
 
-    def _path_value_search(self, source: WDEntity, value):
+    def _path_value_search(self, source: WDEntity, value, target_ents: list[WDEntity]):
+        target_ent_ids = None
         matches = []
         for p, stmts in source.props.items():
-            if p == "P31":
-                # no need to search in the instanceOf property, as the ontology is removed from the databased as they are huge
-                continue
+            # if p == "P31":
+            #     # no need to search in the instanceOf property, as the ontology is removed from the databased as they are huge
+            #     continue
 
             for stmt_i, stmt in enumerate(stmts):
                 has_stmt_value = False
@@ -370,24 +376,30 @@ class DGFactory:
                         ):
                             if not has_stmt_value:
                                 if stmt.value.is_qnode(stmt.value):
-                                    pn_stmt_value = DGPathNodeEntity(
-                                        stmt.value.as_entity_id()
-                                    )
+                                    if target_ent_ids is None:
+                                        target_ent_ids = {e.id for e in target_ents}
+
+                                    target_ent_id = stmt.value.as_entity_id()
+                                    has_stmt_value = target_ent_id in target_ent_ids
+
+                                    pn_stmt_value = DGPathNodeEntity(target_ent_id)
                                 else:
                                     pn_stmt_value = DGPathNodeLiteralValue(stmt.value)
-                                matches.append(
-                                    DGPath(
-                                        sequence=[
-                                            DGPathEdge.p(p),
-                                            DGPathNodeStatement.from_FromWikidataLink(
-                                                source.id, p, stmt_i, None
-                                            ),
-                                            DGPathEdge.p(p),
-                                            pn_stmt_value,
-                                        ]
+
+                                if not has_stmt_value:
+                                    matches.append(
+                                        DGPath(
+                                            sequence=[
+                                                DGPathEdge.p(p),
+                                                DGPathNodeStatement.from_FromWikidataLink(
+                                                    source.id, p, stmt_i, None
+                                                ),
+                                                DGPathEdge.p(p),
+                                                pn_stmt_value,
+                                            ]
+                                        )
                                     )
-                                )
-                                has_stmt_value = True
+                                    has_stmt_value = True
 
                             matches.append(
                                 DGPath(
@@ -783,7 +795,8 @@ class DGFactory:
 
 def create_dg(
     table: LinkedTable,
-    context,  #: gcore.AlgoContext,
+    rust_table: gcore_LinkedTable,
+    rust_context: gcore.AlgoContext,
     wdentities: Mapping[str, WDEntity],
     wdprops: Mapping[str, WDProperty],
     text_parser: TextParser,
@@ -799,12 +812,13 @@ def create_dg(
         literal_matcher_cfg.to_rust()
     )
     matches = gcore.steps.data_matching.matching(
-        table.to_rust(),
+        rust_table,
         cells,
-        context,
+        rust_context,
         literal_matcher,
         [],
-        ["P31"],
+        # ["P31"],
+        [],
         cfg.ALLOW_SAME_ENT_SEARCH,
         cfg.USE_CONTEXT,
     )
@@ -933,32 +947,7 @@ def create_dg(
                         .props[stmt_property][stmt.statement_index]
                         .value
                     )
-
-                    if stmt_value.is_entity_id(stmt_value):
-                        target_entid = stmt_value.as_entity_id()
-                        target_id = DGPathNodeEntity(target_entid).get_id()
-                        if not dg.has_node(target_id):
-                            dg.add_node(
-                                EntityValueNode(
-                                    id=target_id,
-                                    qnode_id=target_entid,
-                                    # the prob of this node should depend on the how it is generated, but since we won't discover
-                                    # the link between this node and other node, having the prob 1.0 is fine (we should only this prob. later
-                                    # in discovering unmatched links)
-                                    qnode_prob=1.0,
-                                    context_span=None,
-                                )
-                            )
-                    else:
-                        target_id = DGPathNodeLiteralValue(stmt_value).get_id()
-                        if not dg.has_node(target_id):
-                            dg.add_node(
-                                LiteralValueNode(
-                                    id=target_id,
-                                    value=stmt_value,
-                                    context_span=None,
-                                )
-                            )
+                    target_id = add_stmt_value_node(dg, stmt_value)
 
                     if not dg.has_edge_between_nodes(sid, target_id, stmt_property):
                         dg.add_edge(
@@ -971,6 +960,7 @@ def create_dg(
                                 is_inferred=False,
                             )
                         )
+
                     edge_target = EdgeFlowTarget(target_id, stmt_property)
                     # TODO: determine the provenance
                     snode.track_provenance(
@@ -998,7 +988,85 @@ def create_dg(
                                 is_inferred=False,
                             )
                         )
-                        edge_target = EdgeFlowTarget(vid, qual_qualifier)
+                    edge_target = EdgeFlowTarget(vid, qual_qualifier)
+                    # TODO: determine the provenance
+                    snode.track_provenance(
+                        edge_source,
+                        edge_target,
+                        [
+                            FlowProvenance(
+                                gen_method=LinkGenMethod.FromWikidataLink,
+                                gen_method_arg={"value_index": qual.qualifier_index},
+                                prob=qual.matched_score,
+                            )
+                        ],
+                    )
+
+    if cfg.ADD_MISSING_PROPERTY:
+        add_missing_property(dg, wdentities)
+
+    if cfg.RUN_INFERENCE:
+        KGInference(
+            dg, wdentities, wdprops
+        ).infer_subproperty().kg_transitive_inference()
+
+    # pruning unnecessary paths
+    if cfg.PRUNE_REDUNDANT_ENT:
+        DGPruning(dg, cfg).prune_hidden_entities()
+
+    return dg
+
+
+def add_missing_property(dg: DGGraph, wdentities: Mapping[str, WDEntity]):
+    """There is a case where a statement have both qualifier and property pointing the same node. Unless we have another property, the qualifier is unlikely to be chosen. Therefore, we add
+    a new property node to give the qualifier the chance to be chosen."""
+    for snode in dg.iter_nodes():
+        if isinstance(snode, StatementNode):
+            outedges = dg.out_edges(snode.id)
+            # get the property, and
+            prop_edges: list[DGEdge] = []
+            qual_edges: list[DGEdge] = []
+            for outedge in outedges:
+                if snode.predicate == outedge.predicate:
+                    prop_edges.append(outedge)
+                else:
+                    qual_edges.append(outedge)
+            if len(prop_edges) == 1:
+                prop_target = prop_edges[0].target
+                if any(e.target == prop_target for e in qual_edges):
+                    qual_edge = next(
+                        qual_edge
+                        for qual_edge in qual_edges
+                        if qual_edge.target == prop_target
+                    )
+
+                    # we need a new property node
+                    stmt_value = (
+                        wdentities[snode.qnode_id]
+                        .props[snode.predicate][snode.statement_index]
+                        .value
+                    )
+                    target_id = add_stmt_value_node(dg, stmt_value)
+
+                    if not dg.has_edge_between_nodes(
+                        snode.id, target_id, snode.predicate
+                    ):
+                        dg.add_edge(
+                            DGEdge(
+                                id=-1,  # will be assigned later
+                                source=snode.id,
+                                target=target_id,
+                                predicate=snode.predicate,
+                                is_qualifier=False,
+                                is_inferred=False,
+                            )
+                        )
+
+                    # the new node will have the same flow as one of the qualifier
+                    for edge_source in snode.reversed_flow[
+                        EdgeFlowTarget(qual_edge.target, qual_edge.predicate)
+                    ]:
+                        edge_target = EdgeFlowTarget(target_id, snode.predicate)
                         # TODO: determine the provenance
                         snode.track_provenance(
                             edge_source,
@@ -1007,17 +1075,119 @@ def create_dg(
                                 FlowProvenance(
                                     gen_method=LinkGenMethod.FromWikidataLink,
                                     gen_method_arg={
-                                        "value_index": qual.qualifier_index
+                                        "value_index": snode.statement_index
                                     },
-                                    prob=qual.matched_score,
+                                    prob=1.0,
                                 )
                             ],
                         )
 
-    KGInference(dg, wdentities, wdprops).infer_subproperty().kg_transitive_inference()
 
-    # pruning unnecessary paths
-    if cfg.PRUNE_REDUNDANT_ENT:
-        DGPruning(dg, cfg).prune_hidden_entities()
+def add_stmt_value_node(dg: DGGraph, stmt_value: WDValueKind):
+    if stmt_value.is_entity_id(stmt_value):
+        target_entid = stmt_value.as_entity_id()
+        target_id = DGPathNodeEntity(target_entid).get_id()
+        if not dg.has_node(target_id):
+            dg.add_node(
+                EntityValueNode(
+                    id=target_id,
+                    qnode_id=target_entid,
+                    # the prob of this node should depend on the how it is generated, but since we won't discover
+                    # the link between this node and other node, having the prob 1.0 is fine (we should only this prob. later
+                    # in discovering unmatched links)
+                    qnode_prob=1.0,
+                    context_span=None,
+                )
+            )
+    else:
+        target_id = DGPathNodeLiteralValue(stmt_value).get_id()
+        if not dg.has_node(target_id):
+            dg.add_node(
+                LiteralValueNode(
+                    id=target_id,
+                    value=stmt_value,
+                    context_span=None,
+                )
+            )
+    return target_id
 
-    return dg
+
+def assert_dg_equal(table_id: str, pydg: DGGraph, rudg: DGGraph):
+    # handle special cases where we know its true
+
+    def remove_extra_nodes(pydg2: DGGraph, rudg2: DGGraph):
+        # rudg will have extra value nodes when it tries to fix qualifiers and property pointing to the same node
+        pynodes1 = {u.id for u in pydg2.iter_nodes()}
+        runodes2 = {u.id for u in rudg2.iter_nodes()}
+
+        assert pynodes1.issubset(runodes2)
+        for node in runodes2.difference(pynodes1):
+            assert isinstance(
+                node, (LiteralValueNode)
+            )  # it's rare to see an entity in both property and qualifiers of a statement
+            (inedge,) = rudg2.in_edges(node.id)
+            # make sure that the source node
+            outedges = pydg2.out_edges(inedge.source)
+            (prop_edge,) = [e for e in outedges if e.predicate == inedge.predicate]
+            assert any(
+                e.target == prop_edge.target
+                for e in outedges
+                if e.predicate != inedge.predicate
+            )
+            rudg2.remove_node(node.id)
+
+    def remove_node(dg: DGGraph, uid: str):
+        (inedge,) = dg.in_edges(uid)
+        stmt = dg.get_statement_node(inedge.source)
+        stmt.untrack_target_flow(EdgeFlowTarget(uid, inedge.predicate))
+        dg.remove_node(uid)
+
+    if table_id == "Miss_Heritage_2014":
+        remove_node(pydg, 'val:{"type":"string","value":"Argentina"}')
+    elif table_id == "List_of_women's_Twenty20_International_cricket_grounds":
+        remove_node(
+            pydg,
+            'val:{"type":"monolingualtext","value":{"text":"Bristol","language":"en"}}',
+        )
+    elif table_id == "Major_professional_sports_teams_of_the_United_States_and_Canada":
+        remove_node(
+            pydg,
+            'val:{"type":"monolingualtext","value":{"text":"Dallas","language":"cs"}}',
+        )
+
+    nodes1 = {u.id for u in pydg.iter_nodes()}
+    nodes2 = {u.id for u in rudg.iter_nodes()}
+
+    # check if the nodes are the same
+    diff_nodes = list(nodes1.symmetric_difference(nodes2))
+    if len(diff_nodes) > 0:
+        print("-----\nDG1 contains the following nodes that are not in DG2:")
+        print(nodes1.difference(nodes2))
+        print("-----\nDG2 contains the following nodes that are not in DG1:")
+        print(nodes2.difference(nodes1))
+        assert False
+
+    # check if the edges are the same
+    edges1 = {(u.source, u.target, u.predicate) for u in pydg.iter_edges()}
+    edges2 = {(u.source, u.target, u.predicate) for u in rudg.iter_edges()}
+
+    diff_edges = edges1.symmetric_difference(edges2)
+    if len(diff_edges) > 0:
+        print("-----\nDG1 contains the following edges that are not in DG2:")
+        print(edges1.difference(edges2))
+        print("-----\nDG2 contains the following edges that are not in DG1:")
+        print(edges2.difference(edges1))
+        assert False
+
+    # check the flow
+    for snode in pydg.iter_nodes():
+        if isinstance(snode, StatementNode):
+            flows1 = set(snode.flow.keys())
+            flows2 = set(rudg.get_statement_node(snode.id).flow.keys())
+            diff_flows = flows1.symmetric_difference(flows2)
+            if len(diff_flows) > 0:
+                print("-----\nDG1 contains the following flows that are not in DG2:")
+                print(flows1.difference(flows2))
+                print("-----\nDG2 contains the following flows that are not in DG1:")
+                print(flows2.difference(flows1))
+                assert False

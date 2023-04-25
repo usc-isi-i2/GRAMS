@@ -12,6 +12,16 @@ class DGConfigs:
             "between the same entity in same row but different columns"
         },
     )
+    RUN_INFERENCE: bool = field(
+        default=True,
+        metadata={"help": "run inference on the graph to complete missing links."},
+    )
+    ADD_MISSING_PROPERTY: bool = field(
+        default=False,
+        metadata={
+            "help": "whether to add statement property if the same target node is used for both property and qualifier to give the qualifier the chance to be selected"
+        },
+    )
     PRUNE_REDUNDANT_ENT: bool = field(
         default=True,
         metadata={
