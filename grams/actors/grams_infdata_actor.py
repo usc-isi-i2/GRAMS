@@ -99,14 +99,13 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
         for name, ds in dsdict.items():
             newds = ray_map(
                 create_inference_data,
-                [(dbref, paramref, ex.table) for ex in ds][:50],
+                [(dbref, paramref, ex.table) for ex in ds],
                 desc=f"Creating inference data",
                 verbose=True,
                 using_ray=using_ray,
                 # using_ray=False,
                 is_func_remote=False,
             )
-            assert False
 
             id2cg = {}
             for ex, (cg, feat) in zip(ds, newds):

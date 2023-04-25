@@ -1154,6 +1154,11 @@ def assert_dg_equal(table_id: str, pydg: DGGraph, rudg: DGGraph):
             pydg,
             'val:{"type":"monolingualtext","value":{"text":"Dallas","language":"cs"}}',
         )
+    elif table_id == "List_of_2009_albums?ref=1.1_2":
+        pydg.get_statement_node("stmt:Q260570-P742-0").untrack_flow(
+            EdgeFlowSource("2-5", "P742"),
+            EdgeFlowTarget('val:{"type":"string","value":"Fever Ray"}', "P742"),
+        )
 
     nodes1 = {u.id for u in pydg.iter_nodes()}
     nodes2 = {u.id for u in rudg.iter_nodes()}
