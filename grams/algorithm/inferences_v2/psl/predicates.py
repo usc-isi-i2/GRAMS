@@ -139,6 +139,12 @@ class P:
         size=2,
         arg_types=[Predicate.ArgType.UNIQUE_INT_ID] * 2,
     )
+    TypeDiscoveredPropProbOverRow = Predicate(
+        "TYPE_DISCOVERED_PROP_PROB_OVER_ROW",
+        closed=True,
+        size=2,
+        arg_types=[Predicate.ArgType.UNIQUE_INT_ID] * 2,
+    )
     TypeHeaderSimilarity = Predicate(
         "TYPE_HEADER_SIMILARITY",
         closed=True,

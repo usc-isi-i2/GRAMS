@@ -119,7 +119,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
     CHANGELOG:
     - 102: Each cell contains maximum one single link"""
 
-    VERSION = 106
+    VERSION = 107
 
     def __init__(
         self,
@@ -219,7 +219,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                     content_hierarchy=table.context.content_hierarchy,
                 )
                 for ri, ci, links in table.links.enumerate_flat_iter():
-                    cell = table.links[ri, ci]
+                    cell = table.table[ri, ci]
                     tindex = topk_cans.index[table.id][2]
                     if ci in tindex and ri in tindex[ci][2]:
                         rstart, rend = tindex[ci][2][ri]

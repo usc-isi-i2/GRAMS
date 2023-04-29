@@ -4,6 +4,7 @@ import grams.core.steps as steps
 from kgdata.core.models import StatementView, Value as KGValue
 
 class GramsDB:
+    def __init__(self, datadir: str) -> None: ...
     @staticmethod
     def init(datadir: str) -> None: ...
     @staticmethod

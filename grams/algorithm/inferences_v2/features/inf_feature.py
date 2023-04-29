@@ -47,7 +47,7 @@ class InfFeature(NumpyDataModelContainer):
 class InfFeatureExtractor:
     """Extracting features in a candidate graph."""
 
-    VERSION = 107
+    VERSION = 109
 
     def __init__(
         self,

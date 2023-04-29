@@ -132,6 +132,9 @@ class TextParser:
     def _norm_string(self, text: str):
         return ftfy.fix_text(text).replace("\xa0", " ").strip()
 
+    def _norm_nostrip_string(self, text: str):
+        return ftfy.fix_text(text).replace("\xa0", " ")
+
 
 class BasicNumberParser:
     parser = FSMParser(not_units=DEFAULT_NOT_UNITS.union(["st", "rd", "nd", "th"]))

@@ -497,6 +497,10 @@ class AuxComplexFeatures(AuxComplexObjectBase):
                         "freq_discovered_prop_over_row",
                         ufeat.freq_discovered_prop_over_row,
                     ),
+                    (
+                        "prob_freq_discovered_prop_over_row",
+                        ufeat.prob_freq_discovered_prop_over_row,
+                    ),
                 ]:
                     record[name] = float(value[key2row[ci, ctype]])
 

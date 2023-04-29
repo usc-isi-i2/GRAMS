@@ -52,6 +52,7 @@ class PSLModelv3:
             P.ExtendedTypeFreqOverEntRow.name(): 0,
             P.TypeHeaderSimilarity.name(): 0.0,
             P.TypeDiscoveredPropFreqOverRow.name(): 2,
+            P.TypeDiscoveredPropProbOverRow.name(): 2,
             P.DataProperty.name(): 1,
             P.PropertyDomain.name(): 1,
             P.PropertyRange.name(): 1,
@@ -193,6 +194,7 @@ class PSLModelv3:
             P.ExtendedTypeFreqOverEntRow,
             P.TypeHeaderSimilarity,
             P.TypeDiscoveredPropFreqOverRow,
+            P.TypeDiscoveredPropProbOverRow,
         ]:
             rules[feat.name()] = Rule(
                 f"""

@@ -64,7 +64,7 @@ class InfDataDatasetDict(DatasetDict[list[InfData]]):
 
 
 class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
-    VERSION = ActorVersion.create(109, [InfFeatureExtractor])
+    VERSION = ActorVersion.create(113, [InfFeatureExtractor])
 
     def __init__(
         self,
@@ -174,45 +174,6 @@ def create_inference_data(
         rust_table = table.to_rust()
         rust_context = rust_db.get_algo_context(rust_table, n_hop=1)
 
-    # nrows, ncols = table.shape()
-    # rcells = [
-    #     [text_parser.parse(table.table[ri, ci]).to_rust() for ci in range(ncols)]
-    #     for ri in range(nrows)
-    # ]
-    # literal_matcher = gcore_matcher.LiteralMatcher(params.literal_matchers.to_rust())
-    # with watch_and_report(
-    #     "build data graph in rust",
-    #     preprint=True,
-    #     print_fn=logger.debug,
-    #     disable=not verbose,
-    # ):
-    #     g = gcore_steps.data_matching.matching(
-    #         rtable,
-    #         rcells,
-    #         context,
-    #         literal_matcher,
-    #         [],
-    #         ["P31"],
-    #         allow_same_ent_search=False,
-    #         use_context=True,
-    #     )
-    with watch_and_report(
-        "build data graph in rust2",
-        preprint=True,
-        print_fn=logger.debug,
-        disable=not verbose,
-    ):
-        dg1 = create_dg(
-            table,
-            rust_table,
-            rust_context,
-            wdentities,
-            wdprops,
-            text_parser,
-            params.literal_matchers,
-            params.data_graph,
-        )
-
     with watch_and_report(
         "build data graph", preprint=True, print_fn=logger.debug, disable=not verbose
     ):
@@ -227,7 +188,7 @@ def create_inference_data(
             table, kg_object_index, max_n_hop=params.data_graph.max_n_hop
         )
 
-    assert_dg_equal(table.id, dg, dg1)
+    # assert_dg_equal(table.id, dg, dg1)
 
     with watch_and_report(
         "build candidate graph",

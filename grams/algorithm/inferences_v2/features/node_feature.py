@@ -32,7 +32,7 @@ class NodeFeature(NumpyDataModel):
     # fmt: off
     __slots__ = [
         "node", "type", "freq_over_row", "freq_over_ent_row", "extended_freq_over_row", 
-        "extended_freq_over_ent_row", "freq_discovered_prop_over_row", "type_distance",
+        "extended_freq_over_ent_row", "freq_discovered_prop_over_row", "prob_freq_discovered_prop_over_row", "type_distance",
     ]
     # fmt: on
 
@@ -43,6 +43,7 @@ class NodeFeature(NumpyDataModel):
     extended_freq_over_row: NDArray[Shape["*"], Float64]
     extended_freq_over_ent_row: NDArray[Shape["*"], Float64]
     freq_discovered_prop_over_row: NDArray[Shape["*"], Float64]
+    prob_freq_discovered_prop_over_row: NDArray[Shape["*"], Float64]
     type_distance: NDArray[Shape["*"], Float64]
 
     def shift_id(self, offset: int):
@@ -54,6 +55,7 @@ class NodeFeature(NumpyDataModel):
             extended_freq_over_row=self.extended_freq_over_row,
             extended_freq_over_ent_row=self.extended_freq_over_ent_row,
             freq_discovered_prop_over_row=self.freq_discovered_prop_over_row,
+            prob_freq_discovered_prop_over_row=self.prob_freq_discovered_prop_over_row,
             type_distance=self.type_distance,
         )
 
@@ -95,6 +97,17 @@ class NodeFeatureExtractor:
         self.sim_fn = sim_fn
         self.graph_helper = graph_helper or GraphHelper(table, cg, dg, context)
 
+        index2entscore = {}
+        ncols = len(self.table.table.columns)
+        for ri, ci, links in self.table.links.enumerate_flat_iter():
+            ent2score = {}
+            for link in links:
+                for can in link.candidates:
+                    entid = str(can.entity_id)
+                    ent2score[entid] = max(can.probability, ent2score.get(entid, 0.0))
+            index2entscore[ri * ncols + ci] = ent2score
+        self.index2entscore = index2entscore
+
     def extract(self) -> NodeFeature:
         node_types = self.get_column_cantypes()
 
@@ -111,6 +124,9 @@ class NodeFeatureExtractor:
         extended_freq_over_row = self.EXTENDED_TYPE_FREQ_OVER_ROW(node_types)
         extended_freq_over_ent_row = self.EXTENDED_TYPE_FREQ_OVER_ENT_ROW(node_types)
         freq_discovered_prop_over_row = self.FREQ_DISCOVERED_PROP_OVER_ROW(node_types)
+        prob_freq_discovered_prop_over_row = self.FREQ_DISCOVERED_PROP_PROB_OVER_ROW(
+            node_types
+        )
         type_distance = self.TYPE_DISTANCE(node_types)
 
         return NodeFeature(
@@ -124,6 +140,9 @@ class NodeFeatureExtractor:
             ),
             freq_discovered_prop_over_row=np.array(
                 freq_discovered_prop_over_row, dtype=np.float64
+            ),
+            prob_freq_discovered_prop_over_row=np.array(
+                prob_freq_discovered_prop_over_row, dtype=np.float64
             ),
             type_distance=np.array(type_distance, dtype=np.float64),
         )
@@ -228,6 +247,90 @@ class NodeFeatureExtractor:
             for c in types:
                 freq = extended_type_freq[c]
                 output.append(freq / n_ent_rows)
+        return output
+
+    def FREQ_DISCOVERED_PROP_PROB_OVER_ROW(
+        self, node_types: list[tuple[CGColumnNode, list[str]]]
+    ) -> list[float]:
+        """The frequency of whether an entity of a type in a row has been used to construct an edge in DGraph (connecting to other nodes)."""
+        # gather all incoming and outgoing edges
+        output = []
+        ncols = len(self.table.table.columns)
+
+        for u, can_types in node_types:
+            col = u.column
+
+            # gather all incoming and outgoing edges
+            inedges = self.cg.in_edges(u.id)
+            outedges = self.cg.out_edges(u.id)
+
+            # type2row[type][row * ncols + col] = score of a match
+            type2row = {type: [0] * self.graph_helper.nrows for type in can_types}
+
+            # for outgoing edges, gather the entities from the column that we discovered the relationship.
+            for outedge in outedges:
+                cg_stmt = self.cg.get_statement_node(outedge.target)
+                for (source, target), dg_stmts in cg_stmt.flow.items():
+                    if (
+                        source.sg_source_id != u.id
+                        or source.sg_source_id == target.sg_target_id
+                    ):
+                        continue
+                    dgu = self.dg.get_cell_node(source.dg_source_id)
+                    dgv = self.dg.get_node(target.dg_target_id)
+                    if not (
+                        isinstance(dgv, CellNode)
+                        or (
+                            isinstance(dgv, (LiteralValueNode, EntityValueNode))
+                            and dgv.is_context
+                        )
+                    ):
+                        continue
+
+                    row = dgu.row
+                    cell_index = row * ncols + col
+
+                    # for each type
+                    for dgsid in dg_stmts:
+                        ent_id = self.dg.get_statement_node(dgsid).qnode_id
+                        ent_types = self.graph_helper.get_entity_types(ent_id)
+                        for type in ent_types:
+                            type2row[type][row] = max(
+                                self.index2entscore[cell_index][ent_id],
+                                type2row[type][row],
+                            )
+
+            for inedge in inedges:
+                cg_stmt = self.cg.get_statement_node(inedge.source)
+                for (source, target), dg_stmts in cg_stmt.flow.items():
+                    if (
+                        target.sg_target_id != u.id
+                        or source.sg_source_id == target.sg_target_id
+                    ):
+                        continue
+
+                    dgu = self.dg.get_cell_node(source.dg_source_id)
+                    is_qualifier = source.edge_id != target.edge_id
+                    for dgsid, dgsprovs in dg_stmts.items():
+                        matched_eids = (
+                            self.graph_helper.get_dg_statement_target_kgentities(
+                                dgsid,
+                                EdgeFlowTarget(target.dg_target_id, target.edge_id),
+                            )
+                        )
+                        if len(matched_eids) == 0:
+                            continue
+
+                        for eid in matched_eids:
+                            escore = self.index2entscore[dgu.row * ncols + col][eid]
+                            for etype in self.graph_helper.get_entity_types(eid):
+                                type2row[etype][dgu.row] = max(
+                                    type2row[etype][dgu.row], escore
+                                )
+
+            for type in can_types:
+                freq = sum(type2row[type]) / self.graph_helper.nrows
+                output.append(freq)
         return output
 
     def FREQ_DISCOVERED_PROP_OVER_ROW(

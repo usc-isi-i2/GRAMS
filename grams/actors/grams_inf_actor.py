@@ -172,7 +172,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
             return model
         raise NotImplementedError()
 
-    def evaluate(self, eval_args: EvalArgs):
+    def evaluate(self, eval_args: EvalArgs, cpa_threshold: float, cta_threshold: float):
         evalout = {}
         for dsquery in eval_args.dsqueries:
             dsquery_p = DatasetQuery.from_string(dsquery)
@@ -191,7 +191,8 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                         examples,
                         infdata_dsdict[name],
                         infres_dsdict[name],
-                        threshold=eval_args.threshold,
+                        cpa_threshold=cpa_threshold,
+                        cta_threshold=cta_threshold,
                     )
                     primitive_output, primitive_ex_output = eval_dataset(
                         self.db,
@@ -225,7 +226,8 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
         examples: list[Example[LinkedTable]],
         infdatas: list[InfData],
         infress: list[InfResult],
-        threshold: float,
+        cpa_threshold: float,
+        cta_threshold: float,
     ) -> list[AnnotationV2]:
         out = []
 
@@ -262,11 +264,13 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                     t = idmap.im(node_feats.type[i])
                     output_node_probs[u][t] = uprobs[i]
 
-                pp = SteinerTree(ex.table, infdata.cg, output_edge_probs, threshold)
+                pp = SteinerTree(ex.table, infdata.cg, output_edge_probs, cpa_threshold)
                 pred_cpa = pp.get_result()
                 pred_cta = {
-                    ci: max(classes.items(), key=itemgetter(1))[0]
+                    ci: ctypescore[0]
                     for ci, classes in output_node_probs.items()
+                    if (ctypescore := max(classes.items(), key=itemgetter(1)))[1]
+                    >= cta_threshold
                 }
 
             with self.timer.watch(f"Convert results to semantic model"):

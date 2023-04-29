@@ -62,6 +62,7 @@ class PSLData:
             P.ExtendedTypeFreqOverRow.name(): ufeat.extended_freq_over_row,
             P.ExtendedTypeFreqOverEntRow.name(): ufeat.extended_freq_over_ent_row,
             P.TypeDiscoveredPropFreqOverRow.name(): ufeat.freq_discovered_prop_over_row,
+            P.TypeDiscoveredPropProbOverRow.name(): ufeat.prob_freq_discovered_prop_over_row,
             P.TypeDistance.name(): ufeat.type_distance,
         }
 
@@ -71,7 +72,7 @@ class PSLData:
                 axis=1, dtype=np.object_
             )
 
-        for p in [P.TypeFreqOverRow, P.TypeFreqOverEntRow, P.ExtendedTypeFreqOverRow, P.ExtendedTypeFreqOverEntRow, P.TypeDiscoveredPropFreqOverRow, P.TypeDistance]:
+        for p in [P.TypeFreqOverRow, P.TypeFreqOverEntRow, P.ExtendedTypeFreqOverRow, P.ExtendedTypeFreqOverEntRow, P.TypeDiscoveredPropFreqOverRow, P.TypeDiscoveredPropProbOverRow, P.TypeDistance]:
             observations[p.name()] = np.stack(
                 [ufeat.node, ufeat.type, pred2feat[p.name()]],
                 axis=1, dtype=np.object_
@@ -115,6 +116,7 @@ class PSLData:
                 P.ExtendedTypeFreqOverRow.name(),
                 P.ExtendedTypeFreqOverEntRow.name(),
                 P.TypeDiscoveredPropFreqOverRow.name(),
+                P.TypeDiscoveredPropProbOverRow.name(),
                 P.TypeDistance.name(),
             },
             struct_feats=set(),
