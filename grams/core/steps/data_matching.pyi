@@ -13,6 +13,7 @@ def matching(
     ignored_columns: list[str],
     ignored_props: list[str],
     allow_same_ent_search: bool,
+    allow_ent_matching: bool,
     use_context: bool,
 ) -> DataMatchesResult: ...
 
@@ -48,6 +49,7 @@ class MatchedEntRel:
     @property
     def source_entity_id(self) -> str: ...
     def iter_statements(self) -> RustVecIter[MatchedStatement]: ...
+    def get_matched_target_entities(self, context: AlgoContext) -> list[str]: ...
 
 PP = property
 

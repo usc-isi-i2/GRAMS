@@ -59,7 +59,7 @@ impl AlgoContext {
     }
 
     pub fn get_object_1hop_index(&self) -> &ObjectHop1Index {
-        self.index_object1hop.as_ref().unwrap().clone()
+        self.index_object1hop.as_ref().unwrap()
     }
 }
 

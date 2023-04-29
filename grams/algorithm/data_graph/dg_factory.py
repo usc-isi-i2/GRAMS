@@ -820,6 +820,7 @@ def create_dg(
         # ["P31"],
         [],
         cfg.ALLOW_SAME_ENT_SEARCH,
+        True,
         cfg.USE_CONTEXT,
     )
 

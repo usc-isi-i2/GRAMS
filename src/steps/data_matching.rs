@@ -143,6 +143,9 @@ pub struct DataMatching<'t, ET: EntityTraversal> {
     /// whether we try to discover relationships between the same entity in same row but different columns
     allow_same_ent_search: bool,
 
+    /// whether to match relationships between entities (i.e., only do literal matching)
+    allow_ent_matching: bool,
+
     /// whether we use context entities in the search
     #[allow(dead_code)]
     use_context: bool,
@@ -160,6 +163,7 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
     /// * `ignored_columns` - The columns to ignore
     /// * `ignored_props` - The properties to ignore and not used during **literal** matching
     /// * `allow_same_ent_search` - whether we try to discover relationships between the same entity in same row but different columns
+    /// * `allow_ent_matching` - whether to match relationships between entities (i.e., only do literal matching)
     /// * `use_context` - whether we use context entities in the search
     pub fn match_data(
         table: &LinkedTable,
@@ -170,6 +174,7 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
         ignored_columns: &Vec<usize>,
         ignored_props: &HashSet<String>,
         allow_same_ent_search: bool,
+        allow_ent_matching: bool,
         use_context: bool,
     ) -> Result<(Vec<Node>, Vec<PotentialRelationships>), GramsError> {
         let (nrows, ncols) = table.shape();
@@ -218,6 +223,7 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
             ignored_columns,
             ignored_props,
             allow_same_ent_search,
+            allow_ent_matching,
             use_context,
         };
 
@@ -283,11 +289,13 @@ impl<'t, ET: EntityTraversal> DataMatching<'t, ET> {
         let mut rels: Vec<MatchedEntRel> = Vec::new();
         for source_entity in source_entities {
             let mut matched_stmts = Vec::new();
-            for target_ent in target_entities {
-                if !self.allow_same_ent_search && source_entity.id == target_ent.id {
-                    continue;
+            if self.allow_ent_matching {
+                for target_ent in target_entities {
+                    if !self.allow_same_ent_search && source_entity.id == target_ent.id {
+                        continue;
+                    }
+                    self.match_entity_pair(source_entity, target_ent, &mut matched_stmts);
                 }
-                self.match_entity_pair(source_entity, target_ent, &mut matched_stmts);
             }
             let found_n_pairs = matched_stmts.len();
             if let Some(target_cell) = target_cell {

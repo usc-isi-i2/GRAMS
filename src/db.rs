@@ -198,6 +198,11 @@ impl GramsDB {
 
 #[pymethods]
 impl GramsDB {
+    #[new]
+    pub fn pynew(datadir: &str) -> PyResult<Self> {
+        Self::new(datadir).map_err(into_pyerr)
+    }
+
     #[staticmethod]
     pub fn init(py: Python<'_>, datadir: &str) -> PyResult<()> {
         if let Some(db) = DB_INSTANCE.get() {

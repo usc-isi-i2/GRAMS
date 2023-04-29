@@ -1,10 +1,11 @@
 use hashbrown::HashSet;
+use kgdata::models::Value;
 use pyo3::prelude::*;
 
 use super::super::data_matching::{DataMatching, Node, PotentialRelationships};
 use crate::context::PyAlgoContext;
 use crate::error::into_pyerr;
-use crate::index::IndexTraversal;
+use crate::index::{IndexTraversal, ObjectHop1Index};
 use crate::literal_matchers::parsed_text_repr::ParsedTextRepr;
 use crate::literal_matchers::PyLiteralMatcher;
 use crate::steps::data_matching::{CellNode, MatchedEntRel, MatchedQualifier, MatchedStatement};
@@ -14,6 +15,7 @@ use kgdata::{pyiter, pyview};
 use postcard::{from_bytes, to_allocvec};
 
 #[pyfunction(name = "matching")]
+#[pyo3(signature = (table, table_cells, context, literal_matcher, ignored_columns, ignored_props, allow_same_ent_search = false, allow_ent_matching = true, use_context = true))]
 pub fn matching(
     table: &LinkedTable,
     table_cells: Vec<Vec<ParsedTextRepr>>,
@@ -22,9 +24,16 @@ pub fn matching(
     ignored_columns: Vec<usize>,
     ignored_props: Vec<String>,
     allow_same_ent_search: bool,
+    allow_ent_matching: bool,
     use_context: bool,
 ) -> PyResult<PyDataMatchesResult> {
-    context.0.init_object_1hop_index();
+    if !allow_ent_matching {
+        context.0.init_object_1hop_index();
+    } else {
+        context.0.index_object1hop = Some(ObjectHop1Index {
+            index: Default::default(),
+        });
+    }
     let mut traversal = IndexTraversal::from_context(&context.0);
     let (nodes, edges) = DataMatching::match_data(
         table,
@@ -35,6 +44,7 @@ pub fn matching(
         &ignored_columns,
         &HashSet::from_iter(ignored_props),
         allow_same_ent_search,
+        allow_ent_matching,
         use_context,
     )
     .map_err(into_pyerr)?;
@@ -125,6 +135,37 @@ pyiter!(MatchedQualifierVecView(module = "grams.core.steps.data_matching", name 
 pyiter!(MatchedStatementVecView(module = "grams.core.steps.data_matching", name = "MatchedStatementVecView") { MatchedStatementView: MatchedStatement });
 pyiter!(MatchedEntRelVecView(module = "grams.core.steps.data_matching", name = "MatchedEntRelVecView") { MatchedEntRelView: MatchedEntRel });
 pyiter!(PotentialRelationshipsVecView(module = "grams.core.steps.data_matching", name = "PotentialRelationshipsVecView") { PotentialRelationshipsView: PotentialRelationships });
+
+#[pymethods]
+impl MatchedEntRelView {
+    pub fn get_matched_target_entities(&self, context: &PyAlgoContext) -> PyResult<Vec<String>> {
+        let mut target_ent_ids = HashSet::new();
+        let ent = &context.0.entities[&self.0.source_entity_id];
+
+        for stmt in &self.0.statements {
+            let kgstmt = &ent.props[&stmt.property][stmt.statement_index];
+            if stmt.property_matched_score.is_some() {
+                if let Value::EntityId(id) = &kgstmt.value {
+                    if !target_ent_ids.contains(&id.id) {
+                        target_ent_ids.insert(id.id.clone());
+                    }
+                }
+            }
+
+            for qual in &stmt.qualifier_matched_scores {
+                if let Value::EntityId(id) =
+                    &kgstmt.qualifiers[&qual.qualifier][qual.qualifier_index]
+                {
+                    if !target_ent_ids.contains(&id.id) {
+                        target_ent_ids.insert(id.id.clone());
+                    }
+                }
+            }
+        }
+
+        Ok(target_ent_ids.into_iter().collect::<Vec<_>>())
+    }
+}
 
 pub(crate) fn register(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     let submodule = PyModule::new(py, "data_matching")?;
