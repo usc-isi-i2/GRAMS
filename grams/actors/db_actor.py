@@ -57,6 +57,7 @@ class GramsDB:
             self.wdprops = self.db.wdprops
             self.wdprop_domains = self.db.wdprop_domains
             self.wdprop_ranges = self.db.wdprop_ranges
+            self.wdontcount = self.db.wdontcount
             self.wd_numprop_stats = WDQuantityPropertyStats.from_dir(
                 os.path.join(data_dir, "quantity_prop_stats")
             )

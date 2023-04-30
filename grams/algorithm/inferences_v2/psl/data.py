@@ -53,6 +53,9 @@ class PSLData:
             P.RelFreqOverRow.name(): efeat.freq_over_row,
             P.RelFreqOverEntRow.name(): efeat.freq_over_ent_row,
             P.RelFreqOverPosRel.name(): efeat.freq_over_pos_rel,
+            P.RelProbOverRow.name(): efeat.prob_over_row,
+            P.RelProbOverEntRow.name(): efeat.prob_over_ent_row,
+            P.RelProbOverPosRel.name(): efeat.prob_over_pos_rel,
             P.RelFreqUnmatchOverEntRow.name(): efeat.freq_unmatch_over_ent_row,
             P.RelFreqUnmatchOverPosRel.name(): efeat.freq_unmatch_over_pos_rel,
             P.RelNotFuncDependency.name(): efeat.not_func_dependency,
@@ -66,7 +69,7 @@ class PSLData:
             P.TypeDistance.name(): ufeat.type_distance,
         }
 
-        for p in [P.RelFreqOverRow, P.RelFreqOverEntRow, P.RelFreqOverPosRel, P.RelFreqUnmatchOverEntRow, P.RelFreqUnmatchOverPosRel]:
+        for p in [P.RelFreqOverRow, P.RelFreqOverEntRow, P.RelFreqOverPosRel, P.RelProbOverRow, P.RelProbOverEntRow, P.RelProbOverPosRel, P.RelFreqUnmatchOverEntRow, P.RelFreqUnmatchOverPosRel]:
             observations[p.name()] = np.stack(
                 [efeat.source, efeat.target, efeat.statement, efeat.outprop, pred2feat[p.name()]],
                 axis=1, dtype=np.object_
@@ -106,6 +109,9 @@ class PSLData:
                 P.RelFreqOverRow.name(),
                 P.RelFreqOverEntRow.name(),
                 P.RelFreqOverPosRel.name(),
+                P.RelProbOverRow.name(),
+                P.RelProbOverEntRow.name(),
+                P.RelProbOverPosRel.name(),
                 P.RelFreqUnmatchOverEntRow.name(),
                 P.RelFreqUnmatchOverPosRel.name(),
                 P.RelNotFuncDependency.name(),

@@ -32,7 +32,7 @@ from sm.outputs.semantic_model import (
     SemanticModel,
 )
 from grams.algorithm.inferences.psl_gram_model_exp3 import P
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 
 if TYPE_CHECKING:
@@ -61,7 +61,8 @@ def eval_dataset(
 
     evaluator = Evaluator(wdentities, wdentity_labels, wdclasses, wdprops, db.data_dir)
 
-    hits = [3, 5, 10]
+    hits = [3, 5]
+    hits_all = False
 
     cpas: list[CPAEvalRes] = []
     ctas: list[CTAEvalOutput] = []
@@ -160,6 +161,15 @@ def eval_dataset(
             }
         )
 
+    # fmt: off
+    logger.info(
+        "for copying...\nrun-id\tcpa-p\tcpa-r\tcpa-f1\tcta-p\tcta-r\tcta-f1\n{}",
+        ",".join(
+            [str(0 if exprun is None else exprun.id)] +
+            ["%.2f" % (round(float(x) * 100, 2)) for x in [avg_cpa.precision, avg_cpa.recall, avg_cpa.f1, avg_cta.precision, avg_cta.recall, avg_cta.f1]]
+    ))
+    # fmt: on
+
     if exprun is not None:
         # log the results of each example
         # if len(examples) > 1:
@@ -177,7 +187,7 @@ def eval_dataset(
             extract_complex_objects(
                 db, e, pred_sms[i], anns[i] if anns is not None else None
             )
-            for i, e in enumerate(tqdm(examples))
+            for i, e in enumerate(tqdm(examples, desc="extract complex objects"))
         ]
         for i, e in enumerate(examples):
             exprun.update_example_output(
@@ -186,15 +196,6 @@ def eval_dataset(
                 primitive=ex_details[i],
                 complex=complex_objs[i],
             )
-
-    # fmt: off
-    logger.info(
-        "for copying...\nrun-id\tcpa-p\tcpa-r\tcpa-f1\tcta-p\tcta-r\tcta-f1\n{}",
-        ",".join(
-            [str(0 if exprun is None else exprun.id)] +
-            ["%.2f" % (round(float(x) * 100, 2)) for x in [avg_cpa.precision, avg_cpa.recall, avg_cpa.f1, avg_cta.precision, avg_cta.recall, avg_cta.f1]]
-    ))
-    # fmt: on
 
     return {
         "cpa": {
@@ -209,7 +210,8 @@ def eval_dataset(
                     "recall": float(avg_cpa_k[k].recall),
                     "f1": float(avg_cpa_k[k].f1),
                 }
-                for k in [f"perf@{kp}" for kp in hits] + ["perf@all"]
+                for k in [f"perf@{kp}" for kp in hits]
+                + (["perf@all"] if hits_all else [])
                 if k in avg_cpa_k
             },
         },
@@ -225,7 +227,8 @@ def eval_dataset(
                     "recall": float(avg_cta_k[k].recall),
                     "f1": float(avg_cta_k[k].f1),
                 }
-                for k in [f"perf@{kp}" for kp in hits] + ["perf@all"]
+                for k in [f"perf@{kp}" for kp in hits]
+                + (["perf@all"] if hits_all else [])
                 if k in avg_cta_k
             },
         },
@@ -542,6 +545,9 @@ class AuxComplexFeatures(AuxComplexObjectBase):
             ("freq_over_row", efeat.freq_over_row),
             ("freq_over_ent_row", efeat.freq_over_ent_row),
             ("freq_over_pos_rel", efeat.freq_over_pos_rel),
+            ("prob_over_row", efeat.prob_over_row),
+            ("prob_over_ent_row", efeat.prob_over_ent_row),
+            ("prob_over_pos_rel", efeat.prob_over_pos_rel),
             ("freq_unmatch_over_ent_row", efeat.freq_unmatch_over_ent_row),
             ("freq_unmatch_over_pos_rel", efeat.freq_unmatch_over_pos_rel),
         ]:

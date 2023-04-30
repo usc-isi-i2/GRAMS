@@ -8,6 +8,7 @@ from grams.algorithm.data_graph.dg_graph import (
 from grams.algorithm.inferences_v2.features.detect_missing_info import (
     MissingInformationDetector,
 )
+from grams.algorithm.inferences_v2.features.graph_helper import GraphHelper
 from grams.algorithm.inferences_v2.features.graph_traversal_helper import (
     GraphTraversalHelper,
 )
@@ -50,16 +51,16 @@ class ContradictedInformationDetector:
     def __init__(
         self,
         correct_entity_threshold: float,
-        traversal: GraphTraversalHelper,
+        graph_helper: GraphHelper,
         context: AlgoContext,
         rustextractor: RustFeatureExtractor,
     ):
         self.correct_entity_threshold = correct_entity_threshold
         self.wdentities = context.wdentities
         self.wdprops = context.wdprops
-        self.cg = traversal.cg
-        self.dg = traversal.dg
-        self.traversal = traversal
+        self.cg = graph_helper.cg
+        self.dg = graph_helper.dg
+        self.graph_helper = graph_helper
         self.missing_info_detector = MissingInformationDetector(context)
         self.rustextractor = rustextractor
         self._mancache = {}
@@ -103,7 +104,7 @@ class ContradictedInformationDetector:
         we can try to detect if we can find the information in some pages.
         """
         u = self.cg.get_node(inedge.source)
-        uv_links = self.traversal.get_rel_dg_pairs(s, outedge)
+        uv_links = self.graph_helper.get_rel_dg_pairs(s, outedge)
 
         inedge_predicate = inedge.predicate
         outedge_predicate = outedge.predicate
@@ -113,7 +114,7 @@ class ContradictedInformationDetector:
 
         contradicted_info = []
 
-        for dgu, dgv in self.traversal.iter_dg_pair(inedge.source, outedge.target):
+        for dgu, dgv in self.graph_helper.iter_dg_pair(inedge.source, outedge.target):
             if (dgu.id, dgv.id) in uv_links:
                 continue
 

@@ -84,6 +84,24 @@ class P:
         size=4,
         arg_types=[Predicate.ArgType.UNIQUE_INT_ID] * 4,
     )
+    RelProbOverRow = Predicate(
+        "REL_PROB_OVER_ROW",
+        closed=True,
+        size=4,
+        arg_types=[Predicate.ArgType.UNIQUE_INT_ID] * 4,
+    )
+    RelProbOverEntRow = Predicate(
+        "REL_PROB_OVER_ENT_ROW",
+        closed=True,
+        size=4,
+        arg_types=[Predicate.ArgType.UNIQUE_INT_ID] * 4,
+    )
+    RelProbOverPosRel = Predicate(
+        "REL_PROB_OVER_POS_REL",
+        closed=True,
+        size=4,
+        arg_types=[Predicate.ArgType.UNIQUE_INT_ID] * 4,
+    )
     RelFreqUnmatchOverEntRow = Predicate(
         "REL_FREQ_UNMATCH_OVER_ENT_ROW",
         closed=True,

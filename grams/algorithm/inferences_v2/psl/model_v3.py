@@ -40,6 +40,9 @@ class PSLModelv3:
             P.RelFreqOverRow.name(): 2,
             P.RelFreqOverEntRow.name(): 2,
             P.RelFreqOverPosRel.name(): 2,
+            P.RelProbOverRow.name(): 4,
+            P.RelProbOverEntRow.name(): 4,
+            P.RelProbOverPosRel.name(): 4,
             P.RelFreqUnmatchOverEntRow.name(): 2,
             P.RelFreqUnmatchOverPosRel.name(): 2,
             P.RelHeaderSimilarity.name(): 0.0,
@@ -52,7 +55,7 @@ class PSLModelv3:
             P.ExtendedTypeFreqOverEntRow.name(): 0,
             P.TypeHeaderSimilarity.name(): 0.0,
             P.TypeDiscoveredPropFreqOverRow.name(): 2,
-            P.TypeDiscoveredPropProbOverRow.name(): 2,
+            P.TypeDiscoveredPropProbOverRow.name(): 200,
             P.DataProperty.name(): 1,
             P.PropertyDomain.name(): 1,
             P.PropertyRange.name(): 1,
@@ -68,6 +71,9 @@ class PSLModelv3:
             P.RelFreqOverRow,
             P.RelFreqOverEntRow,
             P.RelFreqOverPosRel,
+            P.RelProbOverRow,
+            P.RelProbOverEntRow,
+            P.RelProbOverPosRel,
             P.RelHeaderSimilarity,
         ]:
             rules[feat.name()] = Rule(

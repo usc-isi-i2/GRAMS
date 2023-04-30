@@ -64,7 +64,7 @@ class InfDataDatasetDict(DatasetDict[list[InfData]]):
 
 
 class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
-    VERSION = ActorVersion.create(113, [InfFeatureExtractor])
+    VERSION = ActorVersion.create(114, [InfFeatureExtractor])
 
     def __init__(
         self,

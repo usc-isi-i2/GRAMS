@@ -97,17 +97,6 @@ class NodeFeatureExtractor:
         self.sim_fn = sim_fn
         self.graph_helper = graph_helper or GraphHelper(table, cg, dg, context)
 
-        index2entscore = {}
-        ncols = len(self.table.table.columns)
-        for ri, ci, links in self.table.links.enumerate_flat_iter():
-            ent2score = {}
-            for link in links:
-                for can in link.candidates:
-                    entid = str(can.entity_id)
-                    ent2score[entid] = max(can.probability, ent2score.get(entid, 0.0))
-            index2entscore[ri * ncols + ci] = ent2score
-        self.index2entscore = index2entscore
-
     def extract(self) -> NodeFeature:
         node_types = self.get_column_cantypes()
 
@@ -265,7 +254,7 @@ class NodeFeatureExtractor:
             outedges = self.cg.out_edges(u.id)
 
             # type2row[type][row * ncols + col] = score of a match
-            type2row = {type: [0] * self.graph_helper.nrows for type in can_types}
+            type2row = {type: [0.0] * self.graph_helper.nrows for type in can_types}
 
             # for outgoing edges, gather the entities from the column that we discovered the relationship.
             for outedge in outedges:
@@ -296,7 +285,9 @@ class NodeFeatureExtractor:
                         ent_types = self.graph_helper.get_entity_types(ent_id)
                         for type in ent_types:
                             type2row[type][row] = max(
-                                self.index2entscore[cell_index][ent_id],
+                                self.graph_helper.get_candidate_entity_score(
+                                    row, col, ent_id
+                                ),
                                 type2row[type][row],
                             )
 
@@ -322,7 +313,9 @@ class NodeFeatureExtractor:
                             continue
 
                         for eid in matched_eids:
-                            escore = self.index2entscore[dgu.row * ncols + col][eid]
+                            escore = self.graph_helper.get_candidate_entity_score(
+                                dgu.row, col, eid
+                            )
                             for etype in self.graph_helper.get_entity_types(eid):
                                 type2row[etype][dgu.row] = max(
                                     type2row[etype][dgu.row], escore

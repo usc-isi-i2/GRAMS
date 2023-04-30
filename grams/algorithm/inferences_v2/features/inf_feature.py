@@ -11,6 +11,7 @@ from grams.algorithm.inferences_v2.features.edge_feature import (
     EdgeFeature,
     EdgeFeatureExtractor,
 )
+from grams.algorithm.inferences_v2.features.graph_helper import GraphHelper
 from grams.algorithm.inferences_v2.features.helper import IDMap, K, OffsetIDMap
 from grams.algorithm.inferences_v2.features.misc_feature import (
     MiscFeatureExtractor,
@@ -47,7 +48,7 @@ class InfFeature(NumpyDataModelContainer):
 class InfFeatureExtractor:
     """Extracting features in a candidate graph."""
 
-    VERSION = 109
+    VERSION = 110
 
     def __init__(
         self,
@@ -69,6 +70,7 @@ class InfFeatureExtractor:
     ) -> InfFeature:
         idmap = IDMap()
 
+        graph_helper = GraphHelper(table, cg, dg, self.context)
         edge_feat_extractor = EdgeFeatureExtractor(
             idmap,
             table,
@@ -78,9 +80,12 @@ class InfFeatureExtractor:
             self.rust_db,
             rust_table,
             self.rust_context,
+            graph_helper,
             verbose,
         )
-        node_feat_extractor = NodeFeatureExtractor(idmap, table, cg, dg, self.context)
+        node_feat_extractor = NodeFeatureExtractor(
+            idmap, table, cg, dg, self.context, graph_helper=graph_helper
+        )
         misc_feat_extractor = MiscFeatureExtractor(
             idmap,
             table,

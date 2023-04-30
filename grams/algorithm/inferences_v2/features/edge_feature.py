@@ -1,4 +1,6 @@
 from __future__ import annotations
+from typing import Optional
+from grams.algorithm.inferences_v2.features.graph_helper import GraphHelper
 from grams.algorithm.inferences_v2.features.rust_feature_extractor import (
     RustFeatureExtractor,
 )
@@ -27,9 +29,6 @@ from grams.algorithm.inferences_v2.features.detect_contradicted_info import (
 from grams.algorithm.inferences_v2.features.func_dependency import (
     FunctionalDependencyDetector,
 )
-from grams.algorithm.inferences_v2.features.graph_traversal_helper import (
-    GraphTraversalHelper,
-)
 from grams.algorithm.inferences_v2.features.helper import MISSING_VALUE, IDMap
 from grams.inputs.linked_table import LinkedTable
 from sm.misc.fn_cache import CacheMethod
@@ -39,8 +38,9 @@ class EdgeFeature(NumpyDataModel):
     # fmt: off
     __slots__ = [
         "source", "target", "statement", "inprop", "outprop", "is_qualifier",
-        "freq_over_row", "freq_over_ent_row", "freq_over_pos_rel", "freq_unmatch_over_ent_row",
-        "freq_unmatch_over_pos_rel", "not_func_dependency"
+        "freq_over_row", "freq_over_ent_row", "freq_over_pos_rel", 
+        "prob_over_row", "prob_over_ent_row", "prob_over_pos_rel", 
+        "freq_unmatch_over_ent_row", "freq_unmatch_over_pos_rel", "not_func_dependency"
     ]
     # fmt: on
 
@@ -53,6 +53,9 @@ class EdgeFeature(NumpyDataModel):
     freq_over_row: NDArray[Shape["*"], Float64]
     freq_over_ent_row: NDArray[Shape["*"], Float64]
     freq_over_pos_rel: NDArray[Shape["*"], Float64]
+    prob_over_row: NDArray[Shape["*"], Float64]
+    prob_over_ent_row: NDArray[Shape["*"], Float64]
+    prob_over_pos_rel: NDArray[Shape["*"], Float64]
     freq_unmatch_over_ent_row: NDArray[Shape["*"], Float64]
     freq_unmatch_over_pos_rel: NDArray[Shape["*"], Float64]
     not_func_dependency: NDArray[Shape["*"], Int32]
@@ -68,6 +71,9 @@ class EdgeFeature(NumpyDataModel):
             freq_over_row=self.freq_over_row,
             freq_over_ent_row=self.freq_over_ent_row,
             freq_over_pos_rel=self.freq_over_pos_rel,
+            prob_over_row=self.prob_over_row,
+            prob_over_ent_row=self.prob_over_ent_row,
+            prob_over_pos_rel=self.prob_over_pos_rel,
             freq_unmatch_over_ent_row=self.freq_unmatch_over_ent_row,
             freq_unmatch_over_pos_rel=self.freq_unmatch_over_pos_rel,
             not_func_dependency=self.not_func_dependency,
@@ -80,7 +86,7 @@ EdgeFeature.init()
 class EdgeFeatureExtractor:
     """Extracting edge features in a candidate graph."""
 
-    VERSION = 101
+    VERSION = 102
 
     def __init__(
         self,
@@ -92,7 +98,8 @@ class EdgeFeatureExtractor:
         rust_db: gcore.GramsDB,
         rust_table: RustLinkedTable,
         rust_context: gcore.AlgoContext,
-        verbose: bool,
+        graph_helper: Optional[GraphHelper] = None,
+        verbose: bool = False,
     ):
         self.idmap = idmap
         self.table = table
@@ -107,10 +114,10 @@ class EdgeFeatureExtractor:
             rust_table, dg, cg, rust_context, rust_db
         )
 
-        self.traversal = GraphTraversalHelper(table, cg, dg)
+        self.graph_helper = graph_helper or GraphHelper(table, cg, dg, context)
         self.contradicted_info_detector = ContradictedInformationDetector(
             correct_entity_threshold=0.8,
-            traversal=self.traversal,
+            graph_helper=self.graph_helper,
             context=context,
             rustextractor=self.rustextractor,
         )
@@ -158,6 +165,16 @@ class EdgeFeatureExtractor:
             "freq over pos rel", preprint=True, disable=not self.verbose
         ):
             freq_over_pos_rel = self.FREQ_OVER_POS_REL(rels)
+        with watch_and_report("prob over row", preprint=True, disable=not self.verbose):
+            prob_over_row = self.PROB_OVER_ROW(rels)
+        with watch_and_report(
+            "prob over ent row", preprint=True, disable=not self.verbose
+        ):
+            prob_over_ent_row = self.PROB_OVER_ENT_ROW(rels)
+        with watch_and_report(
+            "prob over pos rel", preprint=True, disable=not self.verbose
+        ):
+            prob_over_pos_rel = self.PROB_OVER_POS_REL(rels)
         with watch_and_report(
             "freq unmatch over ent row", preprint=True, disable=not self.verbose
         ):
@@ -181,6 +198,9 @@ class EdgeFeatureExtractor:
             freq_over_row=np.array(freq_over_row, dtype=np.float64),
             freq_over_ent_row=np.array(freq_over_ent_row, dtype=np.float64),
             freq_over_pos_rel=np.array(freq_over_pos_rel, dtype=np.float64),
+            prob_over_row=np.array(prob_over_row, dtype=np.float64),
+            prob_over_ent_row=np.array(prob_over_ent_row, dtype=np.float64),
+            prob_over_pos_rel=np.array(prob_over_pos_rel, dtype=np.float64),
             freq_unmatch_over_ent_row=np.array(
                 freq_unmatch_over_ent_row, dtype=np.float64
             ),
@@ -199,6 +219,15 @@ class EdgeFeatureExtractor:
             output.append(ratio)
         return output
 
+    def PROB_OVER_ROW(self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]):
+        """The frequency of the relation over the row."""
+        n_rows = self.table.size()
+        output = []
+        for s, inedge, outedge in rels:
+            ratio = self.get_rel_prob(s, outedge) / n_rows
+            output.append(ratio)
+        return output
+
     def FREQ_OVER_ENT_ROW(self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]):
         # what is the maximum possible links we can have? this ignore the the link so this is used to calculate FreqOverEntRow
         output = []
@@ -207,6 +236,18 @@ class EdgeFeatureExtractor:
                 s, inedge, outedge
             )
             freq = self.get_rel_freq(s, outedge)
+            ratio = 0 if max_pos_ent_rows == 0 else freq / max_pos_ent_rows
+            output.append(ratio)
+        return output
+
+    def PROB_OVER_ENT_ROW(self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]):
+        # what is the maximum possible links we can have? this ignore the the link so this is used to calculate FreqOverEntRow
+        output = []
+        for s, inedge, outedge in rels:
+            max_pos_ent_rows = self.get_maximum_possible_ent_links_between_two_nodes(
+                s, inedge, outedge
+            )
+            freq = self.get_rel_prob(s, outedge)
             ratio = 0 if max_pos_ent_rows == 0 else freq / max_pos_ent_rows
             output.append(ratio)
         return output
@@ -221,7 +262,43 @@ class EdgeFeatureExtractor:
             freq = self.get_rel_freq(s, outedge)
             n_possible_links = self.get_unmatch_discovered_links(
                 s, inedge, outedge
-            ) + len(self.traversal.get_rel_dg_pairs(s, outedge))
+            ) + len(self.graph_helper.get_rel_dg_pairs(s, outedge))
+
+            max_possible_links[inedge.source, outedge.target] = max(
+                n_possible_links,
+                max_possible_links.get((inedge.source, outedge.target), 0),
+            )
+
+            tmp[
+                (
+                    self.idmap.m(inedge.source),
+                    self.idmap.m(outedge.target),
+                    self.idmap.m(s.id),
+                    self.idmap.m(outedge.predicate),
+                )
+            ] = (reli, freq, (inedge.source, outedge.target))
+
+        for key, (reli, freq, pair) in tmp.items():
+            prob = (
+                0.0
+                if max_possible_links[pair] == 0
+                else freq / max_possible_links[pair]
+            )
+            output[reli] = prob
+
+        return output
+
+    def PROB_OVER_POS_REL(self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]):
+        """The frequency of the relation over all possible relations that the two nodes can have."""
+        output = [0.0] * len(rels)
+        tmp = {}
+        max_possible_links = {}
+
+        for reli, (s, inedge, outedge) in enumerate(rels):
+            freq = self.get_rel_prob(s, outedge)
+            n_possible_links = self.get_unmatch_discovered_links(
+                s, inedge, outedge
+            ) + len(self.graph_helper.get_rel_dg_pairs(s, outedge))
 
             max_possible_links[inedge.source, outedge.target] = max(
                 n_possible_links,
@@ -281,7 +358,7 @@ class EdgeFeatureExtractor:
             )
             n_possible_links = self.get_unmatch_discovered_links(
                 s, inedge, outedge
-            ) + len(self.traversal.get_rel_dg_pairs(s, outedge))
+            ) + len(self.graph_helper.get_rel_dg_pairs(s, outedge))
 
             max_possible_links[inedge.source, outedge.target] = max(
                 n_possible_links,
@@ -330,6 +407,35 @@ class EdgeFeatureExtractor:
 
     def REL_HEADER_SIMILARITY(self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]):
         return []
+
+    @CacheMethod.cache(CacheMethod.two_object_args)
+    def get_rel_prob(self, s: CGStatementNode, outedge: CGEdge) -> float:
+        sum_prob = 0.0
+        for source_flow, target_flow in s.flow:
+            if (
+                target_flow.sg_target_id == outedge.target
+                and target_flow.edge_id == outedge.predicate
+            ):
+                dg_stmts = s.flow[source_flow, target_flow]
+                edge_prob = max(
+                    p.prob for provenances in dg_stmts.values() for p in provenances
+                )
+                dgu = self.dg.get_node(source_flow.dg_source_id)
+                if isinstance(dgu, CellNode):
+                    source_ent_prob = max(
+                        self.graph_helper.get_candidate_entity_score(
+                            dgu.row,
+                            dgu.column,
+                            self.dg.get_statement_node(sid).qnode_id,
+                        )
+                        for sid in dg_stmts.keys()
+                    )
+                else:
+                    assert isinstance(dgu, EntityValueNode)
+                    source_ent_prob = dgu.qnode_prob
+                sum_prob += edge_prob * source_ent_prob
+
+        return sum_prob
 
     @CacheMethod.cache(CacheMethod.two_object_args)
     def get_rel_freq(self, s: CGStatementNode, outedge: CGEdge):
@@ -480,18 +586,18 @@ class EdgeFeatureExtractor:
         """
         u = self.cg.get_node(inedge.source)
         v = self.cg.get_node(outedge.target)
-        uv_links = self.traversal.get_rel_dg_pairs(s, outedge)
+        uv_links = self.graph_helper.get_rel_dg_pairs(s, outedge)
         is_outpred_qualifier = inedge.predicate != outedge.predicate
         is_outpred_data_predicate = self.wdprops[outedge.predicate].is_data_property()
 
         n_unmatch_links = 0
-        for dgu, dgv in self.traversal.iter_dg_pair(inedge.source, outedge.target):
+        for dgu, dgv in self.graph_helper.iter_dg_pair(inedge.source, outedge.target):
             # if has link, then we don't have to count
             if (dgu.id, dgv.id) in uv_links:
                 continue
 
             # ignore pairs that can't have any links
-            if not self.traversal.dg_pair_has_possible_ent_links(
+            if not self.graph_helper.dg_pair_has_possible_ent_links(
                 dgu, dgv, is_outpred_data_predicate
             ):
                 continue
