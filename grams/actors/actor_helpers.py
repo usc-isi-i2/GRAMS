@@ -44,6 +44,10 @@ class EvalArgs:
     dsqueries: List[str] = field(
         metadata={"help": "List of dataset queries to evaluate"}
     )
+    record_complex_objects: bool = field(
+        default=True,
+        metadata={"help": "Record complex objects in the experiment run"},
+    )
     threshold: float = 0.5
 
 
@@ -53,6 +57,8 @@ def eval_dataset(
     pred_sms: list[SemanticModel],
     anns: Optional[list[AnnotationV2]] = None,
     exprun: Optional[RemoteExpRun] = None,
+    exprun_record_complex_objects: bool = False,
+    exprun_individual_perf_at_k: bool = False,
 ):
     wdentities = db.get_auto_cached_entities(None)
     wdentity_labels = db.wdentity_labels.cache()
@@ -76,7 +82,7 @@ def eval_dataset(
             logger.error("Failed to evaluate example: {} - {}", i, example.table.id)
             raise
 
-        if anns is not None:
+        if anns is not None and exprun_individual_perf_at_k:
             for k, v in evaluator.cta_at_k(example, anns[i].cta_probs, k=hits)[
                 0
             ].items():
@@ -172,29 +178,31 @@ def eval_dataset(
 
     if exprun is not None:
         # log the results of each example
-        # if len(examples) > 1:
-        #     complex_objs = ray_map(
-        #         ray_extract_complex_objects.remote,
-        #         [
-        #             (db.data_dir, e, pred_sms[i], anns[i] if anns is not None else None)
-        #             for i, e in enumerate(examples)
-        #         ],
-        #         desc="creating annotation debug info.",
-        #         verbose=True,
-        #     )
-        # else:
-        complex_objs = [
-            extract_complex_objects(
-                db, e, pred_sms[i], anns[i] if anns is not None else None
+        complex_objs = None
+        if exprun_record_complex_objects:
+            complex_objs = ray_map(
+                extract_complex_objects,
+                [
+                    (
+                        db.data_dir,
+                        e,
+                        pred_sms[i],
+                        anns[i] if anns is not None else None,
+                    )
+                    for i, e in enumerate(examples)
+                ],
+                desc="extract complex objects",
+                verbose=True,
+                is_func_remote=False,
+                using_ray=len(examples) > 1,
             )
-            for i, e in enumerate(tqdm(examples, desc="extract complex objects"))
-        ]
+
         for i, e in enumerate(examples):
             exprun.update_example_output(
                 example_id=str(i),
                 example_name=e.table.id,
                 primitive=ex_details[i],
-                complex=complex_objs[i],
+                complex=complex_objs[i] if complex_objs is not None else None,
             )
 
     return {

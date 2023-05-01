@@ -194,6 +194,8 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
             for name, examples in dsdict.items():
                 with self.new_exp_run(
                     dataset=dsquery_p.get_query(name),
+                    cpa_threshold=cpa_threshold,
+                    cta_threshold=cta_threshold,
                 ) as exprun:
                     anns = ray_map(
                         normalize_result,
@@ -229,6 +231,7 @@ class GramsInfActor(OsinActor[LinkedTable, GramsInfParams]):
                         pred_sms=[ann.sm for ann in anns],
                         anns=anns,
                         exprun=exprun,
+                        exprun_record_complex_objects=eval_args.record_complex_objects,
                     )
                     self.logger.info(
                         "Dataset: {}\n{}",
@@ -361,6 +364,7 @@ def normalize_result(
 
     wdclasses = db.wdclasses.cache()
     wdprops = db.wdprops.cache()
+    wdontcount = db.wdontcount.cache()
 
     edge_feats = infdata.feat.edge_features
 
@@ -372,7 +376,7 @@ def normalize_result(
         reduce_numerical_noise.tiebreak(
             newprobs,
             get_id=lambda x: x,
-            id2popularity=db.wdontcount,
+            id2popularity=wdontcount,
             id2ent=db.wdclasses,
         )
         return dict(newprobs)
@@ -388,7 +392,7 @@ def normalize_result(
         reduce_numerical_noise.tiebreak(
             newprobs,
             get_id=get_prop_id,
-            id2popularity=db.wdontcount,
+            id2popularity=wdontcount,
             id2ent=db.wdprops,
         )
         return dict(newprobs)
