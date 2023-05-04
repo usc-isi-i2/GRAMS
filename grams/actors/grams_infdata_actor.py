@@ -141,15 +141,9 @@ def create_inference_data(
 ):
     db = to_grams_db(db)
 
-    with watch_and_report(
-        "load data", preprint=True, print_fn=logger.debug, disable=not verbose
-    ):
-        wdentity_ids, wdentities = db.get_table_entities(
-            table, params.data_graph.max_n_hop, verbose
-        )
-        wdentity_labels = db.get_table_entity_labels(
-            table, params.data_graph.max_n_hop, verbose
-        )
+    context, table_wdentity_ids, table_wdentity_labels = db.get_context(
+        table, params.data_graph.max_n_hop, verbose
+    )
     wdclasses = db.wdclasses.cache()
     wdprops = db.wdprops.cache()
 
@@ -157,14 +151,14 @@ def create_inference_data(
         "build index", preprint=True, print_fn=logger.debug, disable=not verbose
     ):
         kg_object_index = KGObjectIndex.from_entities(
-            list(wdentity_ids.intersection(wdentities.keys())),
-            wdentities,
-            wdprops,
+            list(table_wdentity_ids.intersection(context.wdentities.keys())),
+            context.wdentities,
+            context.wdprops,
             n_hop=params.data_graph.max_n_hop,
             traversal_option=TraversalOption.TransitiveOnly,
         )
     text_parser = TextParser(params.text_parser)
-    literal_match = LiteralMatch(wdentities, params.literal_matchers)
+    literal_match = LiteralMatch(context.wdentities, params.literal_matchers)
 
     with watch_and_report(
         "build rust context", preprint=True, print_fn=logger.debug, disable=not verbose
@@ -178,7 +172,7 @@ def create_inference_data(
         "build data graph", preprint=True, print_fn=logger.debug, disable=not verbose
     ):
         dg_factory = DGFactory(
-            wdentities,
+            context.wdentities,
             wdprops,
             text_parser,
             literal_match,
@@ -197,23 +191,12 @@ def create_inference_data(
         disable=not verbose,
     ):
         cg_factory = CGFactory(
-            wdentities,
-            wdentity_labels,
+            context.wdentities,
+            table_wdentity_labels,
             wdclasses,
             wdprops,
         )
         cg = cg_factory.create_cg(table, dg)
-
-    context = AlgoContext(
-        data_dir=db.data_dir,
-        wdprop_domains=db.wdprop_domains,
-        wdprop_ranges=db.wdprop_ranges,
-        wdentities=wdentities,
-        wdentity_labels=db.wdentity_labels,
-        wdclasses=wdclasses,
-        wdprops=wdprops,
-        wd_num_prop_stats=db.wd_numprop_stats,
-    )
 
     # from ream.helper import profile
     # with profile(engine="cprofile"):

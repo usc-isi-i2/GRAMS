@@ -3,8 +3,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from functools import cached_property
 from dataclasses import dataclass
-from typing import Optional
-from grams.actors.db_actor import GramsDB
+from typing import Optional, TYPE_CHECKING
+
 from kgdata.wikidata.models import (
     WDEntity,
     WDProperty,
@@ -15,6 +15,9 @@ from kgdata.wikidata.models import (
     WDPropertyRanges,
 )
 from kgdata.wikidata.db import WikidataDB
+
+if TYPE_CHECKING:
+    from grams.actors.db_actor import GramsDB
 
 
 @dataclass

@@ -31,6 +31,7 @@ class SqliteItemDistance(SqliteDict[str, int]):
         path: Union[str, Path],
         items: Mapping[str, WDClass] | Mapping[str, WDProperty],
         item_type: ItemType,
+        timeout: float = 5.0,
     ):
         super().__init__(
             path,
@@ -38,6 +39,7 @@ class SqliteItemDistance(SqliteDict[str, int]):
             ser_value=identity,
             deser_value=identity,
             valuetype=SqliteDictFieldType.int,
+            timeout=timeout,
         )
         self._items = items
         self._cache_distance = {}
@@ -52,6 +54,7 @@ class SqliteItemDistance(SqliteDict[str, int]):
         self.is_valid_uri = WikidataNamespace.create().is_uri_in_ns
 
     def get_distance(self, pred_item: str, target_item: str) -> int:
+        """Calculate distance between two items. Positive if pred_id is the ancestor of target_id, negative otherwise."""
         if pred_item == target_item:
             return 0
 
@@ -75,6 +78,7 @@ class SqliteItemDistance(SqliteDict[str, int]):
         return self._cache_distance[pred_item, target_item]
 
     def _calculate_distance(self, pred_id: str, target_id: str) -> int:
+        """Calculate distance between two items. Positive if pred_id is the ancestor of target_id, negative otherwise."""
         targ_obj = self._items[target_id]
 
         if pred_id in targ_obj.ancestors:
@@ -117,5 +121,8 @@ def get_hierarchy_scoring_fn(
     path: str | Path,
     items: Mapping[str, WDClass] | Mapping[str, WDProperty],
     item_type: ItemType,
+    timeout: float = 5.0,
 ) -> HierarchyScoringFn:
-    return HierarchyScoringFn(SqliteItemDistance(path, items, item_type))
+    return HierarchyScoringFn(
+        SqliteItemDistance(path, items, item_type, timeout=timeout)
+    )

@@ -79,6 +79,19 @@ class EdgeFeature(NumpyDataModel):
             not_func_dependency=self.not_func_dependency,
         )
 
+    def get_feature_array(self, i):
+        return [
+            self.freq_over_row[i],
+            self.freq_over_ent_row[i],
+            self.freq_over_pos_rel[i],
+            self.prob_over_row[i],
+            self.prob_over_ent_row[i],
+            self.prob_over_pos_rel[i],
+            self.freq_unmatch_over_ent_row[i],
+            self.freq_unmatch_over_pos_rel[i],
+            self.not_func_dependency[i],
+        ]
+
 
 EdgeFeature.init()
 

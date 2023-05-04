@@ -5,9 +5,11 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, MutableMapping, Optional, Set, Union
+from grams.algorithm.context import AlgoContext
 from grams.inputs.linked_table import LinkedTable
 from hugedict.types import HugeMutableMapping
 from kgdata.wikidata.models.wdproperty import WDProperty
+from loguru import logger
 from ream.actor_version import ActorVersion
 from ream.cache_helper import Cache
 from ream.helper import orjson_dumps
@@ -37,6 +39,8 @@ from kgdata.wikidata.models import (
     WDQuantityPropertyStats,
 )
 
+logger = logger.bind(name=__name__)
+
 
 class GramsDB:
     VERSION = 102
@@ -53,6 +57,7 @@ class GramsDB:
             self.db = WikidataDB(data_dir)
             self.wdentities = self.db.wdentities
             self.wdentity_labels = self.db.wdentity_labels
+            self.wdentity_types = self.db.wdattr("instanceof")
             self.wdclasses = self.db.wdclasses
             self.wdprops = self.db.wdprops
             self.wdprop_domains = self.db.wdprop_domains
@@ -218,6 +223,34 @@ class GramsDB:
                                     label = qnode_id
                                 id2label[qnode_id] = label
         return id2label
+
+    def get_context(
+        self, table: LinkedTable, max_n_hop: int, verbose: bool
+    ) -> tuple[AlgoContext, set[str], dict[str, str]]:
+        with watch_and_report(
+            "load data", preprint=True, print_fn=logger.debug, disable=not verbose
+        ):
+            wdentity_ids, wdentities = self.get_table_entities(
+                table, max_n_hop, verbose
+            )
+            wdentity_labels = self.get_table_entity_labels(table, max_n_hop, verbose)
+        wdclasses = self.wdclasses.cache()
+        wdprops = self.wdprops.cache()
+
+        return (
+            AlgoContext(
+                data_dir=self.data_dir,
+                wdprop_domains=self.wdprop_domains,
+                wdprop_ranges=self.wdprop_ranges,
+                wdentities=wdentities,
+                wdentity_labels=self.wdentity_labels,
+                wdclasses=wdclasses,
+                wdprops=wdprops,
+                wd_num_prop_stats=self.wd_numprop_stats,
+            ),
+            wdentity_ids,
+            wdentity_labels,
+        )
 
 
 @dataclass

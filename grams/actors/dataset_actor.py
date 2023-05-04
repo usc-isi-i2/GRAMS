@@ -193,6 +193,8 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
         cg_dsdict = self.cangen_actor.run_dataset(dsquery)
         cr_dsdict = self.canrank_actor.run_dataset(dsquery)
 
+        wdentity_types = self.db_actor.db.wdentity_types.cache()
+
         for name, examples in dsdict.items():
             candidates = cg_dsdict[name]
             candidates = candidates.replace("score", cr_dsdict[name].score)
@@ -208,7 +210,6 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                 # just one link with the ground-truth containing all entities of
                 # links in the cell.
                 table = example.table
-                wdentities = self.db_actor.db.get_auto_cached_entities(table)
                 # the candidates inside table.links are always empty because grams dataset actor
                 # create a linked table from a full table which does not have candidates
                 newlinks = table.links.shallow_copy()
@@ -306,7 +307,7 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                     link.candidates = [
                         can
                         for can in link.candidates
-                        if not self.is_metadata_entity(can.entity_id, wdentities)
+                        if not self.is_metadata_entity(can.entity_id, wdentity_types)
                     ]
                     newlinks[ri, ci] = [link]
 
@@ -337,12 +338,13 @@ class GramsELDatasetActor(OsinActor[str, GramsELParams]):
                 ) as exprun:
                     pass
 
-    def is_metadata_entity(self, entity_id: str, wdentities: Mapping[str, WDEntity]):
+    def is_metadata_entity(
+        self, entity_id: str, wdentity_types: Mapping[str, list[str]]
+    ):
         """Test if an entity is a metadata entity or instance of a metadata entity."""
         return entity_id not in self.params.skip_meta_entities and (
-            entity_id in wdentities
-            and any(
-                stmt.value.as_entity_id_safe() in self.params.skip_meta_entities
-                for stmt in wdentities[entity_id].props.get("P31", [])
+            any(
+                ent_type_id in self.params.skip_meta_entities
+                for ent_type_id in wdentity_types.get(entity_id, [])
             )
         )
