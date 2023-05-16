@@ -103,7 +103,6 @@ class GramsInfDataActor(OsinActor[LinkedTable, GramsInfDataParams]):
                 desc=f"Creating inference data",
                 verbose=True,
                 using_ray=using_ray,
-                # using_ray=False,
                 is_func_remote=False,
             )
 

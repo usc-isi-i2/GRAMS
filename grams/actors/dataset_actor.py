@@ -9,6 +9,7 @@ from kgdata.wikidata.models.wdentity import WDEntity
 from loguru import logger
 from ned.actors.candidate_generation import CanGenActor
 from ned.actors.candidate_ranking import CanRankActor
+from ned.actors.dataset.auto_dataset import NEDAutoDatasetActor
 from ned.actors.evaluate_helper import EvalArgs
 from osin.integrations.ream import OsinActor
 from ream.cache_helper import Cache, CacheArgsHelper
@@ -26,12 +27,18 @@ from tqdm import tqdm
 
 
 class GramsDatasetActor(OsinActor[str, NoParams]):
-    VERSION = 106
+    VERSION = 110
 
-    def __init__(self, params: NoParams, db_actor: GramsDBActor):
-        super().__init__(params, [db_actor])
+    def __init__(
+        self,
+        params: NoParams,
+        db_actor: GramsDBActor,
+        autodataset_actor: NEDAutoDatasetActor,
+    ):
+        super().__init__(params, [db_actor, autodataset_actor])
         self.db_actor = db_actor
         self.kgns = WikidataNamespace.create()
+        self.autodataset_actor = autodataset_actor
 
     @Cache.cls.dir(
         cls=DatasetDict,
@@ -73,6 +80,11 @@ class GramsDatasetActor(OsinActor[str, NoParams]):
 
     @Cache.pickle.file(mem_persist=True, compression="lz4")
     def load_dataset(self, dataset: str) -> list[Example[FullTable]]:
+        if dataset.startswith("wtauto"):
+            return self.autodataset_actor.run_dataset(
+                dataset, return_ned_example=False
+            )[""]
+
         ds = Datasets()
         db = self.db_actor.db
         wdentities = db.get_auto_cached_entities(None)

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from operator import attrgetter, itemgetter
 from pathlib import Path
 from typing import Optional, Protocol, Sequence, Union
+from grams.actors.db_actor import GramsDB
 from grams.algorithm.candidate_graph.cg_graph import (
     CGColumnNode,
     CGEntityValueNode,
@@ -75,23 +76,55 @@ class Evaluator:
         )
         self.wdns = self.sm_helper.wdns
         self.class_scoring_fn = get_hierarchy_scoring_fn(
-            cache_dir / "class_distance.sqlite", classes, ItemType.CLASS
+            cache_dir / "class_distance.sqlite", classes, ItemType.CLASS, timeout=60
         )
         self.prop_scoring_fn = get_hierarchy_scoring_fn(
-            cache_dir / "prop_distance.sqlite", props, ItemType.PROPERTY
+            cache_dir / "prop_distance.sqlite", props, ItemType.PROPERTY, timeout=60
         )
 
-    def cpa(self, example: Example[LinkedTable], sm: SemanticModel) -> CPAEvalRes:
+    @staticmethod
+    def from_db(db: GramsDB):
+        return Evaluator(
+            db.wdentities.cache(),
+            db.wdentity_labels.cache(),
+            db.wdclasses.cache(),
+            db.wdprops.cache(),
+            db.data_dir,
+        )
+
+    def cpa(
+        self,
+        example: Example[LinkedTable],
+        sm: SemanticModel,
+    ) -> CPAEvalRes:
         """Calculate the CPA score. The code is borrowed from: sm.evaluation.cpa_cta_metrics.cpa to adapt with this class API that uses WrappedSemanticModel"""
         gold_sms = self.get_example_gold_sms(example)
         cpa_pred_sm = self.convert_sm_for_cpa(self.norm_sm(sm))
+        cpa_gold_sms = [self.convert_sm_for_cpa(gold_sm) for gold_sm in gold_sms]
+        return self._cpa_real(
+            cpa_pred_sm,
+            cpa_gold_sms,
+            gold_sms,
+        )
+
+    def _cpa_real(
+        self,
+        cpa_pred_sm: WrappedSemanticModel,
+        cpa_gold_sms: list[WrappedSemanticModel],
+        gold_sms: list[WrappedSemanticModel],
+    ) -> CPAEvalRes:
+        """Calculate the CPA score. The code is borrowed from: sm.evaluation.cpa_cta_metrics.cpa to adapt with this class API that uses WrappedSemanticModel"""
+        assert cpa_pred_sm.is_normalized and cpa_pred_sm.is_cpa_transformed
+        assert all(
+            cpa_gold_sm.is_normalized and cpa_gold_sm.is_cpa_transformed
+            for cpa_gold_sm in cpa_gold_sms
+        )
 
         output = None
         best_cpa_gold_sm = None
         best_gold_sm = None
 
-        for gold_sm in gold_sms:
-            cpa_gold_sm = self.convert_sm_for_cpa(gold_sm)
+        for i, cpa_gold_sm in enumerate(cpa_gold_sms):
             res = sm_metrics.precision_recall_f1(
                 gold_sm=cpa_gold_sm.sm,
                 pred_sm=cpa_pred_sm.sm,
@@ -100,7 +133,7 @@ class Evaluator:
             if output is None or res.f1 > output.f1:
                 output = res
                 best_cpa_gold_sm = cpa_gold_sm
-                best_gold_sm = gold_sm
+                best_gold_sm = gold_sms[i]
 
         assert (
             output is not None

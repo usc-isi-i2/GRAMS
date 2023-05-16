@@ -16,6 +16,7 @@ from grams.algorithm.data_graph.dg_graph import (
     DGGraph,
     DGNode,
     EdgeFlowTarget,
+    EntityValueNode,
     FromInference_GenArg,
     FromLiteralMatchingFunc_GenArg,
     FromWikidataLink_GenArg,
@@ -23,6 +24,9 @@ from grams.algorithm.data_graph.dg_graph import (
 )
 from grams.inputs.linked_table import LinkedTable
 from sm.misc.fn_cache import CacheMethod
+
+
+MAX_RANK = 100000
 
 
 class GraphHelper:
@@ -38,18 +42,50 @@ class GraphHelper:
         self.wdentities = context.wdentities
 
         index2entscore = {}
+        index2entrank = {}
         ncols = len(table.table.columns)
         for ri, ci, links in table.links.enumerate_flat_iter():
             ent2score = {}
+            ent2rank = {}
             for link in links:
-                for can in link.candidates:
+                for j, can in enumerate(link.candidates):
                     entid = str(can.entity_id)
                     ent2score[entid] = max(can.probability, ent2score.get(entid, 0.0))
+                    ent2rank[entid] = min(j, ent2rank.get(entid, MAX_RANK))
+
             index2entscore[ri * ncols + ci] = ent2score
+            index2entrank[ri * ncols + ci] = ent2rank
         self.index2entscore = index2entscore
+        self.index2entrank = index2entrank
 
     def get_candidate_entity_score(self, ri: int, ci: int, entid: str) -> float:
         return self.index2entscore[ri * self.ncols + ci].get(entid, 0.0)
+
+    def get_candidate_entity_rank(self, ri: int, ci: int, entid: str) -> int:
+        return self.index2entrank[ri * self.ncols + ci].get(entid, MAX_RANK)
+
+    @CacheMethod.cache(CacheMethod.single_literal_arg)
+    def get_entity_value_rank(self, entid: str) -> int:
+        v = self.dg.get_node(entid)
+        assert isinstance(v, EntityValueNode)
+
+        if v.is_context:
+            return 0
+
+        best_rank = MAX_RANK
+        for sv_edge in self.dg.in_edges(v.id):
+            s = self.dg.get_statement_node(sv_edge.source)
+            for us_edge in self.dg.in_edges(sv_edge.source):
+                u = self.dg.get_node(us_edge.source)
+                if isinstance(u, CellNode):
+                    best_rank = min(
+                        best_rank,
+                        self.get_candidate_entity_rank(u.row, u.column, s.qnode_id),
+                    )
+                # should we?
+                # elif isinstance(u, EntityValueNode) and u.is_context:
+                #     best_rank = ...
+        return best_rank
 
     def does_statement_from_entity_of_type(self, sid: str, type: str):
         return type in self.get_dg_statement_source_entity_types(sid)

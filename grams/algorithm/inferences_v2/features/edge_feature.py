@@ -79,7 +79,22 @@ class EdgeFeature(NumpyDataModel):
             not_func_dependency=self.not_func_dependency,
         )
 
-    def get_feature_array(self, i):
+    def get_feature_matrix(self):
+        return np.stack(
+            [
+                self.freq_over_row,
+                self.freq_over_ent_row,
+                self.freq_over_pos_rel,
+                self.prob_over_row,
+                self.prob_over_ent_row,
+                self.prob_over_pos_rel,
+                self.freq_unmatch_over_ent_row,
+                self.freq_unmatch_over_pos_rel,
+                self.not_func_dependency,
+            ]
+        )
+
+    def get_feature_array(self, i: int):
         return [
             self.freq_over_row[i],
             self.freq_over_ent_row[i],
@@ -91,6 +106,19 @@ class EdgeFeature(NumpyDataModel):
             self.freq_unmatch_over_pos_rel[i],
             self.not_func_dependency[i],
         ]
+
+    def get_feature_dict(self, i: int):
+        return dict(
+            freq_over_row=self.freq_over_row[i],
+            freq_over_ent_row=self.freq_over_ent_row[i],
+            freq_over_pos_rel=self.freq_over_pos_rel[i],
+            prob_over_row=self.prob_over_row[i],
+            prob_over_ent_row=self.prob_over_ent_row[i],
+            prob_over_pos_rel=self.prob_over_pos_rel[i],
+            freq_unmatch_over_ent_row=self.freq_unmatch_over_ent_row[i],
+            freq_unmatch_over_pos_rel=self.freq_unmatch_over_pos_rel[i],
+            not_func_dependency=self.not_func_dependency[i],
+        )
 
 
 EdgeFeature.init()
@@ -241,6 +269,17 @@ class EdgeFeatureExtractor:
             output.append(ratio)
         return output
 
+    def FREQ_TOPK_OVER_ROW(
+        self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]], topk: int
+    ):
+        """The frequency of the relation over the row."""
+        n_rows = self.table.size()
+        output = []
+        for s, inedge, outedge in rels:
+            ratio = self.get_rel_freq_topk(s, outedge, topk) / n_rows
+            output.append(ratio)
+        return output
+
     def FREQ_OVER_ENT_ROW(self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]]):
         # what is the maximum possible links we can have? this ignore the the link so this is used to calculate FreqOverEntRow
         output = []
@@ -249,6 +288,20 @@ class EdgeFeatureExtractor:
                 s, inedge, outedge
             )
             freq = self.get_rel_freq(s, outedge)
+            ratio = 0 if max_pos_ent_rows == 0 else freq / max_pos_ent_rows
+            output.append(ratio)
+        return output
+
+    def FREQ_TOPK_OVER_ENT_ROW(
+        self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]], topk: int
+    ):
+        # what is the maximum possible links we can have? this ignore the the link so this is used to calculate FreqOverEntRow
+        output = []
+        for s, inedge, outedge in rels:
+            max_pos_ent_rows = self.get_maximum_possible_ent_links_between_two_nodes(
+                s, inedge, outedge
+            )
+            freq = self.get_rel_freq_topk(s, outedge, topk)
             ratio = 0 if max_pos_ent_rows == 0 else freq / max_pos_ent_rows
             output.append(ratio)
         return output
@@ -273,6 +326,44 @@ class EdgeFeatureExtractor:
 
         for reli, (s, inedge, outedge) in enumerate(rels):
             freq = self.get_rel_freq(s, outedge)
+            n_possible_links = self.get_unmatch_discovered_links(
+                s, inedge, outedge
+            ) + len(self.graph_helper.get_rel_dg_pairs(s, outedge))
+
+            max_possible_links[inedge.source, outedge.target] = max(
+                n_possible_links,
+                max_possible_links.get((inedge.source, outedge.target), 0),
+            )
+
+            tmp[
+                (
+                    self.idmap.m(inedge.source),
+                    self.idmap.m(outedge.target),
+                    self.idmap.m(s.id),
+                    self.idmap.m(outedge.predicate),
+                )
+            ] = (reli, freq, (inedge.source, outedge.target))
+
+        for key, (reli, freq, pair) in tmp.items():
+            prob = (
+                0.0
+                if max_possible_links[pair] == 0
+                else freq / max_possible_links[pair]
+            )
+            output[reli] = prob
+
+        return output
+
+    def FREQ_TOPK_OVER_POS_REL(
+        self, rels: list[tuple[CGStatementNode, CGEdge, CGEdge]], topk: int
+    ):
+        """The frequency of the relation over all possible relations that the two nodes can have."""
+        output = [0.0] * len(rels)
+        tmp = {}
+        max_possible_links = {}
+
+        for reli, (s, inedge, outedge) in enumerate(rels):
+            freq = self.get_rel_freq_topk(s, outedge, topk)
             n_possible_links = self.get_unmatch_discovered_links(
                 s, inedge, outedge
             ) + len(self.graph_helper.get_rel_dg_pairs(s, outedge))
@@ -447,6 +538,42 @@ class EdgeFeatureExtractor:
                     assert isinstance(dgu, EntityValueNode)
                     source_ent_prob = dgu.qnode_prob
                 sum_prob += edge_prob * source_ent_prob
+
+        return sum_prob
+
+    @CacheMethod.cache(CacheMethod.auto_object_args)
+    def get_rel_freq_topk(
+        self, s: CGStatementNode, outedge: CGEdge, topk: int
+    ) -> float:
+        sum_prob = 0.0
+        for source_flow, target_flow in s.flow:
+            if (
+                target_flow.sg_target_id == outedge.target
+                and target_flow.edge_id == outedge.predicate
+            ):
+                dg_stmts = s.flow[source_flow, target_flow]
+                edge_prob = max(
+                    p.prob for provenances in dg_stmts.values() for p in provenances
+                )
+                dgu = self.dg.get_node(source_flow.dg_source_id)
+                if isinstance(dgu, CellNode):
+                    source_ent_rank = min(
+                        self.graph_helper.get_candidate_entity_rank(
+                            dgu.row,
+                            dgu.column,
+                            self.dg.get_statement_node(sid).qnode_id,
+                        )
+                        for sid in dg_stmts.keys()
+                    )
+                else:
+                    assert isinstance(dgu, EntityValueNode)
+                    # choose the rank of the statement that leads to this entity.
+                    source_ent_rank = self.graph_helper.get_entity_value_rank(
+                        dgu.qnode_id
+                    )
+
+                if source_ent_rank <= topk:
+                    sum_prob += edge_prob
 
         return sum_prob
 

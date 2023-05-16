@@ -606,10 +606,10 @@ class DGEdge(BaseEdge[str, str]):
 class DGGraph(RetworkXStrDiGraph[str, DGNode, DGEdge]):
     def get_statement_node(self, nid: str) -> StatementNode:
         n = self.get_node(nid)
-        assert isinstance(n, StatementNode)
+        assert isinstance(n, StatementNode), n
         return n
 
     def get_cell_node(self, nid: str) -> CellNode:
         n = self.get_node(nid)
-        assert isinstance(n, CellNode)
+        assert isinstance(n, CellNode), n
         return n

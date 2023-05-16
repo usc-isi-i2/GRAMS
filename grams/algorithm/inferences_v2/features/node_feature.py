@@ -300,7 +300,7 @@ class NodeFeatureExtractor:
                     ):
                         continue
 
-                    dgu = self.dg.get_cell_node(source.dg_source_id)
+                    dgu = self.dg.get_cell_node(target.dg_target_id)
                     is_qualifier = source.edge_id != target.edge_id
                     for dgsid, dgsprovs in dg_stmts.items():
                         matched_eids = (
@@ -385,7 +385,7 @@ class NodeFeatureExtractor:
                     ):
                         continue
 
-                    dgu = self.dg.get_cell_node(source.dg_source_id)
+                    dgu = self.dg.get_cell_node(target.dg_target_id)
                     is_qualifier = source.edge_id != target.edge_id
                     for dgsid, dgsprovs in dg_stmts.items():
                         matched_eids = (

@@ -11,7 +11,7 @@ class FunctionalDependencyDetector:
     def is_functional_dependency(
         self, source_column_index: int, target_column_index: int
     ) -> bool:
-        """Test whether values in the target column is uniquely determiend by the values in the source column. True if
+        """Test whether values in the target column is uniquely determined by the values in the source column. True if
         it's FD.
 
         Parameters

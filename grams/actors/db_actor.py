@@ -4,18 +4,15 @@ from collections.abc import Mapping
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, MutableMapping, Optional, Set, Union
+from typing import Dict, Optional, Set, Union
 from grams.algorithm.context import AlgoContext
 from grams.inputs.linked_table import LinkedTable
-from hugedict.types import HugeMutableMapping
-from kgdata.wikidata.models.wdproperty import WDProperty
 from loguru import logger
 from ream.actor_version import ActorVersion
 from ream.cache_helper import Cache
-from ream.helper import orjson_dumps
 
 import serde.prelude as serde
-from hugedict.prelude import CacheDict, Parallel
+from hugedict.prelude import Parallel
 from ream.actors.base import BaseActor
 from sm.misc.ray_helper import get_instance
 from timer import watch_and_report
@@ -24,18 +21,10 @@ from tqdm import tqdm
 from kgdata.wikidata.db import (
     WDProxyDB,
     WikidataDB,
-    get_entity_db,
-    get_entity_label_db,
-    get_wdclass_db,
-    get_wdprop_db,
-    get_wdprop_domain_db,
-    get_wdprop_range_db,
     query_wikidata_entities,
 )
 from kgdata.wikidata.models import (
-    WDClass,
     WDEntity,
-    WDEntityLabel,
     WDQuantityPropertyStats,
 )
 
@@ -43,7 +32,7 @@ logger = logger.bind(name=__name__)
 
 
 class GramsDB:
-    VERSION = 102
+    VERSION = 103
 
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
