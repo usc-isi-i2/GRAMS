@@ -150,7 +150,7 @@ class CGFactory:
 
                         for qp, qv in children_non_values:
                             qtgi = self.get_cg_node_id(qv)
-                            if not dg.has_edge_between_nodes(stmt_id, qtgi, qp):
+                            if not cg.has_edge_between_nodes(stmt_id, qtgi, qp):
                                 cg.add_edge(
                                     CGEdge(
                                         source=stmt_id,
